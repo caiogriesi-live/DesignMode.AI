@@ -1,0 +1,130 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RunAOTCompilation>false</RunAOTCompilation>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="Pages\App\Loginbak.razor" />
+    <Content Remove="wwwroot\googleLogin.js" />
+    <Content Remove="wwwroot\js\audio.js" />
+    <Content Remove="wwwroot\js\audioPlayer.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.1.8" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.5" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="8.0.16" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="RestSharp" Version="112.1.1-alpha.0.4" />
+    <PackageReference Include="Telerik.UI.for.Blazor" Version="8.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DesignMode.AI.Business\DesignMode.AI.Business.csproj" />
+    <ProjectReference Include="..\DesignMode.AI.Shared\DesignMode.AI.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="DesignMode.AI.Common">
+      <HintPath>..\..\DesignMode.AI.Common\DesignMode.AI.Common\bin\Release\net8.0\DesignMode.AI.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignMode.AI.Services.OpenAI">
+      <HintPath>..\..\DesignMode.AI.Services\DesignMode.AI.Services.OpenAI\bin\Release\net8.0\DesignMode.AI.Services.OpenAI.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <UpToDateCheckInput Remove="Pages\Login.razor" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <_ContentIncludedByDefault Remove="Pages\Login.razor" />
+    <_ContentIncludedByDefault Remove="wwwroot\accessdenied.html" />
+    <_ContentIncludedByDefault Remove="wwwroot\assets\css\imageconfirmmodal.css" />
+    <_ContentIncludedByDefault Remove="wwwroot\caio.html" />
+    <_ContentIncludedByDefault Remove="wwwroot\css\gen.css" />
+    <_ContentIncludedByDefault Remove="wwwroot\googleLogin.js" />
+    <_ContentIncludedByDefault Remove="wwwroot\js\audio.js" />
+    <_ContentIncludedByDefault Remove="wwwroot\js\audioPlayer.js" />
+    <_ContentIncludedByDefault Remove="wwwroot\staticwebapp.config.json" />
+    <_ContentIncludedByDefault Remove="wwwroot\terms.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Pages\App\Loginbak.razor" />
+    <None Include="wwwroot\argon\.DS_Store" />
+    <None Include="wwwroot\argon\.github\workflows\main.yml" />
+    <None Include="wwwroot\css\bootstrap\bootstrap.min.css.map" />
+    <None Include="wwwroot\googleLogin.js" />
+    <None Include="wwwroot\js\audio.js" />
+    <None Include="wwwroot\js\audioPlayer.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\api\" />
+    <Folder Include="wwwroot\assets\img\curved-images\" />
+    <Folder Include="wwwroot\assets\music\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="Pages\App\Logout.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\DesignerIntro2.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\AIRecommendationsModalInit.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\AllVideosModal.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\AllGeneratedAssets.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\FunnelEnd.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\EnhancementRecommendationModal.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\Gen.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\EditConcept.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\CreateNewImage.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\DesignerDashboard.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\InviteClient.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\PlusAssetCreation.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Init\Success.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\Signup.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\App\Test.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <Content Update="Pages\App\TestLogin.razor">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+
+</Project>

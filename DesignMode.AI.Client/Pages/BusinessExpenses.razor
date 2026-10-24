@@ -1,0 +1,112 @@
+@page "/admin/expenses"
+@using System.Net.Http.Json
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@inject HttpClient Http
+@inject ApiConfigService Api
+
+<PageTitle>Business expenses</PageTitle>
+<main class="expense-page">
+    <header class="expense-heading">
+        <div><p class="eyebrow">COMPANY OPERATIONS</p><h1>Business expenses</h1><p>Record and review manually entered company expenses.</p></div>
+    </header>
+    @if (!string.IsNullOrEmpty(message)) { <div class="expense-message" role="status">@message</div> }
+    <section class="expense-card" aria-labelledby="expense-form-title" data-testid="expense-form">
+        <h2 id="expense-form-title">@(editingId is null ? "Add an expense" : "Edit expense")</h2>
+        <EditForm Model="draft" OnValidSubmit="SaveAsync">
+            <div class="expense-fields">
+                <label>Date<input type="date" value="@draft.Date" @onchange="e => draft.Date = e.Value?.ToString() ?? string.Empty" required /></label>
+                <label>Amount<input type="number" min="0" step="0.01" @bind="draft.Amount" required /></label>
+                <label>Currency<input maxlength="12" @bind="draft.Currency" placeholder="USD" required /></label>
+                <label>Category<select @bind="draft.Category" required>@foreach (var category in Categories) { <option value="@category">@category</option> }</select></label>
+                <label class="expense-description">Description / vendor<input maxlength="300" @bind="draft.Description" required /></label>
+            </div>
+            <div class="expense-actions"><button class="primary" type="submit" data-testid="expense-save">@(editingId is null ? "Save expense" : "Save changes")</button>@if (editingId is not null) { <button type="button" @onclick="CancelEdit">Cancel</button> }</div>
+        </EditForm>
+    </section>
+    <section class="expense-card" aria-labelledby="ledger-title">
+        <div class="ledger-heading"><div><h2 id="ledger-title">Expense ledger</h2><p>Filter by date and currency to review matching entries.</p></div>
+            <div class="ledger-filters"><label>Date<input type="date" value="@filterDate" @onchange="e => filterDate = e.Value?.ToString() ?? string.Empty" /></label><label>Currency<input maxlength="12" @bind="filterCurrency" /></label><button type="button" @onclick="LoadAsync">Show records</button></div>
+        </div>
+        <div class="expense-records" data-testid="expense-records">
+            @if (loading) { <p>Loading ledger…</p> }
+            else if (records.Count == 0) { <p class="empty-ledger">No expenses match this date and currency.</p> }
+                else {
+                    @foreach (var expense in records) {
+                        <article class="expense-record">
+                            <div><strong>@expense.Description</strong><span>@expense.Category · @expense.Date</span></div>
+                            <strong class="expense-amount">@expense.Amount.ToString(System.Globalization.CultureInfo.InvariantCulture) @expense.Currency</strong>
+                            <button type="button" @onclick="() => BeginEdit(expense)">Edit</button>
+                        </article>
+                    }
+                }
+        </div>
+    </section>
+</main>
+
+@code {
+    private static readonly string[] Categories = ["software", "AI/API", "hosting/infrastructure", "contractors", "payroll", "advertising/marketing", "professional services", "other"];
+    private readonly BusinessExpense draft = new() { Date = DateTime.Today.ToString("yyyy-MM-dd"), Currency = "USD", Category = "software" };
+    private string filterDate = DateTime.Today.ToString("yyyy-MM-dd");
+    private string filterCurrency = "USD";
+    private string? editingId;
+    private string? message;
+    private bool loading;
+    private List<BusinessExpense> records = [];
+    private string Endpoint => new Uri(new Uri(Api.ApiBaseUrl), "api/business-expenses").ToString();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task SaveAsync()
+    {
+        message = null;
+        var url = editingId is null ? Endpoint : $"{Endpoint}/{Uri.EscapeDataString(editingId)}";
+        try
+        {
+            using var response = editingId is null ? await Http.PostAsJsonAsync(url, draft) : await Http.PutAsJsonAsync(url, draft);
+            if (!response.IsSuccessStatusCode) { message = SaveError(response.StatusCode); return; }
+            editingId = null;
+            filterDate = draft.Date;
+            filterCurrency = draft.Currency;
+            draft.Date = DateTime.Today.ToString("yyyy-MM-dd"); draft.Amount = 0; draft.Currency = filterCurrency; draft.Category = "software"; draft.Description = string.Empty;
+            await LoadAsync();
+            if (message is null) message = "Expense saved.";
+        }
+        catch (HttpRequestException)
+        {
+            message = "The expense service could not be reached. Check the server connection and try again.";
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            var url = $"{Endpoint}?date={Uri.EscapeDataString(filterDate)}&currency={Uri.EscapeDataString(filterCurrency)}";
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) { records = []; message = response.StatusCode == System.Net.HttpStatusCode.Unauthorized ? "Company operator access is required." : "Ledger could not be loaded."; return; }
+            records = await response.Content.ReadFromJsonAsync<List<BusinessExpense>>() ?? [];
+            message = null;
+        }
+        catch { records = []; message = "Ledger could not be loaded."; }
+        finally { loading = false; }
+    }
+
+    private void BeginEdit(BusinessExpense expense)
+    {
+        editingId = expense.ExpenseId; draft.Date = expense.Date; draft.Amount = expense.Amount;
+        draft.Currency = expense.Currency; draft.Category = expense.Category; draft.Description = expense.Description;
+    }
+
+    private void CancelEdit() { editingId = null; draft.Date = DateTime.Today.ToString("yyyy-MM-dd"); draft.Amount = 0; draft.Currency = filterCurrency; draft.Category = "software"; draft.Description = string.Empty; }
+
+    private static string SaveError(System.Net.HttpStatusCode statusCode) => statusCode switch
+    {
+        System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden => "Company operator access is required.",
+        System.Net.HttpStatusCode.BadRequest => "Check the expense date, amount, currency, category, and description.",
+        System.Net.HttpStatusCode.NotFound => "This expense no longer exists. Reload the ledger and try again.",
+        System.Net.HttpStatusCode.ServiceUnavailable => "The expense database is unavailable. Try again shortly.",
+        _ => "The expense could not be saved. Check the server response and try again."
+    };
+}

@@ -1,0 +1,35 @@
+﻿@page "/loginbak"
+@using DesignMode.AI.Shared.Security;
+@using DesignMode.AI.Client.Services;
+@inject AuthService Auth
+@inject PostAuthNavigationService PostAuthNavigation
+@inject NavigationManager Nav
+
+@inject ApiConfigService ApiConfig
+
+<p>Current API URL: @ApiConfig.ApiBaseUrl</p>
+
+<h3>Login</h3>
+
+<input @bind="username" placeholder="Username" />
+<input @bind="password" type="password" placeholder="Password" />
+<button @onclick="HandleLogin">Login</button>
+
+@if (errorMessage is not null)
+{
+    <p style="color:red">@errorMessage</p>
+}
+
+@code {
+    string username, password, errorMessage;
+
+    async Task HandleLogin()
+    {
+        var success = await Auth.Login(username, password, @ApiConfig.ApiBaseUrl);
+        if (success)
+            //await SavePendingIdeasAfterLogin();
+            await PostAuthNavigation.NavigateAsync();
+        else
+            errorMessage = "Invalid credentials.";
+    }
+}

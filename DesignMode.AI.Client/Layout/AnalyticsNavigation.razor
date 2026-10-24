@@ -1,0 +1,8 @@
+@inject NavigationManager Navigation
+@implements IDisposable
+@code {
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) await Analytics.PageAsync(Navigation.Uri); }
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) => await Analytics.PageAsync(args.Location);
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

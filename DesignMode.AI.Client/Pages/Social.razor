@@ -1,0 +1,1348 @@
+@page "/social"
+
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+@using DesignMode.AI.Shared.Security;
+@using DesignMode.AI.Client.Services;
+@using DesignMode.AI.Shared.Util;
+@using System.Text;
+@using Microsoft.AspNetCore.Components.Authorization
+@using DesignMode.AI.Shared.Security
+@using Microsoft.AspNetCore.Authorization
+@inject Blazored.LocalStorage.ILocalStorageService _localStorage
+@inject ApiConfigService ApiConfig
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<div class="dm-page" @onclick="HandlePageClick">
+    <main class="dm-hero">
+        <section class="dm-copy" style="margin-top: -86px;">
+            <span>
+                <img src="assets/img/logo-left.png" width="26px" height="26px" class="navbar-brand-img h-100" alt="main_logo"
+                     style="width: 20px; height: 20px; margin-top: -9px; object-fit: contain;">
+                <span style="font-family: 'SF Pro Display','Arial'; font-weight: 650; font-size: 24px; color: #1f2951; text-transform: none;">
+                    design<span style="color: #ffa900; font-weight: 650;">
+                        <img src="images/logo-m3.svg" style="width: 30px; margin-left: 3px; margin-right: 3px; margin-bottom: 3px;">
+                    </span>ode.ai
+                </span>
+            </span>
+            <h1 style="margin-top: 20px;">
+                Explore Social<br />
+                Content Directions<span>.</span>
+            </h1>
+
+            <p>
+                Discover designer-built creative directions and generate
+                consistent social content tailored to your brand.
+            </p>
+
+            <div class="dm-form" style="margin-top: -26px;">
+                <label>Company name</label>
+                <input placeholder="Enter your company name" @bind="CompanyName" />
+
+                <label>Industry</label>
+                <div class="industry-combo" @onclick:stopPropagation="true">
+                    <div class="combo-input-wrapper" @onclick:stopPropagation="true">
+                        <input placeholder="e.g. Beauty, SaaS, Real Estate, Fitness" @bind="IndustrySearch" />
+                    </div>
+                </div>
+
+                <button @onclick="GoToInit" disabled="@IsLoading">
+                    @if (IsLoading)
+                    {
+                        <span class="spinner"></span>
+                        <span>Loading...</span>
+                    }
+                    else
+                    {
+                        <span>See My Directions →</span>
+                    }
+                </button>
+
+                <small>No credit card required</small>
+
+                <div class="industry-proof">
+                    Trusted across Beauty • Fashion • Food • SaaS • Ecommerce
+                </div>
+            </div>
+        </section>
+
+        <section class="dm-preview">
+            <div class="dm-direction-row">
+                <article class="dm-card minimal">
+                    <div class="dm-card-image">
+                        <p style="
+font-weight: 500;font-size: 20px;color: #2F2A26;text-transform: none;">Less is more.<br />Always.</p>
+                    </div>
+                    <footer>
+                        <b>Minimal</b>
+                        <span></span>
+                    </footer>
+                </article>
+
+                <article class="dm-card active bold">
+                    <div class="dm-card-image">
+                        <p style="
+font-weight: 500;font-size: 20px;color: white;text-transform: none;">Nature<br />in every drop.</p>
+                    </div>
+                    <footer>
+                        <b>Bold</b>
+                        <span>✓</span>
+                    </footer>
+                </article>
+
+                <article class="dm-card editorial">
+                    <div class="dm-card-image">
+                        <p style="
+font-weight: 500;font-size: 20px;color: white;text-transform: none;">Thoughtful<br />by nature.</p>
+                    </div>
+                    <footer>
+                        <b>Editorial</b>
+                        <span></span>
+                    </footer>
+                </article>
+            </div>
+
+            <div class="dm-arrow">↓</div>
+            <h4>Your selected direction</h4>
+
+            <div class="dm-social-strip">
+                <div class="dm-post large">
+                    <p>Clean beauty.<br />Powered by<br />nature.</p>
+                </div>
+                <div xxclass="dm-phone">
+                    <img src="/assets/img/vase4.png" style="width:150px;" />
+                </div>
+                <div class="dm-post">
+                    <span class="float-icon">❤️</span>
+                    <span class="float-icon">💬</span>
+                    <span class="float-icon">💬</span>
+                    <span class="float-icon">❤️</span>
+                    <span class="float-icon">💬</span>
+
+                    <span class="float-icon">❤️</span>
+                </div>
+                <div class="dm-post video">
+                    <span>▶</span>
+                </div>
+            </div>
+
+            <div class="dm-platforms">
+                <span><i class="fab fa-instagram"></i></span>
+                <span><i class="fab fa-facebook-f"></i></span>
+                <span><i class="fab fa-tiktok"></i></span>
+                <span><i class="fab fa-pinterest-p"></i></span>
+                <span><i class="fab fa-linkedin-in"></i></span>
+                <span><i class="fab fa-youtube"></i></span>
+            </div>
+        </section>
+    </main>
+</div>
+
+@code {
+    private string CompanyName { get; set; } = "";
+    private string IndustrySearch { get; set; } = "";
+    private string SelectedIndustry { get; set; } = "";
+    private bool ShowIndustryOptions { get; set; } = false;
+    private int SelectedIndex { get; set; } = -1;
+    private bool IsLoading { get; set; } = false;
+
+    private readonly List<string> Industries = new()
+    {
+        "Beauty",
+        "Skincare",
+        "Fashion",
+        "Food & Beverage",
+        "Technology",
+        "SaaS",
+        "Healthcare",
+        "Real Estate",
+        "Fitness",
+        "Finance",
+        "Ecommerce",
+        "Wellness",
+        "Education",
+        "Coaching",
+        "Consulting",
+        "Restaurants",
+        "Hospitality",
+        "Travel",
+        "Home Services",
+        "Professional Services",
+        "Retail",
+        "Events",
+        "Entertainment",
+        "Nonprofit",
+        "Other"
+    };
+
+    private IEnumerable<string> FilteredIndustries =>
+        string.IsNullOrWhiteSpace(IndustrySearch)
+            ? Industries.Take(6)
+            : Industries
+                .Where(i => i.Contains(IndustrySearch, StringComparison.OrdinalIgnoreCase))
+                .Take(6);
+
+    private void SelectIndustry(string industry)
+    {
+        SelectedIndustry = industry;
+        IndustrySearch = industry;
+        ShowIndustryOptions = false;
+        SelectedIndex = -1;
+    }
+
+    public async Task SavePendingCompanyInfoWithLocalBeforeLogin(
+        string url,
+        string anonymousUserId)
+    {
+        const string localStorageKey = "unsaved_company_industry";
+
+        if (!await _localStorage.ContainKeyAsync(localStorageKey))
+            return;
+
+        var pendingCompany = await _localStorage.GetItemAsync<CompanyIndustryRequestLocal>(localStorageKey);
+
+        if (pendingCompany == null ||
+            string.IsNullOrWhiteSpace(pendingCompany.Name) ||
+            string.IsNullOrWhiteSpace(pendingCompany.Industry))
+            return;
+
+        pendingCompany.UserId = anonymousUserId;
+        pendingCompany.Local = anonymousUserId;
+
+        await _localStorage.SetItemAsync(localStorageKey, pendingCompany);
+
+        var request = new CompanyIndustryLocalRequest
+            {
+                Name = pendingCompany.Name,
+                Industry = pendingCompany.Industry,
+                UserId = anonymousUserId,
+                Local = anonymousUserId
+            };
+
+        string functionUrl = $"{url}api/SaveCompanyIndustryLocal?code=REDACTED_FOR_GROOMING";
+
+        HttpClient client = new HttpClient();
+        var response = await client.PostAsJsonAsync(functionUrl, request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"❌ Failed to save company info with local data: {error}");
+            return;
+        }
+    }
+    public class CompanyIndustryLocalRequest
+    {
+        public string Name { get; set; }
+        public string Industry { get; set; }
+        public string UserId { get; set; }
+        public string Local { get; set; }
+    }
+
+    private void ToggleDropdown()
+    {
+        ShowIndustryOptions = !ShowIndustryOptions;
+    }
+
+    private void HandlePageClick()
+    {
+        // Close dropdown when clicking anywhere on the page
+        if (ShowIndustryOptions)
+        {
+            ShowIndustryOptions = false;
+            SelectedIndex = -1;
+            StateHasChanged();
+        }
+    }
+
+    private async void OnIndustryKeyDown(KeyboardEventArgs e)
+    {
+        var filtered = FilteredIndustries.ToList();
+
+        if (e.Key == "ArrowDown")
+        {
+            await JS.InvokeVoidAsync("window.event.preventDefault");
+            if (filtered.Any())
+            {
+                SelectedIndex = Math.Min(SelectedIndex + 1, filtered.Count - 1);
+            }
+            ShowIndustryOptions = true;
+        }
+        else if (e.Key == "ArrowUp")
+        {
+            await JS.InvokeVoidAsync("window.event.preventDefault");
+            SelectedIndex = Math.Max(SelectedIndex - 1, -1);
+            ShowIndustryOptions = true;
+        }
+        else if (e.Key == "Enter")
+        {
+            await JS.InvokeVoidAsync("window.event.preventDefault");
+            if (SelectedIndex >= 0 && SelectedIndex < filtered.Count)
+            {
+                SelectIndustry(filtered[SelectedIndex]);
+            }
+            else if (filtered.Count == 1)
+            {
+                SelectIndustry(filtered[0]);
+            }
+            else if (!string.IsNullOrWhiteSpace(IndustrySearch))
+            {
+                // If no match found and user has typed something, use the typed value
+                SelectedIndustry = IndustrySearch;
+                ShowIndustryOptions = false;
+                SelectedIndex = -1;
+            }
+        }
+        else if (e.Key == "Escape")
+        {
+            ShowIndustryOptions = false;
+            SelectedIndex = -1;
+        }
+        else if (e.Key == "Tab")
+        {
+            ShowIndustryOptions = false;
+            SelectedIndex = -1;
+        }
+        else
+        {
+            // Any other key - show dropdown
+            ShowIndustryOptions = true;
+            SelectedIndex = -1;
+        }
+    }
+
+    private async void OnOptionKeyDown(KeyboardEventArgs e, string industry)
+    {
+        if (e.Key == "Enter")
+        {
+            await JS.InvokeVoidAsync("window.event.preventDefault");
+            SelectIndustry(industry);
+        }
+    }
+
+    private bool isMobileMenuOpen = false;
+    private ElementReference scrollContainer;
+    private List<string> animatedElements = new();
+
+    public class CompanyIndustryRequestLocal
+    {
+        public string Name { get; set; }
+        public string Industry { get; set; }
+        public string UserId { get; set; }
+        public string Local { get; set; }
+    }
+
+    private async Task GoToInit()
+    {
+        var industry = !string.IsNullOrWhiteSpace(SelectedIndustry)
+            ? SelectedIndustry
+            : IndustrySearch;
+
+        if (string.IsNullOrWhiteSpace(CompanyName) || string.IsNullOrWhiteSpace(industry))
+            return;
+
+        IsLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            const string anonymousUserKey = "dm_anonymous_user_id";
+
+            // Clear any previous anonymous user id
+            await _localStorage.RemoveItemAsync(anonymousUserKey);
+
+            // Generate a new anonymous user id
+            var anonymousUserId = Guid.NewGuid().ToString("N");
+            await _localStorage.SetItemAsync(anonymousUserKey, anonymousUserId);
+
+            var pendingCompany = new CompanyIndustryRequestLocal
+                {
+                    Name = CompanyName,
+                    Industry = industry,
+                    UserId = anonymousUserId,
+                    Local = anonymousUserId
+                };
+
+            await _localStorage.SetItemAsync("unsaved_company_industry", pendingCompany);
+
+            await SavePendingCompanyInfoWithLocalBeforeLogin(
+                ApiConfig.ApiBaseUrl,
+                anonymousUserId
+            );
+
+            Nav.NavigateTo($"/designerintro?name={CompanyName}&industry={industry}&type=social", forceLoad: true, replace: true);
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToSignUp()
+    {
+        Nav.NavigateTo("/signup", forceLoad: true);
+    }
+
+    private void GoToLogIn()
+    {
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    private void ToggleMobileMenu()
+    {
+        isMobileMenuOpen = !isMobileMenuOpen;
+    }
+
+    private string Login { get; set; } = "";
+    [Inject] AuthenticationStateProvider AuthStateProvider { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+        await UpdateLoginAsync();
+    }
+
+    private async Task UpdateLoginAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            Login = authState.User.Identity.Name ?? "Logged In";
+        }
+        else
+        {
+            Login = "";
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async void OnAuthenticationStateChanged(Task<AuthenticationState> task)
+    {
+        var authState = await task;
+
+        Login = authState.User.Identity?.IsAuthenticated == true
+            ? authState.User.Identity.Name ?? "Logged In"
+            : "";
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+
+        await JS.InvokeVoidAsync("eval", @"
+            window.removeEventListener('scroll', window.checkScrollAnimations);
+        ");
+    }
+
+    private async Task OnScroll()
+    {
+        var js = (IJSObjectReference)null;
+        try
+        {
+            js = await JS.InvokeAsync<IJSObjectReference>("import", "./js/scroll-animations.js");
+            await js.InvokeVoidAsync("checkScrollAnimations");
+        }
+        finally
+        {
+            if (js != null) await js.DisposeAsync();
+        }
+        StateHasChanged();
+    }
+
+    [Inject] IJSRuntime JS { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("eval", @"
+                window.checkScrollAnimations = function() {
+                    const elements = document.querySelectorAll('.animate-on-scroll');
+                    elements.forEach(el => {
+                        const rect = el.getBoundingClientRect();
+                        const isVisible = rect.top < window.innerHeight - 100 && rect.bottom > 0;
+                        if (isVisible && !el.classList.contains('animated')) {
+                            el.classList.add('animated');
+                            const animation = el.getAttribute('data-animation') || 'fadeInUp';
+                            el.classList.add(animation);
+                        }
+                    });
+                };
+                window.addEventListener('scroll', checkScrollAnimations);
+                window.checkScrollAnimations();
+            ");
+        }
+    }
+}
+
+<style>
+    .dm-page {
+        min-height: 100vh;
+        background: radial-gradient(circle at 50% 20%, #f8f8fb 0%, #fff 45%, #f7f7f9 100%);
+        color: #0f172a;
+        font-family: Inter, "SF Pro Display", Arial, sans-serif;
+        padding: 14px 64px;
+        width: 100%;
+    }
+
+    .dm-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .dm-brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 25px;
+        font-weight: 800;
+    }
+
+    .dm-logo {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #ef5bd6 0%, #6257f6 70%);
+        position: relative;
+    }
+
+        .dm-logo::after {
+            content: "";
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            bottom: 0;
+            left: 0;
+            border-radius: 50%;
+            background: #6257f6;
+        }
+
+    .dm-nav {
+        display: flex;
+        align-items: center;
+        gap: 28px;
+    }
+
+    .dm-login {
+        background: none;
+        border: 0;
+        font-size: 16px;
+        color: #111827;
+        cursor: pointer;
+    }
+
+    .dm-primary,
+    .dm-form button {
+        border: 0;
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #5a55f4, #bd38cf);
+        box-shadow: 0 12px 28px rgba(93, 72, 235, .25);
+    }
+
+    .dm-primary {
+        padding: 16px 28px;
+        font-size: 16px;
+    }
+
+    .dm-hero {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        align-items: center;
+        gap: 80px;
+        max-width: 1440px;
+        margin: 0px auto 0;
+    }
+
+    .dm-copy h1 {
+        font-size: clamp(48px, 5vw, 74px);
+        line-height: 1.04;
+        letter-spacing: -0.055em;
+        margin: 0 0 24px;
+        font-weight: 850;
+    }
+
+        .dm-copy h1 span {
+            color: #5a55f4;
+        }
+
+    .dm-copy p {
+        max-width: 560px;
+        color: #818898;
+        font-size: 24px;
+        line-height: 1.45;
+        font-weight: 650;
+        margin-bottom: 42px;
+    }
+
+    .dm-form {
+        max-width: 500px;
+    }
+
+        .dm-form label {
+            display: block;
+            font-weight: 800;
+            margin: 24px 0 9px;
+        }
+
+        .dm-form input:not(.combo-input),
+        .dm-form select {
+            width: 100%;
+            height: 54px;
+            border: 1px solid #dde1ea;
+            border-radius: 9px;
+            padding: 0 18px;
+            font-size: 17px;
+            color: #000;
+            background: #fff;
+        }
+
+    /* Industry Combo Styles */
+    .industry-combo {
+        position: relative;
+        width: 100%;
+    }
+
+    .combo-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        background: #fff;
+        border: 1px solid #dde1ea;
+        border-radius: 9px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .combo-input-wrapper:hover {
+            border-color: #b0b8c9;
+        }
+
+        .combo-input-wrapper:focus-within {
+            border-color: #5a55f4;
+            box-shadow: 0 0 0 3px rgba(90, 85, 244, 0.1);
+        }
+
+    .combo-input {
+        flex: 1;
+        height: 54px;
+        border: none !important;
+        outline: none !important;
+        padding: 0 18px;
+        font-size: 17px;
+        color: #1f2951;
+        background: transparent !important;
+        border-radius: 9px !important;
+        cursor: text;
+    }
+
+        .combo-input::placeholder {
+            color: #8b93a5;
+        }
+
+    .combo-arrow {
+        padding: 0 16px;
+        color: #8b93a5;
+        font-size: 14px;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        user-select: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+    }
+
+        .combo-arrow:hover {
+            color: #5a55f4;
+        }
+
+        .combo-arrow svg {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 20px;
+            height: 20px;
+        }
+
+        .combo-arrow.open svg {
+            transform: rotate(180deg);
+        }
+
+        .combo-arrow.open {
+            color: #5a55f4;
+        }
+
+    .combo-options {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #e7e7ef;
+        border-radius: 9px;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+        max-height: 150px;
+        overflow-y: auto;
+        z-index: 1000;
+        padding: 6px 0;
+        animation: slideDown 0.2s ease;
+    }
+
+    @@keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .combo-option {
+        padding: 10px 18px;
+        font-size: 16px;
+        color: #1f2951;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        transition: background 0.15s ease;
+        outline: none;
+    }
+
+        .combo-option:hover {
+            background: #f5f5fa;
+        }
+
+        .combo-option.selected {
+            background: #f0efff;
+            color: #5a55f4;
+            font-weight: 600;
+        }
+
+        .combo-option .check-mark {
+            color: #5a55f4;
+            font-weight: 700;
+            font-size: 14px;
+            width: 20px;
+            flex-shrink: 0;
+        }
+
+        .combo-option.disabled {
+            color: #9ca3af;
+            cursor: default;
+            font-style: italic;
+        }
+
+            .combo-option.disabled:hover {
+                background: transparent;
+            }
+
+    .no-results .combo-option {
+        color: #9ca3af;
+        cursor: default;
+        justify-content: center;
+        padding: 16px 18px;
+        font-style: italic;
+    }
+
+        .no-results .combo-option:hover {
+            background: transparent;
+        }
+
+    /* Scrollbar styling */
+    .combo-options::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .combo-options::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .combo-options::-webkit-scrollbar-thumb {
+        background: #dde1ea;
+        border-radius: 999px;
+    }
+
+        .combo-options::-webkit-scrollbar-thumb:hover {
+            background: #c0c7d5;
+        }
+
+    .dm-form button {
+        width: 100%;
+        margin-top: 28px;
+        height: 66px;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        transition: opacity 0.3s ease;
+    }
+
+        .dm-form button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .dm-form button span {
+            margin-left: 14px;
+            font-size: 20px;
+        }
+
+    /* Spinner animation */
+    .spinner {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 0.8s ease-in-out infinite;
+        flex-shrink: 0;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .dm-form small {
+        display: block;
+        margin-top: 28px;
+        color: #8b93a5;
+        font-size: 15px;
+    }
+
+    .dm-preview {
+        background: rgba(255,255,255,.82);
+        border: 1px solid #ececf1;
+        border-radius: 12px;
+        box-shadow: 0 22px 55px rgba(15,23,42,.09);
+        padding: 34px;
+        text-align: center;
+    }
+
+        .dm-preview h3,
+        .dm-preview h4 {
+            margin: 0 0 15px;
+            font-size: 17px;
+            font-weight: 850;
+        }
+
+    .dm-direction-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 34px;
+    }
+
+    .dm-card {
+        overflow: hidden;
+        border-radius: 10px;
+        border: 1px solid #e7e7ef;
+        background: #fff;
+        box-shadow: 0 10px 18px rgba(15,23,42,.08);
+    }
+
+        .dm-card.active {
+            border: 2px solid #6858f5;
+        }
+
+    .dm-card-image {
+        position: relative;
+        height: 278px;
+        padding: 34px 24px;
+        text-align: left;
+        overflow: hidden;
+    }
+
+        .dm-card-image p,
+        .dm-post p,
+        .dm-phone p {
+            color: white;
+            font-family: Georgia, serif;
+            font-size: 17px;
+            line-height: 1.15;
+            position: relative;
+            z-index: 2;
+        }
+
+    .minimal .dm-card-image {
+        background: linear-gradient( rgba(217, 185, 168, 0.25), rgba(242, 223, 210, 0.25) ), url('/assets/img/vase1-new.png') center/cover no-repeat !important;
+    }
+
+    .bold .dm-card-image,
+    .dm-post {
+        background: url('/assets/img/vase2-new.png') center center / cover no-repeat !important;
+    }
+
+    .bold
+    .dm-phone {
+        background: url('/assets/img/vase4.png') center center / cover no-repeat !important;
+    }
+
+    .editorial .dm-card-image {
+        background: url('/assets/img/vase3-new.png') center center / cover no-repeat !important;
+    }
+
+    .dm-bottle {
+        position: absolute;
+        width: 48px;
+        height: 94px;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        border-radius: 10px 10px 6px 6px;
+        background: linear-gradient(90deg, #12150b, #344724, #0d1108);
+        box-shadow: 0 18px 25px rgba(0,0,0,.25);
+    }
+
+        .dm-bottle::before {
+            content: "";
+            position: absolute;
+            width: 22px;
+            height: 18px;
+            top: -18px;
+            left: 13px;
+            background: #111;
+            border-radius: 4px 4px 0 0;
+        }
+
+    .dm-card footer {
+        height: 56px;
+        padding: 0 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+        .dm-card footer span {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid #9aa1b2;
+            display: grid;
+            place-items: center;
+            font-size: 12px;
+        }
+
+    .dm-card.active footer span {
+        background: #6257f6;
+        color: white;
+        border-color: #6257f6;
+    }
+
+    .dm-arrow {
+        color: #c5cad5;
+        margin: 3px 0;
+        font-size: 26px;
+    }
+
+    .dm-social-strip {
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 12px 28px rgba(15,23,42,.08);
+        padding: 20px 14px 24px;
+        display: grid;
+        grid-template-columns: 1.2fr .7fr .8fr .8fr;
+        gap: 12px;
+        align-items: end;
+    }
+
+    .dm-post,
+    .dm-phone {
+        height: 174px;
+        border-radius: 7px;
+        padding: 28px 18px;
+        text-align: left;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .dm-phone {
+        height: 210px;
+        border: 6px solid #111;
+        border-radius: 22px;
+        background: url('/assets/img/vase4.png') center center / cover no-repeat !important;
+    }
+
+    .dm-notch {
+        position: absolute;
+        width: 72px;
+        height: 12px;
+        background: #111;
+        border-radius: 0 0 8px 8px;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .dm-story {
+        height: 34px;
+        margin: 18px 0;
+        border-radius: 20px;
+        background: rgba(255,255,255,.65);
+    }
+
+    .dm-video span {
+        position: absolute;
+    }
+
+    .video span {
+        position: absolute;
+        right: 36px;
+        top: 61px;
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        color: white;
+        display: grid;
+        place-items: center;
+        font-size: 24px;
+    }
+
+    .dm-platforms {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 28px;
+        font-weight: 900;
+        font-size: 25px;
+    }
+
+    .hero-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(98,91,255,.08);
+        color: #625bff;
+        border: 1px solid rgba(98,91,255,.15);
+        padding: 8px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 24px;
+    }
+
+    .hero-benefits {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 30px;
+    }
+
+        .hero-benefits li {
+            font-size: 17px;
+            color: #374151;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+    .industry-proof {
+        margin-top: 20px;
+        font-size: 13px;
+        color: #9ca3af;
+        text-align: center;
+        line-height: 1.5;
+    }
+
+    @@media (max-width: 1000px) {
+        .dm-page {
+            padding: 24px;
+        }
+
+        .dm-hero {
+            grid-template-columns: 1fr;
+            gap: 48px;
+        }
+
+        .dm-direction-row,
+        .dm-social-strip {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 1024px) {
+        .dm-page {
+            padding: 24px;
+        }
+
+        .dm-hero {
+            grid-template-columns: 1fr;
+            gap: 48px;
+        }
+
+        .dm-direction-row,
+        .dm-social-strip {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .dm-copy {
+            margin-top: 4px !important;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .dm-social-strip {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .dm-phone {
+            grid-column: span 2;
+        }
+    }
+
+    /* iPad Portrait & Landscape */
+    @@media screen and (min-width: 768px) and (max-width: 1024px) {
+        .dm-copy {
+            margin-top: 4px !important;
+        }
+    }
+
+    @@media screen and (min-width: 1025px) and (max-width: 1366px) {
+        .dm-copy {
+            margin-top: 4px !important;
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .combo-options {
+            position: relative;
+            top: 6px;
+            max-height: 148px;
+            margin-bottom: 12px;
+        }
+    }
+
+    .float-icon {
+        position: absolute;
+        user-select: none;
+        pointer-events: none;
+    }
+
+        /* Random placements */
+        .float-icon:nth-child(1) {
+            top: 10%;
+            left: 12%;
+            font-size: 22px;
+            opacity: 1;
+        }
+
+        .float-icon:nth-child(2) {
+            top: 18%;
+            right: 8%;
+            font-size: 30px;
+            opacity: 0.8;
+        }
+
+        .float-icon:nth-child(3) {
+            top: 40%;
+            left: 20%;
+            font-size: 18px
+        }
+
+        .float-icon:nth-child(4) {
+            bottom: 4%;
+            right: 5%;
+            font-size: 26px;
+            opacity: 1;
+        }
+
+        .float-icon:nth-child(5) {
+            CONTAIN-INTRINSIC-SIZE: AUTO 100PX;
+            top: 65%;
+            left: 8%;
+            font-size: 26px;
+            opacity: 1.5;
+        }
+
+        .float-icon:nth-child(6) {
+            top: 55%;
+            right: 25%;
+            font-size: 17px;
+            opacity: 0.6;
+        }
+
+        .float-icon:nth-child(7) {
+            top: 80%;
+            left: 50%;
+            font-size: 34px;
+            opacity: 0.6;
+        }
+
+        .float-icon:nth-child(8) {
+            bottom: 15%;
+            right: 15%;
+            font-size: 38px;
+            opacity: 1;
+        }
+
+        .float-icon:nth-child(9) {
+            top: 65%;
+            left: 8%;
+            font-size: 26px;
+            opacity: 0.5;
+        }
+
+        .float-icon:nth-child(10) {
+            top: 55%;
+            right: 25%;
+            font-size: 20px;
+            opacity: 0.3;
+        }
+
+        .float-icon:nth-child(11) {
+            top: 80%;
+            left: 50%;
+            font-size: 34px;
+            opacity: 0.8;
+        }
+        @@media (max-width: 900px) {
+    .dm-social-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: stretch;
+    }
+
+    .dm-post,
+    .dm-phone {
+        height: clamp(150px, 28vw, 210px);
+    }
+}
+
+@@media (max-width: 520px) {
+    .dm-social-strip {
+        grid-template-columns: 1fr;
+    }
+
+    .dm-post,
+    .dm-phone {
+        height: auto;
+        min-height: 170px;
+    }
+
+    .dm-post.large p {
+        font-size: 16px;
+    }
+
+    .video span {
+        right: 50%;
+        top: 50%;
+        transform: translate(50%, -50%);
+    }
+}
+/* iPad Portrait (768-1024) */
+@@media (min-width: 768px) and (max-width: 1024px) {
+
+    .dm-social-strip {
+        grid-template-columns: 1.2fr .8fr .8fr;
+        gap: 10px;
+        padding: 20px 12px;
+    }
+
+    .dm-post,
+    .dm-phone {
+        height: 160px;
+        padding: 16px;
+    }
+
+    .dm-phone {
+        height: 180px;
+    }
+
+    /* Make phone span two rows */
+    .dm-phone {
+        grid-row: span 2;
+    }
+
+    .dm-post.large p {
+        font-size: 18px;
+    }
+
+    .float-icon {
+        transform: scale(.85);
+    }
+}
+
+/* Small tablets / large phones */
+@@media (min-width: 521px) and (max-width: 767px) {
+
+    .dm-social-strip {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+
+    .dm-phone {
+        grid-column: span 2;
+        height: 220px;
+    }
+
+    .dm-post {
+        height: 170px;
+    }
+}
+/* iPad Portrait */
+@@media (min-width: 768px) and (max-width: 1024px) {
+    .dm-direction-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .dm-card-image {
+        height: 220px;
+        padding: 22px 16px;
+    }
+
+    .dm-card-image p {
+        font-size: 18px !important;
+    }
+}
+
+/* Small tablets */
+@@media (min-width: 521px) and (max-width: 767px) {
+    .dm-direction-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .dm-card-image {
+        height: 180px;
+        padding: 18px 12px;
+    }
+
+    .dm-card-image p {
+        font-size: 16px !important;
+    }
+
+    .dm-card footer {
+        padding: 0 10px;
+    }
+}
+/* iPad Portrait + Landscape */
+@@media (min-width: 768px) and (max-width: 1024px) {
+    .video span {
+        top: 50%;
+        left: 50%;
+        right: auto;
+        transform: translate(-50%, -50%);
+    }
+}
+
+    @@media (max-width: 1024px) {
+        .video span {
+            top: 50%;
+            left: 50%;
+            right: auto;
+            transform: translate(-50%, -50%);
+        }
+    }
+</style>

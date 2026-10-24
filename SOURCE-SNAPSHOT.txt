@@ -1,0 +1,3 @@
+Azure source branch: master-caio
+Azure source commit: 6880fd831af19ef73d0b6a2864d552408289bfeb
+Purpose: sanitized source for grooming; not a build or deployment copy.

@@ -1,0 +1,262 @@
+@page "/app/testlogic"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using DesignMode.AI.Shared.Security
+@inject AuthenticationStateProvider AuthStateProvider
+
+<style>
+    .mock-dashboard { color: #344767; padding: 1.5rem 0; }
+    .mock-dashboard-heading { margin-bottom: 1.5rem; }
+    .mock-dashboard-heading h2 { color: #344767; font-size: 1.5rem; font-weight: 600; margin: 0 0 .35rem; }
+    .mock-dashboard-heading p { color: #8392ab; margin: 0; }
+    .mock-dashboard-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; }
+    .mock-chart-card { background: #fff; border: 0; border-radius: .75rem; box-shadow: 0 4px 20px rgba(0, 0, 0, .06); height: 100%; }
+    .mock-chart-card .card-body { padding: 1.25rem; }
+    .mock-chart-title { color: #344767; font-size: 1rem; font-weight: 600; margin: 0 0 .25rem; }
+    .mock-chart-subtitle { color: #8392ab; font-size: .8rem; margin: 0 0 .75rem; }
+    .mock-chart { display: block; width: 100%; height: 220px; }
+    .mock-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; color: #67748e; font-size: .78rem; margin-top: .5rem; }
+    .mock-legend-item { align-items: center; display: inline-flex; gap: .4rem; }
+    .mock-swatch { border-radius: 50%; display: inline-block; height: .65rem; width: .65rem; }
+    .mock-axis { fill: #8392ab; font: 11px system-ui, sans-serif; }
+    .mock-gridline { stroke: #e9ecef; stroke-width: 1; }
+    .mock-summary { color: #67748e; font-size: .8rem; margin: .75rem 0 0; }
+    @@media (max-width: 991.98px) { .mock-dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @@media (max-width: 575.98px) { .mock-dashboard { padding: 1rem 0; } .mock-dashboard-grid { grid-template-columns: 1fr; } .mock-chart { height: 210px; } }
+</style>
+
+<h3>TestLogin</h3>
+
+@if (!isAuthorized)
+{
+    <p>Checking authorization...</p>
+}
+else
+{
+    <p>Welcome, @username! You are authorized to view this page.</p>
+    <section class="mock-dashboard" aria-labelledby="mock-dashboard-title">
+        <header class="mock-dashboard-heading">
+            <h2 id="mock-dashboard-title">Mock data</h2>
+            <p>A quick view of sample audience, performance, and category metrics.</p>
+        </header>
+        <div class="mock-dashboard-grid">
+            <article class="card mock-chart-card" aria-labelledby="audience-title">
+                <div class="card-body">
+                    <h3 class="mock-chart-title" id="audience-title">Audience Mix</h3>
+                    <p class="mock-chart-subtitle">Share by audience segment</p>
+                    <svg class="mock-chart" viewBox="0 0 240 220" role="img" aria-labelledby="audience-svg-title audience-svg-desc">
+                        <title id="audience-svg-title">Audience mix pie chart</title>
+                        <desc id="audience-svg-desc">Three segments: 45 percent, 35 percent, and 20 percent.</desc>
+                        <path d="M120 110 L120 22 A88 88 0 0 1 145.9 194.1 Z" fill="#5e72e4" />
+                        <path d="M120 110 L145.9 194.1 A88 88 0 0 1 32 110 Z" fill="#2dce89" />
+                        <path d="M120 110 L32 110 A88 88 0 0 1 120 22 Z" fill="#fb6340" />
+                        <text x="163" y="103" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">45%</text>
+                        <text x="91" y="163" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">35%</text>
+                        <text x="75" y="72" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">20%</text>
+                    </svg>
+                    <div class="mock-legend" aria-label="Audience mix legend">
+                        <span class="mock-legend-item"><i class="mock-swatch" style="background:#5e72e4"></i>Segment A - 45%</span>
+                        <span class="mock-legend-item"><i class="mock-swatch" style="background:#2dce89"></i>Segment B - 35%</span>
+                        <span class="mock-legend-item"><i class="mock-swatch" style="background:#fb6340"></i>Segment C - 20%</span>
+                    </div>
+                    <p class="mock-summary">Segment A leads at 45%, followed by B at 35% and C at 20%.</p>
+                </div>
+            </article>
+
+            <article class="card mock-chart-card" aria-labelledby="performance-title">
+                <div class="card-body">
+                    <h3 class="mock-chart-title" id="performance-title">Performance Trend</h3>
+                    <p class="mock-chart-subtitle">Two point sample - index value</p>
+                    <svg class="mock-chart" viewBox="0 0 300 220" role="img" aria-labelledby="performance-svg-title performance-svg-desc">
+                        <title id="performance-svg-title">Performance trend line chart</title>
+                        <desc id="performance-svg-desc">Value rises from 42 at point one to 68 at point two.</desc>
+                        <line class="mock-gridline" x1="48" y1="35" x2="280" y2="35" />
+                        <line class="mock-gridline" x1="48" y1="85" x2="280" y2="85" />
+                        <line class="mock-gridline" x1="48" y1="135" x2="280" y2="135" />
+                        <line class="mock-gridline" x1="48" y1="185" x2="280" y2="185" />
+                        <text class="mock-axis" x="38" y="189" text-anchor="end">0</text>
+                        <text class="mock-axis" x="38" y="139" text-anchor="end">25</text>
+                        <text class="mock-axis" x="38" y="89" text-anchor="end">50</text>
+                        <text class="mock-axis" x="38" y="39" text-anchor="end">75</text>
+                        <text class="mock-axis" x="95" y="207" text-anchor="middle">Point 1</text>
+                        <text class="mock-axis" x="235" y="207" text-anchor="middle">Point 2</text>
+                        <text class="mock-axis" x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)">Value</text>
+                        <polyline points="95,101 235,49" fill="none" stroke="#5e72e4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="95" cy="101" r="7" fill="#5e72e4" stroke="#fff" stroke-width="2" />
+                        <circle cx="235" cy="49" r="7" fill="#f5365c" stroke="#fff" stroke-width="2" />
+                        <text x="95" y="86" text-anchor="middle" fill="#5e72e4" font-size="12" font-weight="700">42</text>
+                        <text x="235" y="34" text-anchor="middle" fill="#f5365c" font-size="12" font-weight="700">68</text>
+                    </svg>
+                    <div class="mock-legend" aria-label="Performance point legend">
+                        <span class="mock-legend-item"><i class="mock-swatch" style="background:#5e72e4"></i>Point 1 - 42</span>
+                        <span class="mock-legend-item"><i class="mock-swatch" style="background:#f5365c"></i>Point 2 - 68</span>
+                    </div>
+                    <p class="mock-summary">Sample performance increased from 42 to 68 index points.</p>
+                </div>
+            </article>
+
+            <article class="card mock-chart-card" aria-labelledby="category-title">
+                <div class="card-body">
+                    <h3 class="mock-chart-title" id="category-title">Category Results</h3>
+                    <p class="mock-chart-subtitle">Mock score by category</p>
+                    <svg class="mock-chart" viewBox="0 0 300 220" role="img" aria-labelledby="category-svg-title category-svg-desc">
+                        <title id="category-svg-title">Category results bar chart</title>
+                        <desc id="category-svg-desc">Category A scores 30, Category B scores 55, and Category C scores 80.</desc>
+                        <line class="mock-gridline" x1="48" y1="35" x2="280" y2="35" />
+                        <line class="mock-gridline" x1="48" y1="72.5" x2="280" y2="72.5" />
+                        <line class="mock-gridline" x1="48" y1="110" x2="280" y2="110" />
+                        <line class="mock-gridline" x1="48" y1="147.5" x2="280" y2="147.5" />
+                        <line class="mock-gridline" x1="48" y1="185" x2="280" y2="185" />
+                        <text class="mock-axis" x="38" y="189" text-anchor="end">0</text>
+                        <text class="mock-axis" x="38" y="151.5" text-anchor="end">20</text>
+                        <text class="mock-axis" x="38" y="114" text-anchor="end">40</text>
+                        <text class="mock-axis" x="38" y="76.5" text-anchor="end">60</text>
+                        <text class="mock-axis" x="38" y="39" text-anchor="end">80</text>
+                        <text class="mock-axis" x="13" y="110" text-anchor="middle" transform="rotate(-90 13 110)">Score</text>
+                        <rect x="73" y="128.75" width="42" height="56.25" rx="5" fill="#8965e0" />
+                        <rect x="143" y="81.875" width="42" height="103.125" rx="5" fill="#8965e0" />
+                        <rect x="213" y="35" width="42" height="150" rx="5" fill="#8965e0" />
+                        <text x="94" y="120" text-anchor="middle" fill="#6f42c1" font-size="12" font-weight="700">30</text>
+                        <text x="164" y="73" text-anchor="middle" fill="#6f42c1" font-size="12" font-weight="700">55</text>
+                        <text x="234" y="27" text-anchor="middle" fill="#6f42c1" font-size="12" font-weight="700">80</text>
+                        <text class="mock-axis" x="94" y="204" text-anchor="middle">Category A</text>
+                        <text class="mock-axis" x="164" y="204" text-anchor="middle">Category B</text>
+                        <text class="mock-axis" x="234" y="204" text-anchor="middle">Category C</text>
+                    </svg>
+                    <div class="mock-legend" aria-label="Category chart legend">
+                        <span class="mock-legend-item"><i class="mock-swatch" style="background:#8965e0"></i>Score</span>
+                    </div>
+                    <p class="mock-summary">Category C has the highest score at 80; Category A scores 30.</p>
+                </div>
+            </article>
+        </div>
+    </section>
+}
+
+<button type="button" class="btn bg-gradient-primary" data-testid="auto-agent-test-button"
+        @onclick="() => _showAutoAgentTest = true">Auto Agent Test</button>
+
+<button type="button" class="btn bg-gradient-primary" data-testid="auto-company-test-button"
+        @onclick="() => _showAutoCompanyTest = true">AUTO COMPANY TEST</button>
+
+@if (_showAutoCompanyTest)
+{
+    <div class="modal-backdrop show"></div>
+    <div class="modal d-block" role="dialog" aria-modal="true" aria-labelledby="auto-company-test-message"
+         data-testid="auto-company-test-modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body" id="auto-company-test-message" data-testid="auto-company-test-message">AUTONOMOUS COMPANY WORKS</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn bg-gradient-primary" data-testid="auto-company-test-close"
+                            @onclick="() => _showAutoCompanyTest = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showAutoAgentTest)
+{
+    <div class="modal-backdrop show"></div>
+    <div class="modal d-block" role="dialog" aria-modal="true" aria-labelledby="auto-agent-test-message"
+         data-testid="auto-agent-test-modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body" id="auto-agent-test-message">AUTONOMOUS DEVELOPMENT WORKS</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn bg-gradient-primary" data-testid="auto-agent-test-close"
+                            @onclick="() => _showAutoAgentTest = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<button type="button" class="btn bg-gradient-primary" data-testid="auto-repair-test-button"
+        @onclick="() => _showAutoRepairTest = true">Auto Repair Test</button>
+
+<button type="button" class="btn bg-gradient-primary" data-testid="repair-pipeline-test-button"
+        @onclick="() => _showRepairPipelineTest = true">AUTO REPAIR PIPELINE TEST</button>
+
+<button type="button" class="btn bg-gradient-primary" data-testid="full-orchestrator-test-button"
+        @onclick="() => _showFullOrchestratorTest = true">FULL ORCHESTRATOR TEST</button>
+
+@if (_showFullOrchestratorTest)
+{
+    <div class="modal-backdrop show"></div>
+    <div class="modal d-block" role="dialog" aria-modal="true" aria-labelledby="full-orchestrator-test-message"
+         data-testid="full-orchestrator-test-modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body" id="full-orchestrator-test-message" data-testid="full-orchestrator-test-message">FULL AUTONOMOUS ORCHESTRATOR WORKS</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn bg-gradient-primary" data-testid="full-orchestrator-test-close"
+                            @onclick="() => _showFullOrchestratorTest = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showRepairPipelineTest)
+{
+    <div class="modal-backdrop show"></div>
+    <div class="modal d-block" role="dialog" aria-modal="true" aria-labelledby="repair-pipeline-test-message"
+         data-testid="repair-pipeline-test-modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body" id="repair-pipeline-test-message" data-testid="repair-pipeline-test-message">AUTONOMOUS REPAIR PIPELINE WORKS</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn bg-gradient-primary" data-testid="repair-pipeline-test-close"
+                            @onclick="() => _showRepairPipelineTest = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showAutoRepairTest)
+{
+    <div class="modal-backdrop show"></div>
+    <div class="modal d-block" role="dialog" aria-modal="true" aria-labelledby="auto-repair-test-message"
+         data-testid="auto-repair-test-modal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body" id="auto-repair-test-message">AUTONOMOUS REPAIR WORKS</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn bg-gradient-primary" data-testid="auto-repair-test-close"
+                            @onclick="() => _showAutoRepairTest = false">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _showAutoRepairTest;
+    private bool _showRepairPipelineTest;
+    private bool _showAutoAgentTest;
+    private bool _showAutoCompanyTest;
+    private bool _showFullOrchestratorTest;
+    private bool isAuthorized = false;
+    private string? username;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Check if the user is authenticated
+        isAuthorized = user.Identity.IsAuthenticated;
+
+        // If the user is authenticated, get the username
+        if (isAuthorized)
+        {
+            username = user.Identity.Name; // Assuming the username is stored in the "Name" claim
+        }
+
+        // Refresh the UI
+        StateHasChanged();
+    }
+}

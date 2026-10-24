@@ -1,0 +1,2906 @@
+@inherits DesignMode.AI.Client.Components.GenerationAwareComponent
+@using System.Collections.Generic
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.AspNetCore.Components.Authorization;
+@using Newtonsoft.Json;
+@using System.Text;
+@using System.Text.RegularExpressions;
+@using Microsoft.JSInterop
+@using System.Net.Http.Headers
+@inject AttributionContextService AttributionContext
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject AIUsageRefreshService UsageRefresh
+
+@if (IsBusy && !IsGeneratingLabel)
+{
+    <div class="modal-busy-overlay"><div class="loader"></div></div>
+}
+
+@if (Show)
+{
+    <div class="modal-overlay generation-workspace-overlay" @onclick="CloseModal">
+        <div class="vertical-modal-wrapper generation-workspace" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+
+            <div class="modal-tabs">
+                <button class="tab-button @(ActiveTab == TabType.GenerateNew ? "active" : "")"
+                        @onclick="() => SetActiveTab(TabType.GenerateNew)">
+                    <span class="tab-icon">✨</span> Generate New
+                </button>
+                <button class="tab-button @(ActiveTab == TabType.GeneratedLabel ? "active" : "")"
+                        aria-label="Generated Labels"
+                        @onclick="() => SetActiveTab(TabType.GeneratedLabel)"
+                        disabled="@(!IsGeneratingLabel && !HasExistingPackageLabels && string.IsNullOrWhiteSpace(GeneratedLabelPreviewUrl))">
+                    <span class="tab-icon">📦</span> Results
+                    @if (IsGeneratingLabel)
+                    {
+                        <span class="tab-badge generating">Generating...</span>
+                    }
+                    else if (HasExistingPackageLabels || GeneratedLabels.Any())
+                    {
+                        <span class="tab-badge">@GetGeneratedLabelCount()</span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(GeneratedLabelPreviewUrl))
+                    {
+                        <span class="tab-badge">New</span>
+                    }
+                </button>
+            </div>
+
+            <div class="modal-scroll-content">
+                @if (ActiveTab == TabType.GenerateNew)
+                {
+                    <div class="tab-content generate-new-tab">
+                        <div class="modal-header"><h2>Generate Package Label</h2></div>
+                        <div class="modal-intro">
+                            Select <strong>one image</strong>. We'll use it as the visual reference and generate a professional package label from it using your label specifications.
+                        </div>
+
+                        <div class="label-status">
+                            <span class="label-count">
+                                <span class="label-icon">📦</span>
+                                @if (HasLabelImages())
+                                {
+                                    <span>Package label images ready</span>
+                                    @if (SelectedImageIds.Any())
+                                    {
+                                        <span class="selection-count">1 selected</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span style="font-weight:bold;">No images available</span>
+                                    <span style="font-weight:normal;"> – Generate images first to unlock package label creation</span>
+                                }
+                            </span>
+                        </div>
+
+                        <AIRecommendationGenerationLoader IsVisible="@isGeneratingLabelImages" Message="Generating package label source image..." />
+                        @if (IsBusy && !isGeneratingLabelImages)
+                        {
+                            <div class="loading-container text-center">
+                                <div class="spinner-border text-primary mb-2"></div>
+                                <p>Loading images...</p>
+                            </div>
+                        }
+                        else if (!isGeneratingLabelImages)
+                        {
+                            @if (!string.IsNullOrWhiteSpace(ImageGenerationError))
+                            {
+                                <p role="alert" class="generation-error">@ImageGenerationError</p>
+                            }
+                            <div class="image-grid">
+                                @if (GetUniqueLabelImages().Any())
+                                {
+                                    @if (HasLabelImages())
+                                    {
+                                        var allLabelImages = GetUniqueLabelImages();
+                                        var groupedImages = allLabelImages.GroupBy(img => img.SubCategory?.ToLower() == "generic" ? img.DeliverableType : img.SubCategory);
+                                        @foreach (var group in groupedImages)
+                                        {
+                                            var firstImage = group.First();
+                                            var sectionTitle = firstImage.SubCategory?.ToLower() == "generic" ? firstImage.DeliverableType : group.Key;
+                                            var validImages = group.Where(i => !string.IsNullOrWhiteSpace(i.ImageUrl)).OrderBy(i => i.CountId).ToList();
+                                            if (validImages.Any())
+                                            {
+                                                <div class="deliverable-section">
+                                                    <h3 class="section-title">@sectionTitle</h3>
+                                                    <div class="image-col">
+                                                        @foreach (var image in validImages)
+                                                        {
+                                                            @ImageCard(image)
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+                                    }
+                                    @if (isGeneratingLabelImages && !HasLabelImages())
+                                    {
+                                        <div class="image-generating-section">
+                                            <h3 class="section-title">Generating Package Label Image...</h3>
+                                            <div class="image-card image-card-loading">
+                                                <div class="loading-placeholder"><div class="loading-spinner-small"></div><span>Generating source image...</span></div>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="empty-state">
+                                        <div class="empty-icon">📦</div>
+                                        <h3>No Package Label Images Yet</h3>
+                                        <p>Create a package label concept for your brand. Generate a label-ready image to use as the reference for your final label.</p>
+                                        <button type="button" class="generate-images-button" @onclick="GeneratePackageLabelImageOnClickAsync"
+                                                disabled="@isGeneratingLabelImages" aria-busy="@isGeneratingLabelImages">Generate Package Label Image</button>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <div class="label-config-section">
+                            <h3>Label Specifications</h3>
+                            <div class="config-options two-col">
+                                <div class="config-option"><label>Label Type</label><select @bind="SelectedLabelType" class="config-select"><option value="ProductLabel">Product Label</option><option value="ShippingLabel">Shipping Label</option><option value="WarningLabel">Warning/Caution Label</option><option value="InformationalLabel">Informational Label</option><option value="BrandedLabel">Branded Packaging</option><option value="PromotionalLabel">Promotional Sticker</option></select></div>
+                                <div class="config-option"><label>Label Size</label><select @bind="SelectedLabelSize" class="config-select"><option value="4x6">4&quot; x 6&quot; (Standard)</option><option value="4x2">4&quot; x 2&quot; (Small)</option><option value="6x4">6&quot; x 4&quot; (Large)</option><option value="A4">A4 (210x297mm)</option><option value="Custom">Custom Size</option></select></div>
+                                <div class="config-option"><label>Material</label><select @bind="SelectedMaterial" class="config-select"><option value="Paper">Paper</option><option value="Vinyl">Vinyl (Waterproof)</option><option value="Polyester">Polyester (Durable)</option><option value="Clear">Clear Transparent</option><option value="Kraft">Kraft Paper</option><option value="Glossy">Glossy Paper</option></select></div>
+                                <div class="config-option"><label>Orientation</label><select @bind="SelectedOrientation" class="config-select"><option value="Portrait">Portrait</option><option value="Landscape">Landscape</option><option value="Square">Square</option></select></div>
+                            </div>
+                            <div class="custom-fields-section">
+                                <h4>Label Information</h4>
+                                <div class="config-options two-col">
+                                    <div class="config-option"><label>Product Name</label><input type="text" @bind="ProductName" class="config-input" placeholder="Enter product name" /></div>
+                                    <div class="config-option"><label>SKU/Barcode</label><input type="text" @bind="SkuBarcode" class="config-input" placeholder="Enter SKU or barcode" /></div>
+                                </div>
+                                <div class="config-option"><label>Additional Information</label><textarea @bind="AdditionalInfo" class="config-textarea" placeholder="Ingredients, warnings, instructions, claims, etc."></textarea></div>
+                                <div class="checkbox-row">
+                                    <label><input type="checkbox" @bind="IncludeBarcode" /> Include Barcode</label>
+                                    <label><input type="checkbox" @bind="IncludeQrCode" /> Include QR Code</label>
+                                    <label><input type="checkbox" @bind="IncludeBrandLogo" /> Include Brand Logo</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="tab-content generated-label-tab">
+                        <div class="modal-header"><h2>Generated Package Label</h2></div>
+                        @if (IsGeneratingLabel)
+                        {
+                            <div class="generation-loading-container">
+                                <div class="generation-header"><h3>Creating Your Package Label</h3><div class="generation-status">@GenerationStatus</div></div>
+                                <div class="progress-bar-container"><div class="progress-bar" style="width: @(GenerationProgress)%;"></div></div>
+                                <div class="current-step-details">@CurrentStepDetails</div>
+                                <div class="generation-steps-log">
+                                    <h4>Generation Steps:</h4>
+                                    <div class="steps-list">
+                                        @foreach (var step in GenerationSteps)
+                                        {
+                                            <div class="step-item"><span class="step-check">✓</span><span>@step</span></div>
+                                        }
+                                        @if (GenerationProgress < 100)
+                                        {
+                                            <div class="step-item current"><span class="step-spinner"></span><span>@GenerationStatus</span></div>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="label-skeleton"><div class="skeleton-logo"></div><div class="skeleton-line wide"></div><div class="skeleton-line"></div><div class="skeleton-image"></div><div class="skeleton-line short"></div></div>
+                                <div class="generation-tip">💡 The AI is using the selected image as the visual reference for this label.</div>
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(GenerationError))
+                        {
+                            <div class="generation-error"><h3>Label generation failed</h3><p>@GenerationError</p><button class="save-button" @onclick="() => SetActiveTab(TabType.GenerateNew)">Back to Generate New</button></div>
+                        }
+                        else if (GeneratedLabels.Any() || HasExistingPackageLabels || !string.IsNullOrWhiteSpace(GeneratedLabelPreviewUrl))
+                        {
+                            @if (ActiveGeneratedLabel != null && !string.IsNullOrWhiteSpace(GeneratedLabelPreviewUrl))
+                            {
+                                <div class="generated-label-preview current-label-preview">
+                                    <div class="preview-toolbar">
+                                        <div class="preview-title-group">
+                                            <div class="current-label-heading">
+                                                <span class="current-label-pill">Current</span>
+                                                <strong>@GetActiveProductName()</strong>
+                                            </div>
+                                            <span class="preview-meta">@GetActivePreviewMeta()</span>
+                                        </div>
+
+                                        <div class="preview-actions">
+                                            <button class="toolbar-button" @onclick="OpenGeneratedLabel">↗ Open</button>
+                                            <button class="toolbar-button primary" @onclick="DownloadGeneratedLabel">📥 Download</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="label-preview-stage current-label-stage">
+                                        <img src="@GeneratedLabelPreviewUrl"
+                                             alt="Current generated package label"
+                                             class="generated-label-image" />
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(GeneratedPrintReadyPdfUrl))
+                                    {
+                                        <div class="print-ready-row">
+                                            <a class="pdf-link"
+                                               href="@GeneratedPrintReadyPdfUrl"
+                                               target="_blank">
+                                                Open print-ready PDF
+                                            </a>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (GeneratedLabels.Any())
+                            {
+                                <div class="generated-history saved-label-gallery">
+                                    <div class="generated-history-header">
+                                        <div>
+                                            <h4>Generated Labels</h4>
+                                            <p>Click any saved label to show it full-size above.</p>
+                                        </div>
+
+                                        <span class="generated-count">@GeneratedLabels.Count</span>
+                                    </div>
+
+                                    <div class="history-grid saved-label-grid">
+                                        @foreach (var item in GeneratedLabels.OrderByDescending(x => x.CreatedAt))
+                                        {
+                                            var isActive =
+                                            ActiveGeneratedLabel != null &&
+                                            string.Equals(
+                                            item.PackageLabelId,
+                                            ActiveGeneratedLabel.PackageLabelId,
+                                            StringComparison.OrdinalIgnoreCase) &&
+                                            string.Equals(
+                                            item.Version,
+                                            ActiveGeneratedLabel.Version,
+                                            StringComparison.OrdinalIgnoreCase);
+
+                                            <button type="button"
+                                                    class="history-card saved-label-card @(isActive ? "active" : "")"
+                                                    title="View @item.Version"
+                                                    @onclick="() => ViewGeneratedLabel(item)">
+                                                <div class="history-image-wrap saved-label-image-wrap">
+                                                    <img src="@item.PreviewUrl"
+                                                         alt="Saved package label @item.Version"
+                                                         class="history-thumb saved-label-thumb" />
+
+                                                    @* <span class="history-version">@item.Version</span>
+
+                                                    @if (isActive)
+                                                    {
+                                                        <span class="history-current">Current</span>
+                                                    } *@
+                                                </div>
+
+                                                <div class="history-card-info">
+                                                    <strong>@(!string.IsNullOrWhiteSpace(item.ProductName) ? item.ProductName : "Package Label")</strong>
+
+                                                    <span>
+                                                        @if (!string.IsNullOrWhiteSpace(item.LabelType))
+                                                        {
+                                                            <text>@item.LabelType</text>
+                                                            @if (!string.IsNullOrWhiteSpace(item.LabelSize))
+                                                            {
+                                                                <text> · @item.LabelSize</text>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <text>@item.Version</text>
+                                                        }
+                                                    </span>
+
+                                                    <small>@item.CreatedAt.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")</small>
+                                                </div>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @if (HasExistingPackageLabels)
+                            {
+                                <div class="persisted-label-summary">
+                                    <span class="persisted-label-icon">💾</span>
+                                    <div>
+                                        <strong>@sortedPackageLabels.Count saved label version@(sortedPackageLabels.Count == 1 ? "" : "s")</strong>
+                                        <p>
+                                            Labels are loaded from the PackageLabel database and their saved company/version image files.
+                                        </p>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="empty-state generated-empty-state">
+                                <div class="empty-icon">📦</div>
+                                <h3>No Label Generated Yet</h3>
+                                <p>Go to Generate New, select one image, and create your label.</p>
+                                <button class="save-button" @onclick="() => SetActiveTab(TabType.GenerateNew)">Start Generating</button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (ActiveTab == TabType.GenerateNew)
+            {
+                <div class="footer-actions sticky-footer">
+                    <button class="discard-button" @onclick="CloseModal">Cancel</button>
+                    <button class="save-button" @onclick="GenerateLabel" disabled="@(!SelectedImageIds.Any() || IsGeneratingLabel || isGeneratingLabelImages)" style="@(!SelectedImageIds.Any() ? "background-color:#eee; color:#ababab;" : null)">@GetGenerateButtonText()</button>
+                </div>
+            }
+            else
+            {
+                <div class="footer-actions sticky-footer"><button class="discard-button" disabled="@IsGeneratingLabel" @onclick="() => SetActiveTab(TabType.GenerateNew)">← Back to Generate New Label</button></div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; }
+    [Inject] private HttpClient Http { get; set; }
+    [Inject] private NavigationManager NavigationManager { get; set; }
+    [Inject] private IJSRuntime JS { get; set; }
+
+    private bool IsBusy = false;
+
+    private enum TabType { GenerateNew, GeneratedLabel }
+    private TabType ActiveTab { get; set; } = TabType.GenerateNew;
+    private bool IsGeneratingLabel = false;
+    private string GenerationStatus = "";
+    private string CurrentStepDetails = "";
+    private int GenerationProgress = 0;
+    private string GenerationError = "";
+    private List<string> GenerationSteps = new();
+    private string GeneratedLabelPreviewUrl = "";
+    private string GeneratedLabelDownloadUrl = "";
+    private string GeneratedPrintReadyPdfUrl = "";
+    private List<GeneratedLabelRecord> GeneratedLabels = new();
+    private GeneratedLabelRecord? ActiveGeneratedLabel = null;
+
+    // Persisted package-label versions, mirroring the website version flow
+    private List<PackageLabelRecord> sortedPackageLabels = new();
+    private string currentVersion = "1";
+    private bool hasLoadedVersions = false;
+    private string? loadedCompanyIdeaId;
+    private string SelectedCompanyName = "";
+    private bool HasExistingPackageLabels => sortedPackageLabels != null && sortedPackageLabels.Any();
+
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public DesignMode.AI.Client.Pages.Init.MakeVideoModal.ImageIdeaCountResult AllIdeas { get; set; }
+
+    // Updated parameter to accept the selected images
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> LabelImages { get; set; }
+
+    [Parameter] public EventCallback<List<string>> OnImagesSelected { get; set; }
+    [Parameter] public EventCallback<bool> OnLabelGenerated { get; set; }
+
+    // New parameter for parent's CallRunwareImageFunction
+    [Parameter] public Func<string, int, int, int, Task<string>> CallRunwareImageFunction { get; set; }
+
+    // New parameter for parent's CallSaveImageIdeaFunction
+    [Parameter] public Func<string, string, string, string, string, string, string, Task<string>> CallSaveImageIdeaFunction { get; set; }
+
+    // New parameter for parent's other functions
+    [Parameter] public string CompanyIdeaId { get; set; }
+    [Parameter] public string CompanyDescription { get; set; }
+    [Parameter] public string PromptIdFromCID { get; set; }
+    [Parameter] public string MainPromptText { get; set; }
+
+    [Parameter] public EventCallback OnModalClosed { get; set; }
+
+    public string promptText { get; set; }
+    private HashSet<string> SelectedImageIds = new();
+    private HashSet<string> SelectedImageUrls = new();
+
+    // Label configuration
+    private string SelectedLabelType = "ProductLabel";
+    private string SelectedLabelSize = "4x6";
+    private string SelectedMaterial = "Paper";
+    private string SelectedOrientation = "Portrait";
+    private string ProductName = "";
+    private string SkuBarcode = "";
+    private string AdditionalInfo = "";
+    private bool IncludeBarcode = true;
+    private bool IncludeQrCode = false;
+    private bool IncludeBrandLogo = true;
+
+    // For generating label images
+    private bool isGeneratingLabelImages = false;
+    private string ImageGenerationError = "";
+    private List<string> generatedLabelImageUrls = new();
+    private List<Gen.ImageIdeaModel> newlyGeneratedImages = new();
+    private List<string> labelPromptsToGenerate = new();
+    private int currentGenerationIndex = 0;
+    private int totalGenerations = 0;
+
+    // NEW: Track if an image was generated during this modal session
+    private bool wasImageGenerated = false;
+
+    private bool HasLabelImages() => GetUniqueLabelImages().Any();
+
+    private static bool IsPackageLabelImage(Gen.ImageIdeaModel image) =>
+        !string.IsNullOrWhiteSpace(image.ImageUrl) &&
+        (image.DeliverableType?.Contains("label", StringComparison.OrdinalIgnoreCase) == true ||
+         image.SubCategory?.Contains("label", StringComparison.OrdinalIgnoreCase) == true ||
+         image.DeliverableType?.Contains("packaging", StringComparison.OrdinalIgnoreCase) == true ||
+         image.SubCategory?.Contains("packaging", StringComparison.OrdinalIgnoreCase) == true);
+
+    // Helper method to get unique label images (avoid duplicates)
+    private List<Gen.ImageIdeaModel> GetUniqueLabelImages()
+    {
+        var allImages = new List<Gen.ImageIdeaModel>();
+
+        // Add selected images
+        if (LabelImages != null)
+        {
+            allImages.AddRange(LabelImages);
+        }
+
+        // Add newly generated images
+        if (newlyGeneratedImages != null)
+        {
+            allImages.AddRange(newlyGeneratedImages);
+        }
+
+        // Filter for label images and remove duplicates by ImageUrl
+        var labelImages = allImages
+            .Where(IsPackageLabelImage)
+            .GroupBy(img => img.ImageUrl) // Group by ImageUrl to remove duplicates
+            .Select(group => group.First()) // Take the first occurrence of each unique ImageUrl
+            .ToList();
+
+        return labelImages;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.Equals(loadedCompanyIdeaId, CompanyIdeaId, StringComparison.Ordinal))
+        {
+            loadedCompanyIdeaId = CompanyIdeaId;
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+            newlyGeneratedImages.Clear();
+            hasLoadedVersions = false;
+        }
+
+        if (Show)
+        {
+            var uri = NavigationManager.Uri;
+            var queryString = new Uri(uri).Query;
+            string cid = GetQueryParameter(queryString, "cid", "");
+
+            if (!string.IsNullOrWhiteSpace(cid))
+            {
+                string[] parts = cid.Split(new string[] { "|~~|@@|^^|" }, StringSplitOptions.None);
+
+                if (parts.Length >= 1)
+                {
+                    try
+                    {
+                        var decodedCompanyName = Encoding.UTF8.GetString(Convert.FromBase64String(parts[0]));
+                        SelectedCompanyName = SanitizeCompanyName(decodedCompanyName);
+                    }
+                    catch (FormatException ex)
+                    {
+                        Console.WriteLine($"Error decoding company name: {ex.Message}");
+                    }
+                }
+            }
+
+            // Load persisted package-label versions exactly like the website modal:
+            // DynamoDB is the version index and each image is rebuilt from the
+            // deterministic company/version storage folder.
+            if (!hasLoadedVersions && !string.IsNullOrWhiteSpace(SelectedCompanyName))
+            {
+                await LoadExistingPackageLabelVersionsAsync(SelectedCompanyName);
+                hasLoadedVersions = true;
+            }
+        }
+
+        // Opening the modal only resolves existing images. Generation requires a click.
+    }
+
+    public class IdeaDto
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+
+    public class IdeasResponse
+    {
+        public List<IdeaDto> Ideas { get; set; } = new();
+        public int Count { get; set; }
+    }
+
+    private async Task<IdeasResponse> CallGetIdeasByCompanyIdeaId(string companyIdeaId)
+    {
+        try
+        {
+            var url = $"{ApiConfig.ApiBaseUrl}api/GetIdeasByCompanyIdeaId?code=REDACTED_FOR_GROOMING&companyIdeaId={companyIdeaId}";
+            var response = await Http.GetAsync(url);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<IdeasResponse>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error calling GetIdeasByCompanyIdeaId: {ex.Message}");
+        }
+
+        return new IdeasResponse { Ideas = new List<IdeaDto>(), Count = 0 };
+    }
+
+    // Helper method to extract query parameter values
+    private string GetQueryParameter(string queryString, string key, string defaultValue)
+    {
+        var parameters = System.Web.HttpUtility.ParseQueryString(queryString);
+        return parameters[key] ?? defaultValue;
+    }
+
+    private async Task GeneratePackageLabelImageOnClickAsync()
+    {
+        if (isGeneratingLabelImages || CallRunwareImageFunction == null || CallSaveImageIdeaFunction == null) return;
+        IsBusy = true;
+        isGeneratingLabelImages = true;
+        ImageGenerationError = "";
+        try
+        {
+        await using var generationOperation = await BeginGenerationAsync();
+        var uri = NavigationManager.Uri;
+        var queryString = new Uri(uri).Query;
+        string cid = GetQueryParameter(queryString, "cid", null);
+
+        var imageIdeas = LabelImages ?? new List<Gen.ImageIdeaModel>();
+
+        var sortedIdeas = imageIdeas
+            .OrderBy(idea => int.TryParse(idea.CountId, out var count) ? count : int.MaxValue)
+            .ToList();
+
+        // Get main deliverable (Generic)
+        var mainIdea = sortedIdeas.FirstOrDefault(idea =>
+            string.Equals(idea.SubCategory, "Generic", StringComparison.OrdinalIgnoreCase));
+        var MainDeliverable = "";
+        var q = "";
+        string promptTextCall = "";
+        string promptIdCall = "";
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var username = user.Identity?.Name;
+        // ✅ Apply your business rules
+        string deliverableType = "Secondary";
+        string subCategory = "Package Label";
+        if (!string.IsNullOrWhiteSpace(username))
+        {
+            promptIdCall = PromptIdFromCID;
+        }
+        var pText = AllIdeas;
+        var mainPrompt = "";
+        if (mainIdea != null)
+        {
+            MainDeliverable = mainIdea.DeliverableType;
+
+            bool isLabelRelated = IsLabelRelated(MainDeliverable);
+            //IMPORTANT: pass the data to prevent multiple database calls
+            if (isLabelRelated)
+            {
+                q = MainPromptText;
+                // ✅ Apply your business rules
+                deliverableType = "Package Label";
+                subCategory = "Generic";
+            }
+            else
+            {
+                if (pText == null || pText.Ideas == null || !pText.Ideas.Any())
+                {
+                    pText = await GetImageIdeaCountsAsync(cid);
+                }
+                // MODIFIED: Search pText.Ideas for label-related title
+                if (pText != null && pText.Ideas != null && pText.Ideas.Any())
+                {
+                    // Find the first idea in pText.Ideas with a label-related title
+                    var labelRelatedIdea = pText.Ideas
+                        .FirstOrDefault(idea => IsLabelRelated(idea.Title));
+
+                    deliverableType = "Secondary";
+                    subCategory = "Package Label";
+
+                    if (labelRelatedIdea != null)
+                    {
+                        // Use title + description from the label-related idea in pText
+                        q = $"{labelRelatedIdea.Title} {labelRelatedIdea.Description.TrimStart('-')}";
+                        Console.WriteLine($"✅ Using label-related idea from pText: {labelRelatedIdea.Title}");
+                    }
+                    else
+                    {
+                        q = "Package label design - Professional packaging for products";
+                    }
+                }
+                else
+                {
+                    // Fallback if pText has no ideas
+                    q = "Package label design - Professional packaging for products";
+                    Console.WriteLine($"⚠️ pText has no ideas, using default");
+                }
+            }
+        }
+        mainPrompt = MainPromptText;
+        var test = q;
+        string[] parts = (cid ?? "").Split(new string[] { "|~~|@@|^^|" }, StringSplitOptions.None);
+
+        string name = string.Empty;
+        string industry = string.Empty;
+
+        if (parts.Length >= 2)
+        {
+            // Decode Base64 for company name and industry
+            try
+            {
+                name = Encoding.UTF8.GetString(Convert.FromBase64String(parts[0]));
+                industry = Encoding.UTF8.GetString(Convert.FromBase64String(parts[1]));
+            }
+            catch (FormatException ex)
+            {
+                Console.WriteLine($"Error decoding Base64 values: {ex.Message}");
+            }
+        }
+        string mainDeliverableDetail = await FetchDeliverableDetail("Package Label");
+
+        var match = Regex.Match(mainDeliverableDetail, @"Display:\s*(.*?)\s*(?=\w+:|$)", RegexOptions.IgnoreCase);
+        var DisplayLocation = match.Success ? match.Groups[1].Value.Trim() : "Not found";
+        var companyDescription = CompanyDescription;
+        string packageModular = "";
+
+        // Pass label specifications into the string
+        string labelContent = $"{SelectedLabelType} label: {ProductName} | Size: {SelectedLabelSize} | Material: {SelectedMaterial}";
+        if (!string.IsNullOrWhiteSpace(AdditionalInfo))
+        {
+            labelContent += $" | Info: {AdditionalInfo.Substring(0, Math.Min(50, AdditionalInfo.Length))}...";
+        }
+
+        promptText = $"{DisplayLocation}|{q}|{name}|{industry}|{mainDeliverableDetail}|Package Label|{companyDescription}|{packageModular}";
+
+        StateHasChanged();
+
+            // Generate only the first (and only) prompt
+            currentGenerationIndex = 1;
+
+            try
+            {
+                var imageUrl = await CallRunwareImageFunction(promptText, 1344, 768, 1);
+
+                if (string.IsNullOrWhiteSpace(imageUrl))
+                    throw new InvalidOperationException("Package Label image generation returned no image.");
+
+                if (!string.IsNullOrEmpty(imageUrl))
+                {
+                    string timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+
+                    int newCountId = 1;
+                    var allImages = new List<Gen.ImageIdeaModel>();
+                    if (LabelImages != null) allImages.AddRange(LabelImages);
+                    if (newlyGeneratedImages != null) allImages.AddRange(newlyGeneratedImages);
+
+                    if (allImages.Any())
+                    {
+                        var maxCount = allImages
+                            .Select(img => int.TryParse(img.CountId, out var val) ? val : 0)
+                            .Max();
+                        newCountId = maxCount + 1;
+                    }
+
+                    string imageId = await CallSaveImageIdeaFunction(
+                        deliverableType,
+                        subCategory,
+                        promptText,
+                        imageUrl,
+                        PromptIdFromCID,
+                        timestamp,
+                        newCountId.ToString()
+                    );
+
+                    if (string.IsNullOrWhiteSpace(imageId))
+                        throw new InvalidOperationException("Package Label image could not be saved.");
+
+                    var newImage = new Gen.ImageIdeaModel
+                        {
+                            Id = imageId,
+                            ImageUrl = imageUrl,
+                            ImagePrompt = promptText,
+                            DeliverableType = deliverableType,
+                            SubCategory = subCategory,
+                            CountId = newCountId.ToString(),
+                        };
+
+                    // Clear previous newly generated images and add only this one
+                    newlyGeneratedImages.Clear();
+                    newlyGeneratedImages.Add(newImage);
+
+                    // The image is persisted. Keep it visible even if the canonical refresh fails.
+                    wasImageGenerated = true;
+                    try
+                    {
+                        if (OnModalClosed.HasDelegate)
+                            await OnModalClosed.InvokeAsync();
+                    }
+                    catch (Exception)
+                    {
+                        ImageGenerationError = "Image saved, but the project could not refresh. Reopen the modal to load it.";
+                    }
+
+                    SelectedImageIds.Clear();
+                    SelectedImageUrls.Clear();
+                    SelectedImageIds.Add(newImage.Id);
+                    SelectedImageUrls.Add(newImage.ImageUrl);
+
+                    StateHasChanged();
+                }
+            }
+            catch (Exception)
+            {
+                ImageGenerationError = "Package Label image generation failed. Please try again.";
+                Console.WriteLine("[PACKAGE LABEL] image generation failed");
+            }
+
+            if (newlyGeneratedImages.Any())
+            {
+                Console.WriteLine("[PACKAGE LABEL] generation completed and image selected");
+
+                labelPromptsToGenerate.Clear();
+                StateHasChanged();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception)
+        {
+            ImageGenerationError = "Package Label image generation failed. Please try again.";
+            Console.WriteLine("[PACKAGE LABEL] image generation failed");
+        }
+        finally
+        {
+            IsBusy = false;
+            isGeneratingLabelImages = false;
+            currentGenerationIndex = 0;
+            totalGenerations = 0;
+            StateHasChanged();
+        }
+    }
+    private async Task<string> FetchDeliverableDetail(string deliverable)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetDeliverableDetail?code=REDACTED_FOR_GROOMING";
+
+        var content = new StringContent($"\"{deliverable}\"", System.Text.Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var detail = await response.Content.ReadAsStringAsync();
+
+            // Normalize newlines and collapse to one line
+            string singleLine = Regex.Replace(detail, @"\s*\r?\n\s*", " ").Trim();
+            return singleLine;
+        }
+
+        return "Error: Unable to fetch deliverable detail.";
+    }
+
+    private bool IsLabelRelated(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        string[] labelKeywords =
+        {
+            "label",
+            "package",
+            "packaging",
+            "product",
+            "shipping",
+            "barcode",
+            "sku",
+            "warning",
+            "caution",
+            "informational",
+            "sticker",
+            "tag"
+    };
+
+        return labelKeywords.Any(keyword =>
+            text.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string SanitizeCompanyName(string companyName)
+    {
+        if (string.IsNullOrWhiteSpace(companyName))
+            return string.Empty;
+
+        return string.Concat(companyName
+            .Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+            .Replace(" ", "-")
+            .Replace("&", "");
+    }
+
+    private string FormatDateTime(string dateTimeString)
+    {
+        if (string.IsNullOrWhiteSpace(dateTimeString))
+            return "Unknown date";
+
+        if (DateTime.TryParse(
+            dateTimeString,
+            null,
+            System.Globalization.DateTimeStyles.RoundtripKind,
+            out var dateTime))
+        {
+            return dateTime.ToLocalTime().ToString("MM/dd/yyyy hh:mm tt");
+        }
+
+        return dateTimeString;
+    }
+
+    private int GetNextPackageLabelVersion()
+    {
+        if (sortedPackageLabels == null || !sortedPackageLabels.Any())
+            return 1;
+
+        var maxVersion = sortedPackageLabels
+            .Select(x =>
+            {
+                var value = x.Version?.Trim().TrimStart('v', 'V');
+                return int.TryParse(value, out var version) ? version : 0;
+            })
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return maxVersion + 1;
+    }
+
+    private string GetLogicalPackageLabelId(string generatedLabelId)
+    {
+        var existingId = sortedPackageLabels?
+            .Where(x => !string.IsNullOrWhiteSpace(x.PackageLabelId))
+            .OrderByDescending(x =>
+                DateTime.TryParse(x.TimeStamp, out var dt)
+                    ? dt
+                    : DateTime.MinValue)
+            .Select(x => x.PackageLabelId)
+            .FirstOrDefault();
+
+        if (!string.IsNullOrWhiteSpace(existingId))
+            return existingId;
+
+        if (!string.IsNullOrWhiteSpace(generatedLabelId))
+            return generatedLabelId;
+
+        return Guid.NewGuid().ToString();
+    }
+
+    private int GetGeneratedLabelCount()
+    {
+        return sortedPackageLabels?.Count ?? 0;
+    }
+
+    private string GetPackageLabelFolderName(string companyName, string version)
+    {
+        var safeCompanyName = SanitizeCompanyName(companyName);
+        var safeVersion = (version ?? "1")
+            .Replace("v", "", StringComparison.OrdinalIgnoreCase)
+            .Trim();
+
+        return $"{safeCompanyName}-package-label-v{safeVersion}";
+    }
+
+    private string GetPackageLabelPreviewUrl(
+        string companyName,
+        string version)
+    {
+        return $"{ApiConfig.StorageBaseUrl}" +
+               //$"SavedImages/" +
+               $"{GetPackageLabelFolderName(companyName, version)}/" +
+               $"package-label.png";
+    }
+
+    private string GetPackageLabelDownloadUrl(string companyName, string version)
+    {
+        // The saved PNG is also the download/open target.
+        return GetPackageLabelPreviewUrl(companyName, version);
+    }
+
+    private async Task<string?> SaveGeneratedPackageLabelFileAsync(
+        string sourceImageUrl,
+        string companyName,
+        string version)
+    {
+        if (string.IsNullOrWhiteSpace(sourceImageUrl) ||
+            string.IsNullOrWhiteSpace(companyName) ||
+            string.IsNullOrWhiteSpace(version))
+        {
+            return null;
+        }
+
+        try
+        {
+            var request = new
+            {
+                ImageUrl = sourceImageUrl,
+                CompanyName = companyName,
+                Version = version,
+                FileName = "package-label.png"
+            };
+
+            // This is the package-label equivalent of the website file-save calls.
+            // The Azure Function should download ImageUrl and save it at:
+            // {CompanyName}-package-label-v{Version}/package-label.png
+            var response = await Http.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/SavePackageLabelImage" +
+                "?code=REDACTED_FOR_GROOMING",
+                request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(
+                    $"SavePackageLabelImage returned {(int)response.StatusCode}: {error}");
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<SavePackageLabelImageResponse>();
+
+            if (!string.IsNullOrWhiteSpace(result?.ImageUrl))
+                return result.ImageUrl;
+
+            if (!string.IsNullOrWhiteSpace(result?.SavedUrl))
+                return result.SavedUrl;
+
+            // Match the website approach: reconstruct the deterministic URL even
+            // if the save function only returns success.
+            return GetPackageLabelPreviewUrl(companyName, version);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error saving package-label image file: {ex.Message}");
+            throw;
+        }
+    }
+
+    private async Task LoadExistingPackageLabelVersionsAsync(string companyName)
+    {
+        var packageLabelsResponse = await GetPackageLabelsByCompanyAsync(companyName);
+
+        sortedPackageLabels = packageLabelsResponse?.Data?
+            .OrderByDescending(x =>
+                DateTime.TryParse(x.TimeStamp, out var dt)
+                    ? dt
+                    : DateTime.MinValue)
+            .ToList()
+            ?? new List<PackageLabelRecord>();
+
+        GeneratedLabels.Clear();
+        ActiveGeneratedLabel = null;
+        GeneratedLabelPreviewUrl = "";
+        GeneratedLabelDownloadUrl = "";
+        GeneratedPrintReadyPdfUrl = "";
+
+        if (!sortedPackageLabels.Any())
+        {
+            currentVersion = "1";
+            Console.WriteLine("📦 No saved package-label versions found.");
+            return;
+        }
+
+        // Website equivalent:
+        // DB row tells us CompanyName + Version, and the local/storage file URL
+        // is deterministically rebuilt from those values.
+        foreach (var record in sortedPackageLabels)
+        {
+            var versionNumber =
+                record.Version?.Replace("v", "", StringComparison.OrdinalIgnoreCase)
+                ?? "1";
+
+            var previewUrl = GetPackageLabelPreviewUrl(companyName, versionNumber);
+
+            GeneratedLabels.Add(new GeneratedLabelRecord
+                {
+                    PreviewUrl = previewUrl,
+                    DownloadUrl = previewUrl,
+                    PrintReadyPdfUrl = "",
+                    LabelId = "",
+                    PackageLabelId = record.PackageLabelId ?? "",
+                    Version = string.IsNullOrWhiteSpace(record.Version)
+                        ? $"v{versionNumber}"
+                        : record.Version,
+                    ProductName = "Package Label",
+                    LabelType = "",
+                    LabelSize = "",
+                    Material = "",
+                    Orientation = "",
+                    SkuBarcode = "",
+                    AdditionalInfo = "",
+                    CreatedAt = DateTime.TryParse(record.TimeStamp, out var createdAt)
+                        ? createdAt
+                        : DateTime.MinValue
+                });
+        }
+
+        GeneratedLabels = GeneratedLabels
+            .OrderByDescending(x => x.CreatedAt)
+            .ToList();
+
+        var latestVersion = sortedPackageLabels.First();
+        currentVersion =
+            latestVersion.Version?.Replace("v", "", StringComparison.OrdinalIgnoreCase)
+            ?? "1";
+
+        // Current/latest package label is shown large when the modal loads.
+        var latestGenerated = GeneratedLabels.FirstOrDefault();
+
+        if (latestGenerated != null)
+            ViewGeneratedLabel(latestGenerated);
+
+        Console.WriteLine(
+            $"📦 Loaded {GeneratedLabels.Count} saved package-label files from {sortedPackageLabels.Count} database rows.");
+
+        foreach (var label in sortedPackageLabels)
+        {
+            Console.WriteLine(
+                $"🕒 {label.TimeStamp} | {label.Version} | " +
+                GetPackageLabelPreviewUrl(companyName, label.Version ?? "1"));
+        }
+    }
+
+    public class SavePackageLabelImageResponse
+    {
+        public string ImageUrl { get; set; } = "";
+        public string SavedUrl { get; set; } = "";
+        public string FileName { get; set; } = "";
+        public string FolderName { get; set; } = "";
+    }
+
+    private async Task<GetPackageLabelsResponse?> GetPackageLabelsByCompanyAsync(string companyName)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated != true)
+                return null;
+
+            var urlEndpoint =
+                $"{ApiConfig.ApiBaseUrl}api/GetPackageLabelsByCompany" +
+                "?code=REDACTED_FOR_GROOMING";
+
+            var body = new
+            {
+                CompanyName = companyName
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(body);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await Http.PostAsync(urlEndpoint, content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"❌ Failed to retrieve package labels: {response.StatusCode} - {error}");
+                return null;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<GetPackageLabelsResponse>();
+
+            if (result?.Data != null)
+            {
+                result.Data = result.Data
+                    .OrderByDescending(x =>
+                        DateTime.TryParse(x.TimeStamp, out var dt)
+                            ? dt
+                            : DateTime.MinValue)
+                    .ToList();
+            }
+
+            Console.WriteLine($"✅ Retrieved {result?.Count ?? 0} package labels (sorted).");
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error calling GetPackageLabelsByCompany: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task SavePackageLabelAsync(
+        string packageLabelId,
+        string companyName,
+        string version,
+        string timeStamp)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity?.IsAuthenticated != true)
+                return;
+
+            var urlEndpoint =
+                $"{ApiConfig.ApiBaseUrl}api/SavePackageLabel" +
+                "?code=REDACTED_FOR_GROOMING";
+
+            var body = new
+            {
+                PackageLabelId = packageLabelId,
+                CompanyName = companyName,
+                Version = version,
+                TimeStamp = timeStamp
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(body);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await Http.PostAsync(urlEndpoint, content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(
+                    $"SavePackageLabel returned {(int)response.StatusCode}: {error}");
+            }
+
+            Console.WriteLine($"✅ Package label preview saved: {companyName} {version}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Failed to call SavePackageLabel: {ex.Message}");
+            throw;
+        }
+    }
+
+    public class PackageLabelRecord
+    {
+        public string Id { get; set; } = "";
+        public string PackageLabelId { get; set; } = "";
+        public string CompanyName { get; set; } = "";
+        public string Version { get; set; } = "";
+        public string TimeStamp { get; set; } = "";
+    }
+
+    public class GetPackageLabelsResponse
+    {
+        public string Message { get; set; } = "";
+        public int Count { get; set; }
+        public List<PackageLabelRecord> Data { get; set; } = new();
+    }
+
+    private void SetActiveTab(TabType tab)
+    {
+        ActiveTab = tab;
+        StateHasChanged();
+    }
+
+    private void UpdateGenerationStatus(string status, string details, int progress)
+    {
+        if (!string.IsNullOrWhiteSpace(GenerationStatus) && GenerationStatus != status && GenerationProgress > 0)
+            GenerationSteps.Add(GenerationStatus);
+        GenerationStatus = status;
+        CurrentStepDetails = details;
+        GenerationProgress = Math.Clamp(progress, 0, 100);
+        StateHasChanged();
+    }
+
+    private void ToggleSelection(string url, string id)
+    {
+        if (SelectedImageIds.Contains(id))
+        {
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+        }
+        else
+        {
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+            SelectedImageIds.Add(id);
+            if (!string.IsNullOrWhiteSpace(url)) SelectedImageUrls.Add(url);
+        }
+        StateHasChanged();
+    }
+
+    private void ClearAllSelections()
+    {
+        SelectedImageIds.Clear();
+        SelectedImageUrls.Clear();
+        StateHasChanged();
+    }
+
+    private string GetGenerateButtonText() => SelectedImageIds.Any() ? "Generate Package Label" : "Select an Image to Generate Label";
+
+    private async Task GenerateLabel()
+    {
+        if (IsGeneratingLabel || !SelectedImageIds.Any()) return;
+        await using var generationOperation = await BeginGenerationAsync();
+
+        IsGeneratingLabel = true;
+        ActiveTab = TabType.GeneratedLabel;
+        GenerationError = "";
+        GenerationSteps.Clear();
+        UpdateGenerationStatus("Starting label generation...", "Preparing your selected image and label specifications", 5);
+        StateHasChanged();
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated != true)
+                throw new InvalidOperationException("You must be signed in to generate a package label.");
+
+            UpdateGenerationStatus("Selecting reference image...", "Using your selected image as the design reference", 15);
+            var allImages = new List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel>();
+            if (LabelImages != null) allImages.AddRange(LabelImages);
+            if (newlyGeneratedImages != null) allImages.AddRange(newlyGeneratedImages);
+            var selectedImage = allImages.FirstOrDefault(img => SelectedImageIds.Contains(img.Id) && !string.IsNullOrWhiteSpace(img.ImageUrl));
+            if (selectedImage == null) throw new InvalidOperationException("The selected image could not be found.");
+
+            UpdateGenerationStatus("Preparing label brief...", "Combining the image reference with your product and print settings", 30);
+            var uri = NavigationManager.Uri;
+            var queryString = new Uri(uri).Query;
+            var cid = GetQueryParameter(queryString, "cid", "");
+            string companyName = "";
+            string industry = "";
+            if (!string.IsNullOrWhiteSpace(cid))
+            {
+                var parts = cid.Split(new string[] { "|~~|@@|^^|" }, StringSplitOptions.None);
+                if (parts.Length >= 2)
+                {
+                    try { companyName = Encoding.UTF8.GetString(Convert.FromBase64String(parts[0])); industry = Encoding.UTF8.GetString(Convert.FromBase64String(parts[1])); }
+                    catch (FormatException) { }
+                }
+            }
+
+            UpdateGenerationStatus("Generating package label...", "AI is creating a new label based on the selected image", 55);
+            var generationJobId = Guid.NewGuid().ToString();
+            var attribution = await AttributionContext.AuthorizeGenerationAsync(CompanyIdeaId);
+            var labelRequest = new
+            {
+                ImageUrl = selectedImage.ImageUrl,
+                SelectedImageUrl = selectedImage.ImageUrl,
+                SelectedImageId = selectedImage.Id,
+                Name = companyName,
+                Industry = industry,
+                CompanyDescription = CompanyDescription,
+                Prompt = MainPromptText,
+                LabelType = SelectedLabelType,
+                LabelSize = SelectedLabelSize,
+                Material = SelectedMaterial,
+                Orientation = SelectedOrientation,
+                ProductName,
+                SkuBarcode,
+                AdditionalInfo,
+                IncludeBarcode,
+                IncludeQrCode,
+                IncludeBrandLogo,
+                UserId = user.Identity?.Name,
+                Timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ"),
+                GenerationJobId = generationJobId,
+                ProjectId = attribution?.ProjectId,
+                FunnelId = attribution?.FunnelId
+            };
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"{ApiConfig.ApiBaseUrl}api/GeneratePackageLabel?code=REDACTED_FOR_GROOMING")
+            {
+                Content = JsonContent.Create(labelRequest)
+            };
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await Http.SendAsync(request);
+            if (await UsageRefresh.HandleResponseAsync(response)) return;
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException($"GeneratePackageLabel returned {(int)response.StatusCode}: {errorBody}");
+            }
+
+            UpdateGenerationStatus("Processing generated label...", "Loading the generated preview and print assets", 85);
+            var result = await response.Content.ReadFromJsonAsync<LabelGenerationResult>();
+            if (result == null || !result.Success || string.IsNullOrWhiteSpace(result.PreviewUrl))
+                throw new InvalidOperationException(result?.Error ?? "The function did not return a generated label preview URL.");
+
+            await UsageRefresh.RequestRefreshAsync();
+
+            GeneratedLabelPreviewUrl = result.PreviewUrl;
+            GeneratedLabelDownloadUrl = string.IsNullOrWhiteSpace(result.DownloadUrl) ? result.PreviewUrl : result.DownloadUrl;
+            GeneratedPrintReadyPdfUrl = result.PrintReadyPdfUrl ?? "";
+
+            // Mirror the website version-persistence sequence.
+            var safeCompanyName = !string.IsNullOrWhiteSpace(SelectedCompanyName)
+                ? SelectedCompanyName
+                : SanitizeCompanyName(companyName);
+
+            if (string.IsNullOrWhiteSpace(safeCompanyName))
+                throw new InvalidOperationException("Company name could not be determined for package-label persistence.");
+
+            if (!hasLoadedVersions)
+            {
+                await LoadExistingPackageLabelVersionsAsync(safeCompanyName);
+                hasLoadedVersions = true;
+            }
+
+            var nextVersion = GetNextPackageLabelVersion();
+            var logicalPackageLabelId = GetLogicalPackageLabelId(result.LabelId);
+            var versionText = $"v{nextVersion}";
+            var timeStamp = DateTime.UtcNow.ToString("o");
+
+            UpdateGenerationStatus(
+                "Saving package label image...",
+                $"Saving {versionText} to its local package-label version folder",
+                90);
+
+            // Save the actual generated image first. This is the package-label
+            // equivalent of saving website HTML/background/screenshot files.
+            var savedPreviewUrl = await SaveGeneratedPackageLabelFileAsync(
+                result.PreviewUrl,
+                safeCompanyName,
+                nextVersion.ToString());
+
+            if (string.IsNullOrWhiteSpace(savedPreviewUrl))
+                throw new InvalidOperationException("The generated package-label image could not be saved.");
+
+            UpdateGenerationStatus(
+                "Saving package label version...",
+                $"Adding {versionText} to package-label history",
+                94);
+
+            // Save the version index row after the file exists.
+            await SavePackageLabelAsync(
+                logicalPackageLabelId,
+                safeCompanyName,
+                versionText,
+                timeStamp);
+
+            // Same pattern as the website modal: re-query all DB rows and then
+            // rebuild every displayed image from the local/storage version files.
+            await LoadExistingPackageLabelVersionsAsync(safeCompanyName);
+
+            currentVersion = nextVersion.ToString();
+
+            // Replace the reconstructed latest record with the richer in-memory
+            // metadata from this generation, but keep the persisted local file URL.
+            var generatedRecord = GeneratedLabels.FirstOrDefault(x =>
+                string.Equals(x.Version, versionText, StringComparison.OrdinalIgnoreCase));
+
+            if (generatedRecord == null)
+            {
+                generatedRecord = new GeneratedLabelRecord
+                    {
+                        PreviewUrl = savedPreviewUrl,
+                        DownloadUrl = savedPreviewUrl,
+                        PackageLabelId = logicalPackageLabelId,
+                        Version = versionText,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                GeneratedLabels.Insert(0, generatedRecord);
+            }
+
+            generatedRecord.PreviewUrl = savedPreviewUrl;
+            generatedRecord.DownloadUrl = savedPreviewUrl;
+            generatedRecord.PrintReadyPdfUrl = result.PrintReadyPdfUrl ?? "";
+            generatedRecord.LabelId = result.LabelId ?? "";
+            generatedRecord.PackageLabelId = logicalPackageLabelId;
+            generatedRecord.ProductName = ProductName;
+            generatedRecord.LabelType = SelectedLabelType;
+            generatedRecord.LabelSize = SelectedLabelSize;
+            generatedRecord.Material = SelectedMaterial;
+            generatedRecord.Orientation = SelectedOrientation;
+            generatedRecord.SkuBarcode = SkuBarcode;
+            generatedRecord.AdditionalInfo = AdditionalInfo;
+            generatedRecord.CreatedAt = DateTime.UtcNow;
+
+            ViewGeneratedLabel(generatedRecord);
+
+            UpdateGenerationStatus(
+                "Complete!",
+                $"Your package label {versionText} has been generated, saved, and added to the gallery",
+                100);
+
+            if (OnLabelGenerated.HasDelegate)
+                await OnLabelGenerated.InvokeAsync(true);
+        }
+        catch (Exception ex)
+        {
+            GenerationError = ex.Message;
+            GenerationStatus = "Generation failed";
+            CurrentStepDetails = ex.Message;
+            GenerationProgress = 0;
+            Console.WriteLine($"❌ Exception generating label: {ex}");
+        }
+        finally
+        {
+            IsGeneratingLabel = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenGeneratedLabel()
+    {
+        if (!string.IsNullOrWhiteSpace(GeneratedLabelPreviewUrl))
+            await JS.InvokeVoidAsync("open", GeneratedLabelPreviewUrl, "_blank");
+    }
+
+    private async Task DownloadGeneratedLabel()
+    {
+        var url = string.IsNullOrWhiteSpace(GeneratedLabelDownloadUrl) ? GeneratedLabelPreviewUrl : GeneratedLabelDownloadUrl;
+        if (!string.IsNullOrWhiteSpace(url)) await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private string GetActiveProductName()
+    {
+        if (ActiveGeneratedLabel != null &&
+            !string.IsNullOrWhiteSpace(ActiveGeneratedLabel.ProductName))
+        {
+            return ActiveGeneratedLabel.ProductName;
+        }
+
+        return !string.IsNullOrWhiteSpace(ProductName)
+            ? ProductName
+            : "Package Label";
+    }
+
+    private string GetActivePreviewMeta()
+    {
+        if (ActiveGeneratedLabel != null)
+        {
+            var values = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(ActiveGeneratedLabel.LabelType))
+                values.Add(ActiveGeneratedLabel.LabelType);
+
+            if (!string.IsNullOrWhiteSpace(ActiveGeneratedLabel.LabelSize))
+                values.Add(ActiveGeneratedLabel.LabelSize);
+
+            if (!string.IsNullOrWhiteSpace(ActiveGeneratedLabel.Material))
+                values.Add(ActiveGeneratedLabel.Material);
+
+            if (!string.IsNullOrWhiteSpace(ActiveGeneratedLabel.Version))
+                values.Add(ActiveGeneratedLabel.Version);
+
+            return values.Any()
+                ? string.Join(" · ", values)
+                : $"Package Label · v{currentVersion}";
+        }
+
+        return $"{SelectedLabelType} · {SelectedLabelSize} · {SelectedMaterial} · v{currentVersion}";
+    }
+
+    private void ViewGeneratedLabel(GeneratedLabelRecord item)
+    {
+        if (item == null)
+            return;
+
+        ActiveGeneratedLabel = item;
+        GeneratedLabelPreviewUrl = item.PreviewUrl;
+        GeneratedLabelDownloadUrl =
+            string.IsNullOrWhiteSpace(item.DownloadUrl)
+                ? item.PreviewUrl
+                : item.DownloadUrl;
+        GeneratedPrintReadyPdfUrl = item.PrintReadyPdfUrl;
+
+        if (!string.IsNullOrWhiteSpace(item.Version))
+        {
+            currentVersion = item.Version.Replace(
+                "v",
+                "",
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task CloseModal()
+    {
+        if (GenerationGuard is null && (IsBusy || IsGeneratingLabel || isGeneratingLabelImages)) return;
+        if (!await ConfirmGenerationCloseAsync()) return;
+
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+        if (OnModalClosed.HasDelegate && wasImageGenerated) await OnModalClosed.InvokeAsync();
+        newlyGeneratedImages.Clear();
+        wasImageGenerated = false;
+        ImageGenerationError = "";
+        ActiveTab = TabType.GenerateNew;
+        hasLoadedVersions = false;
+        ActiveGeneratedLabel = GeneratedLabels.FirstOrDefault();
+    }
+
+    private RenderFragment ImageCard(DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel image) => __builder =>
+    {
+        var isSelected = SelectedImageIds.Contains(image.Id);
+        var isNew = newlyGeneratedImages.Contains(image);
+        <div class="image-card @(isSelected ? "label-selected" : "") @(isNew ? "newly-generated" : "")" @onclick="() => ToggleSelection(image.ImageUrl, image.Id)">
+            <img src="@image.ImageUrl" alt="Package label asset" class="image-thumb" />
+            <div class="image-controls"><div class="label-selection-indicator @(isSelected ? "selected" : "")" @onclick="() => ToggleSelection(image.ImageUrl, image.Id)" @onclick:stopPropagation><span class="indicator-icon" title="@(isSelected ? "Selected for package label" : "Select for package label")">@(isSelected ? "✓" : "+")</span></div></div>
+            @if (isSelected)
+            {
+                <div class="label-selection-badge"><span class="badge-icon">📦</span> Reference Image</div>
+            }
+            @if (isNew)
+            {
+                <div class="new-image-badge"><span class="badge-icon">🆕</span> New</div>
+            }
+        </div>
+    };
+
+    public class LabelGenerationResult
+    {
+        public bool Success { get; set; }
+        public string PreviewUrl { get; set; }
+        public string DownloadUrl { get; set; }
+        public string LabelId { get; set; }
+        public string PrintReadyPdfUrl { get; set; }
+        public string BarcodeData { get; set; }
+        public string QrCodeUrl { get; set; }
+        public string Error { get; set; }
+    }
+
+    public class GeneratedLabelRecord
+    {
+        public string PreviewUrl { get; set; } = "";
+        public string DownloadUrl { get; set; } = "";
+        public string PrintReadyPdfUrl { get; set; } = "";
+        public string LabelId { get; set; } = "";
+        public string PackageLabelId { get; set; } = "";
+        public string Version { get; set; } = "";
+        public string ProductName { get; set; } = "";
+        public string LabelType { get; set; } = "";
+        public string LabelSize { get; set; } = "";
+        public string Material { get; set; } = "";
+        public string Orientation { get; set; } = "";
+        public string SkuBarcode { get; set; } = "";
+        public string AdditionalInfo { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+    }
+    private async Task<MakeVideoModal.ImageIdeaCountResult?> GetImageIdeaCountsAsync(string companyIdeaId)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url =
+                    $"{ApiConfig.ApiBaseUrl}api/GetImageIdeaCountsByCompanyId?companyIdeaId={companyIdeaId}" +
+                    "&code=REDACTED_FOR_GROOMING";
+
+                var response = await client.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<MakeVideoModal.ImageIdeaCountResult>();
+                    if (result == null)
+                        return null;
+
+                    Console.WriteLine("✅ Retrieved image idea counts + idea info + deliverable types.");
+                    return result;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to retrieve image idea counts: {response.StatusCode}");
+                    return null;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception retrieving image idea counts: {ex.Message}");
+            return null;
+        }
+    }
+
+}
+
+<style>
+    /* Package label specific styles */
+    .label-selected {
+        border: 2px solid #244D88 !important;
+        box-shadow: 0 4px 12px rgba(36, 77, 136, 0.3) !important;
+    }
+
+    .label-selection-indicator {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: rgba(255, 255, 255, 0.95);
+        border: 2px solid #ddd;
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+        .label-selection-indicator.selected {
+            background: #244D88;
+            border-color: #244D88;
+            color: white;
+        }
+
+        .label-selection-indicator:hover {
+            transform: scale(1.1);
+            border-color: #244D88;
+        }
+
+    .label-selection-badge {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        background: #244D88;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(36, 77, 136, 0.3);
+    }
+
+    .new-image-badge {
+        position: absolute;
+        top: 8px;
+        left: 230px;
+        background: #ff9800;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+    }
+
+    .label-status {
+        margin-bottom: 20px;
+        padding: 12px 16px;
+        background-color: #e3f2fd;
+        border-radius: 8px;
+        border-left: 4px solid #244D88;
+    }
+
+    .label-count {
+        font-weight: 600;
+        color: #1565c0;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .label-icon {
+        font-size: 16px;
+    }
+
+    .selection-count {
+        margin-left: auto;
+        font-weight: 600;
+        color: #244D88;
+        background: rgba(36, 77, 136, 0.1);
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 13px;
+    }
+
+    .label-config-section {
+        border: 1px solid #e0e0e0;
+    }
+
+    .config-select, .config-input, .config-textarea {
+        font-family: inherit;
+        font-size: 14px;
+    }
+
+        .config-input:focus, .config-textarea:focus, .config-select:focus {
+            outline: none;
+            border-color: #244D88;
+            box-shadow: 0 0 0 2px rgba(36, 77, 136, 0.1);
+        }
+
+        /* Label type color hints */
+        .config-select option[value="ProductLabel"] {
+            color: #4CAF50;
+        }
+
+        .config-select option[value="ShippingLabel"] {
+            color: #2196F3;
+        }
+
+        .config-select option[value="WarningLabel"] {
+            color: #FF9800;
+        }
+
+        .config-select option[value="InformationalLabel"] {
+            color: #9C27B0;
+        }
+
+        .config-select option[value="BrandedLabel"] {
+            color: #244D88;
+        }
+
+        .config-select option[value="PromotionalLabel"] {
+            color: #E91E63;
+        }
+
+    .save-button {
+        background-color: #244D88 !important;
+        color: white !important;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+        .save-button:disabled {
+            background-color: #eee !important;
+            color: #ababab !important;
+            cursor: not-allowed;
+        }
+
+    .clear-selection-btn:hover {
+        background: #1565c0 !important;
+        color: white !important;
+    }
+
+    /* Material color indicators */
+    .config-select option[value="Vinyl"] {
+        color: #00BCD4;
+    }
+
+    .config-select option[value="Polyester"] {
+        color: #795548;
+    }
+
+    .config-select option[value="Clear"] {
+        color: #607D8B;
+    }
+
+    .config-select option[value="Kraft"] {
+        color: #8D6E63;
+    }
+
+    .config-select option[value="Glossy"] {
+        color: #FFC107;
+    }
+
+    /* Loading styles */
+    .label-generating-spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s linear infinite;
+    }
+
+    .image-card-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+
+    .loading-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        color: #666;
+        font-size: 14px;
+        text-align: center;
+    }
+
+    .loading-spinner-small {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #244D88;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .image-generating-section {
+        margin-bottom: 30px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+    }
+
+    .saved-version-preview-note {
+        text-align: center;
+        padding: 36px 24px;
+        margin-bottom: 24px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #f8fafc;
+        color: #475569;
+    }
+
+        .saved-version-preview-note h3 {
+            margin: 8px 0 10px;
+            color: #244d88;
+        }
+
+        .saved-version-preview-note p {
+            max-width: 680px;
+            margin: 0 auto;
+            line-height: 1.55;
+        }
+
+    .saved-version-notice {
+        margin: 16px 0;
+        padding: 12px 14px;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        background: #eff6ff;
+        color: #1e40af;
+        font-size: 14px;
+        line-height: 1.45;
+    }
+
+    .package-label-versions {
+        margin-top: 28px;
+    }
+
+    .package-version-body {
+        min-height: 150px;
+        padding: 22px 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: linear-gradient(180deg, #f8fafc, #ffffff);
+        border-top: 1px solid #eef2f7;
+    }
+
+    .package-version-icon {
+        font-size: 42px;
+    }
+
+    .package-version-id {
+        width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: center;
+        color: #64748b;
+        font-size: 12px;
+    }
+
+    .versions-screenshots-section {
+        margin-top: 28px;
+    }
+
+        .versions-screenshots-section h4 {
+            margin-bottom: 14px;
+            color: #244d88;
+        }
+
+    .versions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+    }
+
+    .version-card {
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: white;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+    }
+
+        .version-card.current-version {
+            border-color: #4CAF50;
+            box-shadow: 0 4px 14px rgba(76, 175, 80, 0.18);
+        }
+
+    .version-header {
+        padding: 12px 14px;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid #eef2f7;
+    }
+
+    .version-number {
+        font-weight: 700;
+        color: #1f2937;
+    }
+
+    .version-date {
+        color: #64748b;
+        font-size: 12px;
+        text-align: right;
+    }
+
+    .version-actions {
+        padding: 12px 14px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid #eef2f7;
+    }
+
+    .view-version-button {
+        padding: 7px 12px;
+        border: none;
+        border-radius: 6px;
+        background: #244d88;
+        color: white;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+        .view-version-button:hover {
+            background: #1a3a66;
+        }
+
+    .current-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        background: #4CAF50;
+        color: white;
+        font-size: 10px;
+        font-weight: 700;
+    }
+
+    @@keyframes loading {
+        0% {
+            background-position: 200% 0;
+        }
+
+        100% {
+            background-position: -200% 0;
+        }
+    }
+
+    /* Rest of your existing CSS remains the same */
+    .vertical-modal-wrapper {
+        padding-top: 14px;
+        padding-left: 36px;
+        padding-bottom: 83px;
+        position: relative;
+        width: 100%;
+        max-width: 800px;
+        height: 90vh;
+        background: white;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-scroll-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px;
+    }
+
+    .modal-header {
+        text-align: left;
+        margin: 33px 0 -4px 0px;
+        padding-right: 24px;
+    }
+
+        .modal-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+            margin-top: 0;
+        }
+
+    .image-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+    }
+
+    .empty-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 40px 0;
+        color: #666;
+    }
+
+    .footer-actions {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: white;
+        border-top: 1px solid #ccc;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 32px;
+        z-index: 1050;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .discard-button {
+        font-size: 1rem;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        background-color: transparent;
+        border: 2px solid #ddd;
+        color: #333;
+        transition: all 0.3s ease;
+    }
+
+        .discard-button:hover {
+            border-color: #999;
+            color: #000;
+        }
+
+    .deliverable-section {
+        padding-bottom: 24px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .image-col {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+
+    .image-card {
+        position: relative;
+        width: 300px !important;
+        height: 200px;
+        border-radius: 16px;
+        overflow: hidden;
+        background-color: #fff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #eee;
+        transition: border-color 0.2s ease;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        cursor: pointer;
+    }
+
+        .image-card:hover {
+            border: 1px solid #244D88;
+        }
+
+    .image-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        flex-grow: 1;
+    }
+
+    .image-controls {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #222;
+        margin-bottom: 12px;
+    }
+
+    .modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.4);
+        border: none;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        color: #000;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(6px);
+        z-index: 10;
+    }
+
+        .modal-close:hover {
+            background-color: rgba(255, 255, 255, 0.6);
+            color: #000;
+        }
+
+    @@keyframes zoomFadeIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes blurIn {
+        0% {
+            backdrop-filter: blur(0px);
+            background-color: rgba(0, 0, 0, 0);
+        }
+
+        100% {
+            backdrop-filter: blur(5px);
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+    }
+
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        backdrop-filter: blur(5px);
+        background-color: rgba(0, 0, 0, 0.7);
+        animation: blurIn 0.3s ease-out forwards;
+    }
+
+    .vertical-modal-wrapper {
+        animation: zoomFadeIn 0.3s ease-out forwards;
+    }
+
+    .modal-busy-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #244D88;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .modal-tabs {
+        display: flex;
+        gap: 8px;
+        padding: 18px 24px 0;
+        border-bottom: 1px solid #e9e9ef;
+    }
+
+    .tab-button {
+        border: 0;
+        background: transparent;
+        padding: 12px 16px;
+        font-weight: 700;
+        color: #70707d;
+        cursor: pointer;
+        border-bottom: 3px solid transparent;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+        .tab-button.active {
+            color: #244D88;
+            border-bottom-color: #244D88;
+        }
+
+        .tab-button:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+    .tab-badge {
+        background: #e9eff9;
+        color: #244D88;
+        border-radius: 999px;
+        padding: 2px 7px;
+        font-size: 11px;
+    }
+
+        .tab-badge.generating {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+    .modal-intro {
+        margin-bottom: 24px;
+        color: #555;
+    }
+
+    .label-config-section {
+        margin-top: 30px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+
+        .label-config-section h3, .label-config-section h4 {
+            color: #244D88;
+        }
+
+    .config-options.two-col {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 18px;
+    }
+
+    .config-option {
+        margin-top: 14px;
+    }
+
+        .config-option label {
+            display: block;
+            margin-bottom: 7px;
+            font-weight: 600;
+            color: #333;
+        }
+
+    .config-select, .config-input, .config-textarea {
+        width: 100%;
+        padding: 9px 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+    }
+
+    .config-textarea {
+        min-height: 90px;
+        resize: vertical;
+    }
+
+    .custom-fields-section {
+        margin-top: 20px;
+        padding-top: 18px;
+        border-top: 1px solid #ddd;
+    }
+
+    .checkbox-row {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        margin-top: 16px;
+    }
+
+        .checkbox-row label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+    .generation-loading-container, .generation-error {
+        max-width: 760px;
+        margin: 15px auto 30px;
+        padding: 26px;
+        border: 1px solid #e7e9ef;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 8px 28px rgba(0,0,0,.06);
+    }
+
+    .generation-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: center;
+    }
+
+    .generation-status {
+        color: #244D88;
+        font-weight: 700;
+    }
+
+    .progress-bar-container {
+        height: 9px;
+        background: #e8ebf1;
+        border-radius: 999px;
+        overflow: hidden;
+        margin: 18px 0 10px;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: #244D88;
+        transition: width .35s ease;
+    }
+
+    .current-step-details {
+        color: #666;
+        margin-bottom: 20px;
+    }
+
+    .steps-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .step-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        color: #555;
+    }
+
+    .step-check {
+        color: #28a745;
+        font-weight: 800;
+    }
+
+    .step-spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid #d7dce5;
+        border-top-color: #244D88;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .label-skeleton {
+        width: 280px;
+        min-height: 360px;
+        margin: 28px auto 10px;
+        padding: 24px;
+        border-radius: 14px;
+        background: #f7f8fa;
+        border: 1px solid #e5e7ec;
+    }
+
+    .skeleton-logo, .skeleton-line, .skeleton-image {
+        background: linear-gradient(90deg,#eceef2 25%,#f8f9fb 50%,#eceef2 75%);
+        background-size: 200% 100%;
+        animation: loading 1.4s infinite;
+        border-radius: 7px;
+    }
+
+    .skeleton-logo {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 24px;
+        border-radius: 50%;
+    }
+
+    .skeleton-line {
+        height: 14px;
+        margin: 12px auto;
+        width: 72%;
+    }
+
+        .skeleton-line.wide {
+            width: 90%;
+            height: 22px
+        }
+
+        .skeleton-line.short {
+            width: 48%
+        }
+
+    .skeleton-image {
+        height: 140px;
+        margin: 22px 0
+    }
+
+    .generation-tip {
+        text-align: center;
+        color: #666;
+        margin-top: 18px;
+    }
+
+    .generated-label-preview {
+        max-width: 820px;
+        margin: 10px auto 30px;
+    }
+
+    .preview-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 16px;
+        border: 1px solid #e3e6ec;
+        border-radius: 12px 12px 0 0;
+        background: #fff;
+    }
+
+    .preview-meta {
+        display: block;
+        color: #777;
+        font-size: 12px;
+        margin-top: 3px;
+    }
+
+    .preview-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .toolbar-button {
+        padding: 8px 12px;
+        border: 1px solid #dfe3ea;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer
+    }
+
+        .toolbar-button.primary {
+            background: #244D88;
+            color: white;
+            border-color: #244D88
+        }
+
+    .label-preview-stage {
+        min-height: 420px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        background: #f4f5f7;
+        border: 1px solid #e3e6ec;
+        border-top: 0;
+        border-radius: 0 0 12px 12px;
+    }
+
+    .generated-label-image {
+        max-width: 100%;
+        max-height: 620px;
+        object-fit: contain;
+        border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(0,0,0,.15);
+        background: white;
+    }
+
+    .pdf-link {
+        display: inline-block;
+        margin-top: 12px;
+        color: #244D88;
+        font-weight: 700;
+    }
+
+    .generated-history {
+        max-width: 820px;
+        margin: 20px auto;
+    }
+
+    .history-grid {
+        display: grid;
+        grid-template-columns: repeat(3,minmax(0,1fr));
+        gap: 14px
+    }
+
+    .history-card {
+        border: 1px solid #e2e5eb;
+        border-radius: 10px;
+        padding: 8px;
+        background: #fff;
+        cursor: pointer;
+        text-align: left
+    }
+
+        .history-card.active {
+            border-color: #244D88;
+            box-shadow: 0 0 0 2px rgba(36,77,136,.12)
+        }
+
+        .history-card img {
+            width: 100%;
+            height: 130px;
+            object-fit: contain;
+            background: #f5f6f8;
+            border-radius: 6px
+        }
+
+        .history-card span {
+            display: block;
+            font-size: 11px;
+            color: #666;
+            margin-top: 7px
+        }
+
+    .generation-error {
+        text-align: center;
+        border-color: #f2c7c7;
+        background: #fffafa;
+    }
+
+        .generation-error h3 {
+            color: #b42318
+        }
+
+    .empty-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+    }
+
+    .generate-images-button {
+        background: #244D88;
+        color: white;
+        border: 0;
+        border-radius: 7px;
+        padding: 10px 18px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .generated-history {
+        margin-top: 24px;
+        padding: 18px;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        background: #fff;
+    }
+
+    .generated-history-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+    }
+
+        .generated-history-header h4 {
+            margin: 0 0 4px 0;
+            color: #244d88;
+            font-size: 1.05rem;
+        }
+
+        .generated-history-header p {
+            margin: 0;
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+    .generated-count {
+        min-width: 30px;
+        height: 30px;
+        padding: 0 9px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #244d88;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .history-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+        gap: 14px;
+    }
+
+    .history-card {
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        overflow: hidden;
+        border: 2px solid transparent;
+        border-radius: 10px;
+        background: #fff;
+        text-align: left;
+        cursor: pointer;
+        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+        .history-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 18px rgba(15, 23, 42, 0.13);
+        }
+
+        .history-card.active {
+            border-color: #244d88;
+            box-shadow: 0 0 0 3px rgba(36, 77, 136, 0.12);
+        }
+
+    .history-image-wrap {
+        position: relative;
+        height: 118px;
+        overflow: hidden;
+        background: #f3f4f6;
+    }
+
+    .history-thumb {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: contain;
+        background: #fff;
+    }
+
+    .history-version {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        padding: 4px 7px;
+        border-radius: 999px;
+        background: rgba(17, 24, 39, 0.82);
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+    }
+
+    .history-current {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        padding: 4px 7px;
+        border-radius: 999px;
+        background: #244d88;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 700;
+    }
+
+    .history-card-info {
+        padding: 10px 11px 11px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+        .history-card-info strong {
+            overflow: hidden;
+            color: #1f2937;
+            font-size: 12px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .history-card-info span {
+            overflow: hidden;
+            color: #64748b;
+            font-size: 11px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .history-card-info small {
+            color: #9ca3af;
+            font-size: 10px;
+        }
+
+    .persisted-label-summary {
+        margin-top: 18px;
+        padding: 13px 14px;
+        display: flex;
+        align-items: flex-start;
+        gap: 11px;
+        border: 1px solid #dbeafe;
+        border-radius: 9px;
+        background: #eff6ff;
+        color: #1e3a8a;
+    }
+
+    .persisted-label-icon {
+        font-size: 20px;
+        line-height: 1;
+    }
+
+    .persisted-label-summary strong {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 13px;
+    }
+
+    .persisted-label-summary p {
+        margin: 0;
+        color: #475569;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+
+    .current-label-preview {
+        margin-bottom: 28px;
+    }
+
+    .preview-title-group {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .current-label-heading {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+    }
+
+        .current-label-heading strong {
+            overflow: hidden;
+            color: #384466;
+            font-size: 18px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+    .current-label-pill {
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: #e8eefb;
+        color: #35518f;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: .02em;
+        text-transform: uppercase;
+    }
+
+    .current-label-stage {
+        min-height: 500px;
+        padding: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f4f5f7;
+    }
+
+        .current-label-stage .generated-label-image {
+            width: auto;
+            max-width: min(100%, 620px);
+            max-height: 720px;
+            object-fit: contain;
+            border-radius: 10px;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+        }
+
+    .print-ready-row {
+        padding: 12px 18px 16px;
+        border-top: 1px solid #edf0f4;
+    }
+
+    .saved-label-gallery {
+        margin-top: 0;
+    }
+
+    .saved-label-grid {
+        grid-template-columns: repeat(auto-fill, minmax(155px, 190px));
+        align-items: start;
+        justify-content: start;
+    }
+
+    .saved-label-card {
+        min-height: 0;
+        height: auto;
+        align-self: start;
+    }
+
+    .saved-label-image-wrap {
+        height: 150px;
+        background: #f5f6f8;
+    }
+
+    .saved-label-thumb {
+        object-fit: contain;
+    }
+
+    .saved-label-card.active {
+        border-color: #35518f;
+        box-shadow: 0 0 0 3px rgba(53, 81, 143, 0.13), 0 6px 16px rgba(15, 23, 42, 0.10);
+    }
+
+        .saved-label-card.active .saved-label-image-wrap {
+            background: #eef2fb;
+        }
+
+    @@media (max-width: 767px) {
+
+        .current-label-stage {
+            min-height: 360px;
+            padding: 18px;
+        }
+
+            .current-label-stage .generated-label-image {
+                max-height: 520px;
+            }
+
+        .saved-label-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .saved-label-image-wrap {
+            height: 125px;
+        }
+
+        .preview-toolbar {
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .config-options.two-col {
+            grid-template-columns: 1fr
+        }
+
+        .history-grid {
+            grid-template-columns: 1fr 1fr
+        }
+
+        .preview-toolbar {
+            align-items: flex-start;
+            flex-direction: column
+        }
+
+        .label-preview-stage {
+            padding: 16px
+        }
+
+        .modal-tabs {
+            padding-left: 12px;
+            padding-right: 12px
+        }
+
+        .tab-button {
+            padding: 10px 8px;
+            font-size: 13px
+        }
+    }
+
+</style>

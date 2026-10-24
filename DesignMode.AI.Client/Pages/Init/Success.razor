@@ -1,0 +1,2270 @@
+@page "/init/success"
+@using Telerik.Blazor.Components
+@using Telerik.Blazor
+@using Telerik.SvgIcons
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.AspNetCore.Components.Authorization;
+@using System.Text;
+@using DesignMode.AI.Shared.Models;
+@using Newtonsoft.Json;
+@using System.Text.RegularExpressions;
+@using DesignMode.AI.Client.Pages;
+@using DesignMode.AI.Client.Pages.Init;
+@inject NavigationManager NavigationManager
+@inject ApiConfigService ApiConfig
+@inject AuthenticationStateProvider AuthStateProvider
+@inject SessionService _sessionService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject IJSRuntime JS
+@* Make sure to call the database to verify payment *@
+@if (isSuccessPage)
+{
+    <!-- PROCESSING NOTIFICATION OVERLAY -->
+    @if (showProcessingNotification)
+    {
+        <div class="redirect-notification-overlay">
+            <div class="redirect-notification-card processing-card">
+                <div class="processing-icon">✨</div>
+                <h3 class="redirect-title">@processingTitle</h3>
+                <p class="redirect-message">@processingMessage</p>
+
+                <!-- Progress Steps -->
+                <div class="progress-steps">
+                    <div class="progress-step @(currentStep >= 1 ? "completed" : "") @(currentStep == 1 ? "active" : "")">
+                        <div class="step-indicator">
+                            @if (currentStep > 1)
+                            {
+                                <span>✓</span>
+                            }
+                            else
+                            {
+                                <span>1</span>
+                            }
+                        </div>
+                        <div class="step-label">Unlocking Brand System</div>
+                    </div>
+                    <div class="progress-step @(currentStep >= 2 ? "completed" : "") @(currentStep == 2 ? "active" : "")">
+                        <div class="step-indicator">
+                            @if (currentStep > 2)
+                            {
+                                <span>✓</span>
+                            }
+                            else
+                            {
+                                <span>2</span>
+                            }
+                        </div>
+                        <div class="step-label">Generating Brand Ideas</div>
+                    </div>
+                    <div class="progress-step @(currentStep >= 3 ? "completed" : "") @(currentStep == 3 ? "active" : "")">
+                        <div class="step-indicator">
+                            @if (currentStep > 3)
+                            {
+                                <span>✓</span>
+                            }
+                            else
+                            {
+                                <span>3</span>
+                            }
+                        </div>
+                        <div class="step-label">Creating Visual Assets</div>
+                    </div>
+                    <div class="progress-step @(currentStep >= 4 ? "completed" : "") @(currentStep == 4 ? "active" : "")">
+                        <div class="step-indicator">
+                            @if (currentStep > 4)
+                            {
+                                <span>✓</span>
+                            }
+                            else
+                            {
+                                <span>4</span>
+                            }
+                        </div>
+                        <div class="step-label">Saving Your Progress</div>
+                    </div>
+                </div>
+
+                <!-- Carousel Section - Shows at Step 3 -->
+                @if (currentStep >= 3 && generatedDeliverables.Any())
+                {
+                    <div class="carousel-container">
+                        <div class="carousel-header">
+                            <span class="carousel-icon">🎨</span>
+                            <span class="carousel-title">Generated Visual Assets</span>
+                        </div>
+
+                        <div class="carousel-content">
+                            <button class="carousel-nav prev" @onclick="PrevDeliverable" disabled="@(currentDeliverableIndex == 0)">
+                                ‹
+                            </button>
+
+                            <div class="carousel-slide">
+                                <div class="deliverable-name">@generatedDeliverables[currentDeliverableIndex].Name</div>
+
+                                @if (generatedDeliverables[currentDeliverableIndex].ImageUrl != null)
+                                {
+                                    <div class="deliverable-image-wrapper @(currentDeliverableIndex == newDeliverableIndex ? "new-image-animation" : "")">
+                                        <img src="@generatedDeliverables[currentDeliverableIndex].ImageUrl"
+                                             alt="@generatedDeliverables[currentDeliverableIndex].Name"
+                                             class="deliverable-image" />
+                                        <div class="image-badge">Asset @(currentDeliverableIndex + 1) of @generatedDeliverables.Count</div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="deliverable-image-placeholder">
+                                        <div class="generating-spinner"></div>
+                                        <p>Generating image...</p>
+                                    </div>
+                                }
+                            </div>
+
+                            <button class="carousel-nav next" @onclick="NextDeliverable" disabled="@(currentDeliverableIndex == generatedDeliverables.Count - 1)">
+                                ›
+                            </button>
+                        </div>
+
+                        <div class="carousel-dots">
+                            @for (int i = 0; i < generatedDeliverables.Count; i++)
+                            {
+                                <div class="dot @(currentDeliverableIndex == i ? "active" : "")"
+                                     @onclick="() => GoToDeliverable(i)">
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Loading Spinner -->
+                @if (currentStep <= 4)
+                {
+                    <div class="loading-spinner">
+                        <div class="spinner"></div>
+                    </div>
+                }
+
+                <!-- Success Message -->
+                @if (currentStep > 4)
+                {
+                    <div class="completion-message">
+                        <div class="completion-icon">🎉</div>
+                        <p>All set! Redirecting you to your brand studio...</p>
+                        <div class="redirect-progress">
+                            <div class="redirect-progress-bar" style="width: @((3 - countdown) / 3f * 100)%"></div>
+                        </div>
+                    </div>
+                }
+
+                <button class="redirect-cancel-btn" @onclick="CancelProcessing">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    }
+
+    <!-- SUCCESS/THANK YOU PAGE -->
+    <div class="dashboard-container">
+        <div class="main-wrapper">
+            <div class="inner-content full-height success-container">
+
+                <!-- SUCCESS ANIMATION -->
+                <div class="success-animation">
+                    <div class="checkmark-circle">
+                        <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                            <circle class="checkmark__circle" cx="26" cy="26" r="25" fill="none" stroke="#10b981" stroke-width="4" />
+                            <path class="checkmark__check" fill="none" stroke="#10b981" stroke-width="4" d="M14.1 27.2l7.1 7.2 16.7-16.8" />
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- THANK YOU MESSAGE -->
+                <h1 class="success-title">Thank You for Your Purchase! 🎉</h1>
+                <p class="success-subtitle">Your payment was successful and your account has been upgraded.</p>
+
+                <!-- PLAN DETAILS -->
+                <div class="plan-details-card">
+                    <div class="plan-icon">✨</div>
+                    <h3 class="plan-details-title">@selectedPlanName Plan Activated</h3>
+                    <div class="plan-details-billing">@billingDescription</div>
+                    <div class="plan-details-price">@priceDisplay</div>
+                </div>
+
+                <!-- WHAT'S NEXT -->
+                <div class="whats-next-section">
+                    <h3 class="whats-next-title">What's next?</h3>
+                    <div class="next-steps-grid">
+                        <div class="next-step-card">
+                            <div class="step-icon">🚀</div>
+                            <h4>Start Creating</h4>
+                            <p>Access all your premium features and AI tools</p>
+                        </div>
+                        <div class="next-step-card">
+                            <div class="step-icon">📧</div>
+                            <h4>Check Your Email</h4>
+                            <p>We've sent a confirmation receipt to your inbox</p>
+                        </div>
+                        <div class="next-step-card">
+                            <div class="step-icon">💬</div>
+                            <h4>Need Help?</h4>
+                            <p>Contact our support team anytime</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- SHARE SECTION -->
+                <div class="share-section">
+                    <p class="share-text">Love your new plan? Share with your team! 🎯</p>
+                    <div class="share-buttons">
+                        <button class="share-btn" @onclick="CopyInviteLink">
+                            📋 Copy Invite Link
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <!-- ORIGINAL UPGRADE PAGE -->
+    <div class="dashboard-container">
+        <div class="main-wrapper">
+            <div class="inner-content full-height">
+
+                <!-- TOP BAR -->
+                <div class="top-bar">
+                    <div class="page-header">
+                        <span class="designer-badge" style="cursor:pointer;" @onclick="GoBack">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256" style="margin-left: 2px;">
+                                <path d="M228,128a12,12,0,0,1-12,12H69l51.52,51.51a12,12,0,0,1-17,17l-72-72a12,12,0,0,1,0-17l72-72a12,12,0,0,1,17,17L69,116H216A12,12,0,0,1,228,128Z"></path>
+                            </svg>
+                        </span>
+
+                        <h1 class="page-title">Choose the right plan for you ✨</h1>
+                        <p class="page-subtitle">Turn your selected concept into fully unlocked brand systems.</p>
+                    </div>
+
+                    <!-- SECURE CHECKOUT BADGE - TOP RIGHT -->
+                    <div class="secure-badge">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L4 6V12C4 16.97 7.84 21.74 12 22C16.16 21.74 20 16.97 20 12V6L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                            <path d="M12 11V15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                            <circle cx="12" cy="9" r="1" fill="currentColor" />
+                        </svg>
+                        <span>Secure Checkout</span>
+                        <span class="encryption-text">256-bit encryption</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* Processing Notification Styles */
+    .redirect-notification-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(12px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        animation: fadeIn 0.3s ease-out;
+    }
+
+    .redirect-notification-card {
+        background: white;
+        border-radius: 32px;
+        padding: 48px;
+        max-width: 550px;
+        width: 90%;
+        text-align: center;
+        animation: slideUp 0.4s ease-out;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+
+    .processing-card {
+        max-width: 600px;
+    }
+
+    .processing-icon {
+        font-size: 72px;
+        margin-bottom: 20px;
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    .redirect-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 12px;
+    }
+
+    .redirect-message {
+        font-size: 16px;
+        color: #64748b;
+        line-height: 1.5;
+        margin-bottom: 32px;
+    }
+
+    /* Progress Steps */
+    .progress-steps {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 32px;
+        position: relative;
+    }
+
+        .progress-steps::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 40px;
+            right: 40px;
+            height: 2px;
+            background: #e5e7eb;
+            z-index: 1;
+        }
+
+    .progress-step {
+        flex: 1;
+        text-align: center;
+        position: relative;
+        z-index: 2;
+    }
+
+    .step-indicator {
+        width: 40px;
+        height: 40px;
+        background: #f1f5f9;
+        border: 2px solid #e5e7eb;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 12px;
+        font-weight: 600;
+        color: #64748b;
+        transition: all 0.3s ease;
+    }
+
+    .progress-step.completed .step-indicator {
+        background: #10b981;
+        border-color: #10b981;
+        color: white;
+    }
+
+    .progress-step.active .step-indicator {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: white;
+        animation: bounce 0.5s ease;
+    }
+
+    .step-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #64748b;
+    }
+
+    .progress-step.completed .step-label,
+    .progress-step.active .step-label {
+        color: #1e293b;
+        font-weight: 600;
+    }
+
+    /* Carousel Styles */
+    .carousel-container {
+        margin: 24px 0 32px;
+        padding: 20px;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-radius: 20px;
+        animation: slideUp 0.5s ease-out;
+    }
+
+    .carousel-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+
+    .carousel-icon {
+        font-size: 24px;
+    }
+
+    .carousel-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #0f172a;
+    }
+
+    .carousel-content {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        position: relative;
+    }
+
+    .carousel-nav {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: white;
+        border: 1px solid #e2e8f0;
+        font-size: 24px;
+        font-weight: bold;
+        color: #475569;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding-bottom: 5px;
+    }
+
+        .carousel-nav:hover:not(:disabled) {
+            background: #2563eb;
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .carousel-nav:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+    .carousel-slide {
+        flex: 1;
+        text-align: center;
+    }
+
+    .deliverable-name {
+        font-size: 20px;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 16px;
+        padding: 8px 16px;
+        background: white;
+        border-radius: 40px;
+        display: inline-block;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .deliverable-image-wrapper {
+        position: relative;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        background: white;
+        padding: 12px;
+    }
+
+    .deliverable-image {
+        width: 100%;
+        max-height: 300px;
+        object-fit: contain;
+        border-radius: 12px;
+        transition: transform 0.3s ease;
+    }
+
+        .deliverable-image:hover {
+            transform: scale(1.02);
+        }
+
+    .new-image-animation {
+        animation: imageSlideIn 0.6s ease-out;
+    }
+
+    .image-badge {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(0,0,0,0.7);
+        backdrop-filter: blur(8px);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .deliverable-image-placeholder {
+        min-height: 200px;
+        background: white;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 40px;
+    }
+
+    .generating-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #e2e8f0;
+        border-top-color: #2563eb;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .carousel-dots {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 20px;
+    }
+
+    .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #cbd5e1;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .dot.active {
+            width: 24px;
+            border-radius: 4px;
+            background: #2563eb;
+        }
+
+        .dot:hover {
+            background: #94a3b8;
+            transform: scale(1.2);
+        }
+
+    @@keyframes imageSlideIn {
+        from {
+            opacity: 0;
+            transform: translateX(30px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    /* Loading Spinner */
+    .loading-spinner {
+        margin: 32px 0;
+    }
+
+    .spinner {
+        width: 50px;
+        height: 50px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #2563eb;
+        border-radius: 50%;
+        margin: 0 auto;
+        animation: spin 1s linear infinite;
+    }
+
+    /* Completion Message */
+    .completion-message {
+        margin: 32px 0;
+    }
+
+    .completion-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+        animation: bounce 0.6s ease;
+    }
+
+    .completion-message p {
+        font-size: 16px;
+        color: #0f172a;
+        font-weight: 500;
+        margin-bottom: 20px;
+    }
+
+    .redirect-progress {
+        width: 100%;
+        height: 6px;
+        background: #e5e7eb;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-top: 16px;
+    }
+
+    .redirect-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #2563eb, #1e3a8a);
+        border-radius: 3px;
+        transition: width 0.3s linear;
+    }
+
+    .redirect-cancel-btn {
+        background: #f1f5f9;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 40px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #475569;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-top: 16px;
+    }
+
+        .redirect-cancel-btn:hover {
+            background: #e2e8f0;
+            transform: translateY(-2px);
+        }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    @@keyframes slideUp {
+        from {
+            transform: translateY(30px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @@keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.1);
+        }
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @@keyframes bounce {
+        0%, 100% {
+            transform: scale(1);
+        }
+
+        50% {
+            transform: scale(1.2);
+        }
+    }
+
+    /* Success Page Styles */
+    .success-container {
+        max-width: 800px;
+        margin: 0 auto;
+        text-align: center;
+        padding: 40px 20px;
+    }
+
+    /* Success Animation */
+    .success-animation {
+        margin-bottom: 32px;
+    }
+
+    .checkmark-circle {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto;
+        position: relative;
+    }
+
+    .checkmark {
+        width: 100%;
+        height: 100%;
+        animation: checkmark 0.6s ease-in-out forwards;
+    }
+
+    .checkmark__circle {
+        stroke-dasharray: 166;
+        stroke-dashoffset: 166;
+        stroke-width: 4;
+        stroke-miterlimit: 10;
+        stroke: #10b981;
+        fill: none;
+        animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+    }
+
+    .checkmark__check {
+        transform-origin: 50% 50%;
+        stroke-dasharray: 48;
+        stroke-dashoffset: 48;
+        animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.4s forwards;
+    }
+
+    @@keyframes stroke {
+        100% {
+            stroke-dashoffset: 0;
+        }
+    }
+
+    @@keyframes checkmark {
+        0% {
+            transform: scale(0);
+        }
+
+        100% {
+            transform: scale(1);
+        }
+    }
+
+    .success-title {
+        font-size: 36px;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 12px;
+    }
+
+    .success-subtitle {
+        font-size: 18px;
+        color: #64748b;
+        margin-bottom: 40px;
+    }
+
+    /* Plan Details Card */
+    .plan-details-card {
+        background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+        border-radius: 20px;
+        padding: 32px;
+        margin-bottom: 48px;
+        border: 1px solid #bbf7d0;
+    }
+
+    .plan-icon {
+        font-size: 48px;
+        margin-bottom: 16px;
+    }
+
+    .plan-details-title {
+        font-size: 24px;
+        font-weight: 700;
+        color: #166534;
+        margin-bottom: 8px;
+    }
+
+    .plan-details-billing {
+        font-size: 16px;
+        color: #15803d;
+        margin-bottom: 8px;
+    }
+
+    .plan-details-price {
+        font-size: 20px;
+        font-weight: 600;
+        color: #065f46;
+    }
+
+    /* What's Next Section */
+    .whats-next-section {
+        margin-bottom: 48px;
+    }
+
+    .whats-next-title {
+        font-size: 24px;
+        font-weight: 600;
+        color: #0f172a;
+        margin-bottom: 24px;
+    }
+
+    .next-steps-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+    }
+
+    .next-step-card {
+        background: #f8fafc;
+        border-radius: 16px;
+        padding: 24px;
+        transition: all 0.3s ease;
+    }
+
+        .next-step-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        }
+
+    .step-icon {
+        font-size: 36px;
+        margin-bottom: 12px;
+    }
+
+    .next-step-card h4 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #0f172a;
+        margin-bottom: 8px;
+    }
+
+    .next-step-card p {
+        font-size: 14px;
+        color: #64748b;
+        margin: 0;
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        margin-bottom: 48px;
+        flex-wrap: wrap;
+    }
+
+    /* Share Section */
+    .share-section {
+        padding-top: 32px;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .share-text {
+        font-size: 16px;
+        color: #64748b;
+        margin-bottom: 16px;
+    }
+
+    .share-buttons {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+    }
+
+    .share-btn {
+        background: #f1f5f9;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 40px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #475569;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .share-btn:hover {
+            background: #e2e8f0;
+            transform: translateY(-2px);
+        }
+
+    /* Responsive */
+    @@media (max-width: 640px) {
+        .success-title {
+            font-size: 28px;
+        }
+
+        .success-subtitle {
+            font-size: 16px;
+        }
+
+        .action-buttons {
+            flex-direction: column;
+        }
+
+        .next-steps-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .redirect-notification-card {
+            padding: 32px 24px;
+        }
+
+        .redirect-title {
+            font-size: 24px;
+        }
+
+        .progress-steps {
+            flex-direction: column;
+            gap: 16px;
+        }
+
+            .progress-steps::before {
+                display: none;
+            }
+
+        .step-indicator {
+            margin: 0 auto 8px;
+        }
+
+        .carousel-content {
+            flex-direction: column;
+        }
+
+        .carousel-slide {
+            order: 1;
+        }
+
+        .carousel-nav {
+            order: 2;
+        }
+
+        .deliverable-name {
+            font-size: 16px;
+        }
+    }
+
+    /* Original Styles */
+    .page {
+        background-color: #fff !important;
+    }
+
+    .dashboard-container {
+        min-height: 100vh;
+        padding: 20px;
+        width: 100%;
+    }
+
+    .main-wrapper {
+        width: 100%;
+        max-width: 1600px;
+        margin: 0 auto;
+    }
+
+    .inner-content {
+        width: 100%;
+    }
+
+    .top-bar {
+        padding-bottom: 24px;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 32px;
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    .secure-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #f0fdf4;
+        padding: 8px 16px;
+        border-radius: 40px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+        white-space: nowrap;
+        flex-shrink: 0;
+        margin-left: 20px;
+    }
+
+        .secure-badge svg {
+            flex-shrink: 0;
+        }
+
+    .encryption-text {
+        background: #166534;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 30px;
+        font-size: 10px;
+        font-weight: 600;
+        margin-left: 2px;
+    }
+
+    .one-time-card {
+        background: linear-gradient(135deg, #ffffff 0%, #fefce8 100%);
+        border: 2px solid #eab308;
+    }
+
+    .btn-outline {
+        background: #ffffff;
+        border: 2px solid #2563eb;
+        color: #2563eb;
+        border-radius: 12px !important;
+        padding: 14px 20px;
+        font-weight: 600;
+        font-size: 15px;
+        width: 100%;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+
+        .btn-outline:hover {
+            background: #eff6ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        }
+
+    .btn-primary-style {
+        background: linear-gradient(135deg, #1e3a8a, #2563eb);
+        color: white;
+        border: none;
+        border-radius: 12px !important;
+        padding: 14px 20px;
+        font-weight: 600;
+        font-size: 15px;
+        width: 100%;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+
+        .btn-primary-style:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(30,58,138,0.3);
+        }
+
+    .secure-payment-footer {
+        margin-top: 48px;
+        padding-top: 32px;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .footer-content {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 32px;
+        flex-wrap: wrap;
+    }
+
+    .payment-badges, .cancel-anytime {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #64748b;
+    }
+
+        .payment-badges svg, .cancel-anytime svg {
+            color: #10b981;
+        }
+
+    @@media (max-width: 768px) {
+        .footer-content {
+            flex-direction: column;
+            gap: 16px;
+            text-align: center;
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .top-bar {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .secure-badge {
+            margin-left: 0;
+            align-self: flex-start;
+        }
+    }
+
+    .page-title {
+        font-size: clamp(24px, 5vw, 36px);
+        font-weight: 700;
+        color: #0f172a;
+        margin-top: 16px;
+        margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+        color: #64748b;
+        font-size: 18px;
+        font-weight: 367;
+    }
+</style>
+
+@code {
+    [Parameter] public WebsiteFunnelReturn? WebsiteContext { get; set; }
+    private string billingInterval = "monthly";
+    private string? returnUrl;
+    private bool isSuccessPage = false;
+    private string selectedPlanName = "";
+    private string priceDisplay = "";
+    private string billingDescription = "";
+
+    // Processing notification properties
+    private bool showProcessingNotification = false;
+    private int currentStep = 0;
+    private int countdown = 3;
+    private string processingTitle = "";
+    private string processingMessage = "";
+    private bool isProcessing = false;
+    private System.Timers.Timer? countdownTimer;
+    private System.Timers.Timer? redirectTimer;
+
+    // Carousel properties
+    private List<DeliverableItem> generatedDeliverables = new List<DeliverableItem>();
+    private int currentDeliverableIndex = 0;
+    private int newDeliverableIndex = -1;
+
+    public string Name { get; set; }
+    public string Industry { get; set; }
+    public string Imagepath { get; set; }
+    public string timestampCompanyIdeaId { get; set; }
+    public string existingInfo { get; set; }
+    public List<string> Items { get; set; } = new List<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var email = user.Identity?.Name;
+
+        // =====================================================
+        // CALL AZURE FUNCTION - SUBSCRIPTION CHECK
+        // =====================================================
+        // var subscriptionResult = await CheckUserSubscription(email, NavigationManager.BaseUri);
+        // if(subscriptionResult.Subscriptions.Count < 1){
+        //     NavigationManager.NavigateTo("/accessdenied.html", forceLoad: true);
+        // }
+
+        // Check if this is a success page redirect from Stripe
+        if (uri.AbsolutePath.ToLower().Contains("/success") || uri.AbsolutePath.ToLower().Contains("success"))
+        {
+            isSuccessPage = true;
+
+            if (query.TryGetValue("plan", out var plan))
+            {
+                selectedPlanName = plan;
+            }
+
+            if (query.TryGetValue("price", out var price))
+            {
+                priceDisplay = price;
+            }
+
+            if (query.TryGetValue("billing", out var billing))
+            {
+                billingDescription = billing == "one-time" ? "One-time payment" : $"{billing} billing";
+            }
+
+            if (string.IsNullOrEmpty(selectedPlanName))
+            {
+                selectedPlanName = GetPlanFromStorage() ?? "Premium";
+                priceDisplay = GetPriceFromStorage() ?? "";
+                billingDescription = GetBillingFromStorage() ?? "";
+            }
+
+            // Start the processing flow
+            await StartProcessing();
+        }
+        else
+        {
+            if (query.TryGetValue("b", out var b))
+            {
+                returnUrl = Uri.UnescapeDataString(b!);
+            }
+        }
+    }
+
+    private async Task StartProcessing()
+    {
+        showProcessingNotification = true;
+        isProcessing = true;
+
+        // Step 1: Unlocking Brand System
+        await UpdateStep(1, "Unlocking Your Brand System", "Preparing your personalized brand environment...");
+        //await Task.Delay(1500);
+
+        // Step 2: Generating Brand Ideas
+        await UpdateStep(2, "Generating Brand Ideas", "Our AI is creating unique brand concepts for you...");
+        //await Task.Delay(500);
+
+        // Fetch ideas from OpenAI
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var username = user.Identity?.Name;
+
+        var uri = new Uri(NavigationManager.Uri);
+
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+        var inviteId = WebsiteContext is null ? query["inviteId"] :
+            Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(NavigationManager.BaseUri.TrimEnd('/') + WebsiteContext.WorkspaceUrl).Query)["inviteId"].ToString();
+
+        var inviteResponse = await GetInviteClientByIdAsync(inviteId);
+
+        Name = inviteResponse.Name;
+        Industry = inviteResponse.Industry;
+        Imagepath = inviteResponse.ImagePath;
+        if (WebsiteContext is not null) existingInfo = WebsiteContext.CompanyIdeaId;
+
+        await UpdateStep(2, "Generating Brand Ideas", $"Creating brand concepts for {Name}...");
+
+        // Fetch ideas
+        Items = await FetchIdeaFromOpenAI(Name, Industry, ApiConfig.ApiBaseUrl);
+
+        // Step 3: Creating Visual Assets
+        await UpdateStep(3, "Creating Visual Assets", "Generating brand visuals and assets...");
+
+        // Generate deliverables for each item
+        //await GenerateDeliverablesForItems(inviteResponse);
+
+        //await Task.Delay(100);
+
+        //var imageUrl = await CallRunwareImageFunction(promptText, 1344, 768, 1);
+        string timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+
+        // Now CallSaveImageIdeaFunction returns string (imageId), not bool
+        //string imageId = await CallSaveImageIdeaFunction(MainDeliverable?.Replace("-", ""), "Generic", promptText, imageUrl, promptId, timestamp, "0");
+        //var imageIdeas = await CallGetImageIdeasFunction(existingInfo);
+
+
+        // Step 4: Saving Your Progress
+        await UpdateStep(4, "Saving Your Progress", "Securing your brand identity and ideas...");
+
+        // Save fetched ideas
+        if (Items.Count > 0)
+        {
+            await SaveAllIdeasFromItems();
+        }
+
+        // Save each item to session
+        for (int i = 0; i < Items.Count; i++)
+        {
+            string sessionKey = $"Idea_{i}";
+            await _sessionService.SetSession(sessionKey, Items[i]);
+        }
+
+        if (WebsiteContext is not null)
+        {
+            // This project can contain ideas from an earlier checkout attempt. Carry the
+            // current OpenAI response across the redirect without mixing in those older ideas.
+            await _sessionService.SetSession($"CheckoutIdeas_{WebsiteContext.CompanyIdeaId}",
+                System.Text.Json.JsonSerializer.Serialize(Items));
+        }
+
+        // Complete processing and start redirect countdown
+        await CompleteProcessingAndRedirect(inviteResponse);
+    }
+
+    // Add this class to track image loading status
+    private Dictionary<int, bool> imageLoadedStatus = new Dictionary<int, bool>();
+
+    private async Task GenerateDeliverablesForItems(InviteClientResponse inviteResponse)
+    {
+        // Extract deliverable names from Items list
+        var deliverableNames = new List<string>();
+        foreach (var item in Items)
+        {
+            if (!string.IsNullOrWhiteSpace(item) && item.Contains(":"))
+            {
+                var splitIndex = item.IndexOf(':');
+                var title = item.Substring(0, splitIndex).Trim();
+                deliverableNames.Add(title);
+            }
+        }
+        var promptId = await SavePromptToDatabaseAsync(inviteResponse.Prompt, existingInfo);
+        var existingDescription = await _sessionService.GetSession("CompanyDescription") as string;
+        var companyDescription = "";
+        if (existingDescription == null)
+        {
+            companyDescription = await FetchCompanyDescription(inviteResponse.Name, inviteResponse.Industry, inviteResponse.Prompt);
+            var CompanyDetails = companyDescription;
+            Console.WriteLine(companyDescription);
+
+            await _sessionService.SetSession("CompanyDescription", companyDescription);
+        }
+        else
+        {
+            // Use existing session value if no update needed
+            companyDescription = existingDescription;
+            var CompanyDetails = companyDescription;
+        }
+        //}
+
+        // Call CheckPackageLabelRelevance after description has been determined
+        string packageLabelRelevance = await CheckPackageLabelRelevance(inviteResponse.Name, inviteResponse.Industry, inviteResponse.Prompt, companyDescription);
+        Console.WriteLine($"Package label relevance: {packageLabelRelevance}");
+        string packageModular = "";
+
+        if (packageLabelRelevance.ToLower() == "yes")
+        {
+            packageModular = await GetPackageModularFormula(inviteResponse.Name, inviteResponse.Industry, inviteResponse.Prompt, companyDescription);
+        }
+        // Generate images for each deliverable - ONE AT A TIME
+        for (int i = 0; i < deliverableNames.Count; i++)
+        {
+            var deliverableName = deliverableNames[i];
+
+            // Reset image loaded status for this index
+            imageLoadedStatus[i] = false;
+
+            // Show the new deliverable being generated
+            generatedDeliverables.Add(new DeliverableItem
+                {
+                    Name = deliverableName,
+                    ImageUrl = null,
+                    IsGenerating = true
+                });
+
+            newDeliverableIndex = i;
+            currentDeliverableIndex = i;
+            await InvokeAsync(StateHasChanged);
+
+            // Wait a moment before starting generation for better visual feedback
+            await Task.Delay(500);
+
+            int retryCount = 0;
+            const int maxRetries = 5;
+
+            while (Deliverables.Count <= 1 && retryCount < maxRetries)
+            {
+                string rawResponse = await FetchMainDeliverableCategory(inviteResponse.Name, inviteResponse.Industry, inviteResponse.Prompt, ApiConfig.ApiBaseUrl);
+                Deliverables = ParseDeliverableList(rawResponse);
+                retryCount++;
+
+                if (Deliverables.Count <= 1)
+                {
+                    Console.WriteLine("Only one deliverable received, retrying...");
+                    await Task.Delay(1000);
+                }
+            }
+
+            List<string> sessionItems = new List<string>();
+            bool inSession = false; // Assume it's not in session until proven otherwise
+
+            // Extract main deliverable and secondary deliverables
+            var MainDeliverable = Deliverables.FirstOrDefault() ?? "Website UI/UX";
+
+            string mainDeliverableDetail = await FetchDeliverableDetail(MainDeliverable);
+
+            var match = Regex.Match(mainDeliverableDetail, @"Display:\s*(.*?)\s*(?=\w+:|$)", RegexOptions.IgnoreCase);
+            var DisplayLocation = match.Success ? match.Groups[1].Value.Trim() : "Not found";
+
+            // Generate image for this deliverable
+            //IMPORTANT: Make the prompt dynamic with the ideas for secondary
+            var promptText = "";
+            var imageUrl = "";
+            //var promptText = $"Create a visual representation for {deliverableName} for {inviteResponse.Name} in the {inviteResponse.Industry} industry. Style: Modern, professional, creative.";
+            //promptText = $"{DisplayLocation}|{q}|{name}|{industry}|{mainDeliverableDetail}|{MainDeliverable}|{companyDescription}|{packageModular}";
+            // This await ensures we wait for the API call to complete
+            if (i == 0)
+            {
+                promptText = $"{DisplayLocation}|{inviteResponse.Prompt}|{inviteResponse.Name}|{inviteResponse.Industry}|{mainDeliverableDetail}|{MainDeliverable}|{companyDescription}|{packageModular}";
+                imageUrl = await CallRunwareImageFunction(promptText, 1344, 768, 1);
+            }
+            else
+            {
+                Random rng = new Random();
+                sessionItems = Items
+                    .OrderBy(x => rng.Next())
+                    .Where(deliverable =>
+                        !string.Equals(
+                            deliverable,
+                            MainDeliverable,
+                            StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var SecondaryDeliverables = sessionItems
+                    .Select(item =>
+                    {
+                        int colonIndex = item.IndexOf(':');
+                        int dashIndex = item.IndexOf('-');
+
+                        // Choose the first occurring delimiter
+                        int splitIndex = (colonIndex == -1 || (dashIndex != -1 && dashIndex < colonIndex))
+                            ? dashIndex
+                            : colonIndex;
+
+                        if (splitIndex == -1)
+                            return item.Trim();
+
+                        return item.Substring(0, splitIndex).Trim();
+                    })
+                    .Where(deliverable =>
+                        !string.Equals(
+                            deliverable,
+                            MainDeliverable,
+                            StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                List<string> secondaryDeliverableDetails = new List<string>();
+                List<string> secondaryDisplayLocation = new List<string>();
+                foreach (var deliverable in SecondaryDeliverables)
+                {
+                    string detail = await FetchDeliverableDetail(deliverable);
+                    var matchSecondary = Regex.Match(detail, @"Display:\s*(.*?)\s*(?=\w+:|$)", RegexOptions.IgnoreCase);
+                    var secondaryLocation = matchSecondary.Success ? matchSecondary.Groups[1].Value.Trim() : "Not found";
+                    secondaryDisplayLocation.Add(secondaryLocation);
+                    secondaryDeliverableDetails.Add(detail);
+                }
+                var secondarySessionItems = sessionItems.ToList();
+                // Build prompt texts aligned with secondary items
+                for (int j = 0; j < secondarySessionItems.Count && j < secondaryDeliverableDetails.Count; j++)
+                {
+                    var q2 = secondarySessionItems[j];
+                    var detail = secondaryDeliverableDetails[j];
+                    var secondLocation = secondaryDisplayLocation[j];
+                    var prompt = $"{secondLocation}|{q2}|{inviteResponse.Name}|{inviteResponse.Industry}|{detail}|{SecondaryDeliverables[j]}|{companyDescription}";
+                    promptTexts.Add(prompt);
+                }
+                promptText = promptTexts[i];
+                imageUrl = await CallRunwareImageFunction(promptText, 1344, 768, 1);
+            }
+
+            // Optional: Add validation to ensure we got a valid URL
+            if (string.IsNullOrEmpty(imageUrl))
+            {
+                Console.WriteLine($"Warning: No image URL returned for {deliverableName}");
+                imageUrl = "/images/placeholder-image.png";
+            }
+
+            // Update the deliverable with the generated image
+            generatedDeliverables[i] = new DeliverableItem
+                {
+                    Name = deliverableName,
+                    ImageUrl = imageUrl,
+                    IsGenerating = false
+                };
+
+            // Trigger animation and update UI
+            newDeliverableIndex = i;
+            await InvokeAsync(StateHasChanged);
+
+            // Wait for the image to actually load in the browser (optional)
+            await WaitForImageToLoad(imageUrl);
+
+            // Mark as loaded
+            imageLoadedStatus[i] = true;
+            await InvokeAsync(StateHasChanged);
+
+            // Show the completed image for a moment before moving to next (except for last item)
+            if (i < deliverableNames.Count - 1)
+            {
+                await Task.Delay(1500);
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+    private List<string> promptTexts { get; set; } = new List<string>();
+    // Helper method to wait for an image to load
+    private async Task WaitForImageToLoad(string imageUrl)
+    {
+        if (string.IsNullOrEmpty(imageUrl)) return;
+
+        var tcs = new TaskCompletionSource<bool>();
+
+        // Create a JavaScript interop to check image loading
+        // Note: You'll need to inject IJSRuntime for this to work
+
+        // Simple delay alternative - give time for the image to load
+        await Task.Delay(500);
+
+        return;
+    }
+
+    private async Task UpdateStep(int step, string title, string message)
+    {
+        currentStep = step;
+        processingTitle = title;
+        processingMessage = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(500);
+    }
+
+    private async Task CompleteProcessingAndRedirect(InviteClientDataSuccess inviteResponse)
+    {
+        currentStep = 5; // Completed
+        processingTitle = "Ready to Go!";
+        processingMessage = "Your brand system has been successfully created.";
+        await InvokeAsync(StateHasChanged);
+
+        // Wait 1 second before starting redirect countdown
+        await Task.Delay(1000);
+
+        // Start redirect countdown
+        countdown = 3;
+        countdownTimer = new System.Timers.Timer(1000);
+        countdownTimer.Elapsed += (sender, e) =>
+        {
+            InvokeAsync(() =>
+            {
+                if (countdown > 1)
+                {
+                    countdown--;
+                    StateHasChanged();
+                }
+            });
+        };
+        countdownTimer.Start();
+
+        // Timer for actual redirect
+        redirectTimer = new System.Timers.Timer(3000);
+        redirectTimer.Elapsed += (sender, e) =>
+        {
+            InvokeAsync(() =>
+            {
+                ExecuteRedirect(inviteResponse);
+            });
+        };
+        redirectTimer.AutoReset = false;
+        redirectTimer.Start();
+    }
+
+    // Carousel navigation methods
+    private void NextDeliverable()
+    {
+        if (currentDeliverableIndex < generatedDeliverables.Count - 1)
+        {
+            currentDeliverableIndex++;
+            newDeliverableIndex = -1; // Reset animation trigger
+            StateHasChanged();
+        }
+    }
+
+    private void PrevDeliverable()
+    {
+        if (currentDeliverableIndex > 0)
+        {
+            currentDeliverableIndex--;
+            newDeliverableIndex = -1; // Reset animation trigger
+            StateHasChanged();
+        }
+    }
+
+    private void GoToDeliverable(int index)
+    {
+        if (index >= 0 && index < generatedDeliverables.Count)
+        {
+            currentDeliverableIndex = index;
+            newDeliverableIndex = -1; // Reset animation trigger
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string> GetPackageModularFormula(string name, string industry, string prompt, string companyDescription = "")
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetPackageModularFormula?code=REDACTED_FOR_GROOMING";
+
+        var payload = new
+        {
+            Name = name,
+            Industry = industry,
+            Prompt = prompt,
+            CompanyDescription = companyDescription
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadAsStringAsync();
+
+            // Optional cleanup: remove leading/trailing quotes or whitespace
+            string cleanedResult = result.Trim().Trim('"').Trim();
+
+            return cleanedResult;
+        }
+
+        return "Error: Unable to retrieve modular packaging formula.";
+    }
+
+    private List<string> ParseDeliverableList(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return new List<string>();
+
+        // Step 1: Clean up common enclosing characters
+        raw = raw.Trim('\'', '"', '.', ' ', '\n', '\r');
+
+        // Step 2: Replace known delimiters with newlines to standardize
+        raw = Regex.Replace(raw, @"\s*\d+\.\s*", "\n");           // Replace numbered list (e.g., 1. Item)
+        raw = raw.Replace(",", "\n");                             // Replace commas
+        raw = raw.Replace("•", "\n");                              // Replace bullets if any
+
+        // Step 3: Split on newlines and trim each item
+        var items = raw
+            .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(i => i.Trim())
+            .Where(i => !string.IsNullOrWhiteSpace(i))
+            .ToList();
+
+        return items;
+    }
+    private async Task<string> FetchMainDeliverableCategory(string name, string industry, string prompt, string url)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{url}api/GetMainDeliverableCategory?code=REDACTED_FOR_GROOMING";
+
+        var request = new OpenAIIdeaRequest
+            {
+                Name = name,
+                Industry = industry,
+                Prompt = prompt
+            };
+
+        var response = await client.PostAsJsonAsync(functionUrl, request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var category = await response.Content.ReadAsStringAsync();
+            return category.Trim('"'); // Remove quotes if returned as a JSON string
+        }
+        else
+        {
+            return "Error: Unable to fetch category";
+        }
+    }
+
+    private async Task<string> FetchDeliverableDetail(string deliverable)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetDeliverableDetail?code=REDACTED_FOR_GROOMING";
+
+        var content = new StringContent($"\"{deliverable}\"", System.Text.Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var detail = await response.Content.ReadAsStringAsync();
+
+            // Normalize newlines and collapse to one line
+            string singleLine = Regex.Replace(detail, @"\s*\r?\n\s*", " ").Trim();
+            return singleLine;
+        }
+
+        return "Error: Unable to fetch deliverable detail.";
+    }
+
+    private List<string> Deliverables = new();
+    private async Task<string> CallSaveImageIdeaFunction(string deliverableType, string subCategory, string imagePrompt, string imageUrl, string promptId, string timeStamp, string countId)
+    {
+        HttpClient client = new HttpClient();
+
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/SaveImageIdea?code=REDACTED_FOR_GROOMING";
+
+        var requestBody = new
+        {
+            DeliverableType = deliverableType,
+            SubCategory = subCategory,
+            ImagePrompt = imagePrompt,
+            ImageUrl = imageUrl,
+            PromptId = promptId,
+            TimeStamp = timeStamp,
+            CountId = countId
+        };
+
+        var response = await client.PostAsJsonAsync(functionUrl, requestBody);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            // Deserialize the response to extract the ID
+            var responseObject = System.Text.Json.JsonSerializer.Deserialize<SaveImageIdeaResponse>(responseContent, new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+            Console.WriteLine($"ImageIdea saved successfully. Id: {responseObject?.Id}");
+
+            return responseObject?.Id;  // Return the imageId (or null if somehow deserialization fails)
+        }
+        else
+        {
+            Console.WriteLine($"SaveImageIdea call failed: {response.StatusCode}");
+            return null;  // null indicates failure
+        }
+    }
+
+    public class SaveImageIdeaResponse
+    {
+        public string Message { get; set; }
+        public string Id { get; set; }
+    }
+    private async Task<string> CallRunwareImageFunction(string positivePrompt, int width, int height, int numberResults)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            string functionUrl = $"{ApiConfig.ApiBaseUrl}api/CallRunwareAPI?code=REDACTED_FOR_GROOMING";
+
+            var requestBody = new
+            {
+                positivePrompt = positivePrompt,
+                width = width,
+                height = height,
+                numberResults = numberResults
+            };
+
+            // Ensure we wait for the response
+            var response = await client.PostAsJsonAsync(functionUrl, requestBody);
+
+            // Ensure we wait for the content
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<RunwareResponse>();
+
+                // Add a small delay to ensure the image is ready on the server
+                await Task.Delay(500);
+
+                if (result != null && result.Data != null)
+                {
+                    var firstUrl = result.Data
+                        .Where(img => !string.IsNullOrWhiteSpace(img.ImageURL))
+                        .Select(img => img.ImageURL)
+                        .FirstOrDefault();
+
+                    Console.WriteLine($"Image URL generated: {firstUrl}");
+                    return firstUrl ?? string.Empty;
+                }
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Runware call failed: {response.StatusCode}, Error: {errorContent}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception in CallRunwareImageFunction: {ex.Message}");
+        }
+
+        return string.Empty;
+    }
+
+    private void CancelProcessing()
+    {
+        if (!isProcessing) return;
+
+        // Stop all timers
+        countdownTimer?.Stop();
+        countdownTimer?.Dispose();
+        redirectTimer?.Stop();
+        redirectTimer?.Dispose();
+
+        isProcessing = false;
+        showProcessingNotification = false;
+
+        StateHasChanged();
+    }
+    public class InviteClientDataSuccess
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string Industry { get; set; }
+        public string Prompt { get; set; }
+        public string Email { get; set; }
+        public string ImagePath { get; set; }
+        public string ImageId { get; set; }
+        public bool UseSameImageSeedForAll { get; set; }
+        public string TimeStamp { get; set; }
+    }
+    private async void ExecuteRedirect(InviteClientDataSuccess inviteResponse)
+    {
+        if (!isProcessing) return;
+
+        // Clean up timers
+        countdownTimer?.Stop();
+        countdownTimer?.Dispose();
+        redirectTimer?.Stop();
+        redirectTimer?.Dispose();
+
+        isProcessing = false;
+        showProcessingNotification = false;
+
+        if (WebsiteContext is not null)
+        {
+            await JS.InvokeVoidAsync("designModeAttribution.markFunnelComplete");
+            NavigationManager.NavigateTo(WebsiteContext.WorkspaceUrl, forceLoad: true);
+            return;
+        }
+
+        var timestampCompanyIdeaId = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+        var existingInfo = $"{Convert.ToBase64String(Encoding.UTF8.GetBytes(inviteResponse.Name))}|~~|@@|^^|{Convert.ToBase64String(Encoding.UTF8.GetBytes(inviteResponse.Industry))}|~~|@@|^^|{timestampCompanyIdeaId}";
+        var prompt = $"{inviteResponse.Prompt}";
+
+        var url = $"init/gen?name={Uri.EscapeDataString(inviteResponse.Name)}" +
+          $"&industry={Uri.EscapeDataString(inviteResponse.Industry)}" +
+          $"&cid={Uri.EscapeDataString(existingInfo)}" +
+          $"&prompt={Uri.EscapeDataString(":" + prompt)}";
+
+        string[] inviteDataArr = Array.Empty<string>();
+
+        if (!string.IsNullOrWhiteSpace(Imagepath))
+        {
+            inviteDataArr = System.Text.Json.JsonSerializer.Deserialize<string[]>(Imagepath)
+                            ?? Array.Empty<string>();
+        }
+
+        if (!string.IsNullOrWhiteSpace(Imagepath) && inviteDataArr.Length > 0)
+        {
+            url += $"&seed={Uri.EscapeDataString(inviteDataArr[0])}";
+        }
+
+        var uri = new Uri(NavigationManager.Uri);
+
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+        var sessionId = query["session_id"];
+        var inviteId = query["inviteId"];
+
+        if (!string.IsNullOrWhiteSpace(inviteId))
+        {
+            url += $"&inviteid={Uri.EscapeDataString(inviteId)}";
+        }
+
+        await JS.InvokeVoidAsync("designModeAttribution.markFunnelComplete");
+        NavigationManager.NavigateTo(url, forceLoad: true);
+    }
+    private async Task<CheckSubscriptionResponse> CheckUserSubscription(string email, string url)
+    {
+        using HttpClient client = new HttpClient();
+
+        string functionUrl =
+            $"{url}api/CheckUserSubscription?email={Uri.EscapeDataString(email)}&code=REDACTED_FOR_GROOMING";
+
+        var response = await client.GetAsync(functionUrl);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var json = await response.Content.ReadAsStringAsync();
+
+            var result = System.Text.Json.JsonSerializer.Deserialize<CheckSubscriptionResponse>(
+                json,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            return result;
+        }
+
+        return new CheckSubscriptionResponse
+            {
+                Success = false,
+                HasSubscription = false
+            };
+    }
+
+    public class CheckSubscriptionResponse
+    {
+        public bool Success { get; set; }
+        public string Email { get; set; }
+        public string UserId { get; set; }
+        public bool HasSubscription { get; set; }
+        public int SubscriptionCount { get; set; }
+        public List<SubscriptionDto> Subscriptions { get; set; }
+    }
+
+    public class SubscriptionDto
+    {
+        public string Id { get; set; }
+        public string UserId { get; set; }
+        public string SubscriptionId { get; set; }
+        public string Status { get; set; }
+        public string PriceId { get; set; }
+        public string Name { get; set; }
+    }
+    private async Task<string> CheckPackageLabelRelevance(string name, string industry, string prompt, string companyDescription = "")
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/CheckPackageLabelRelevance?code=REDACTED_FOR_GROOMING";
+
+        var payload = new
+        {
+            Name = name,
+            Industry = industry,
+            Prompt = prompt,
+            CompanyDescription = companyDescription
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Just return the full response string
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        return "Error: Unable to check package label relevance.";
+    }
+
+    private async Task<string> FetchCompanyDescription(string name, string industry, string prompt)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetCompanyDescription?code=REDACTED_FOR_GROOMING";
+
+        var payload = new
+        {
+            Name = name,
+            Industry = industry,
+            Prompt = prompt
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadAsStringAsync();
+
+            // Normalize newlines and collapse to one line
+            string singleLine = Regex.Replace(result, @"\s*\r?\n\s*", " ").Trim();
+            return singleLine;
+        }
+
+        return "Error: Unable to fetch company description.";
+    }
+    public class SavePromptResponse
+    {
+        public string Message { get; set; }
+        public string PromptId { get; set; }
+    }
+    private async Task<string?> SavePromptToDatabaseAsync(string prompt, string companyIdeaId)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                string userId = user.Identity.Name;
+
+                var requestBody = new
+                {
+                    Prompt = prompt,
+                    CompanyIdeaId = companyIdeaId,
+                    UserId = userId,
+                    TimeStamp = DateTime.UtcNow
+                };
+                HttpClient client = new HttpClient();
+                var response = await client.PostAsJsonAsync($"{ApiConfig.ApiBaseUrl}api/SavePrompt?code=REDACTED_FOR_GROOMING", requestBody);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"❌ Failed to save prompt: {response.StatusCode}");
+                    return null;
+                }
+                else
+                {
+                    // Read the response content as JSON
+                    var jsonResponse = await response.Content.ReadFromJsonAsync<SavePromptResponse>();
+
+                    Console.WriteLine("✅ Prompt saved successfully.");
+
+                    // Return the PromptId from the response
+                    return jsonResponse?.PromptId;
+                }
+            }
+            else
+            {
+                Console.WriteLine("⚠️ User not authenticated. Skipping prompt save.");
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception in SavePromptToDatabaseAsync: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task<List<ImageIdeaModel>> CallGetImageIdeasFunction(string companyIdeaId)
+    {
+        HttpClient client = new HttpClient();
+
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetImageIdeasByCompanyId?code=REDACTED_FOR_GROOMING&companyIdeaId={companyIdeaId}";
+
+        var response = await client.GetAsync(functionUrl);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var imageIdeas = await response.Content.ReadFromJsonAsync<List<ImageIdeaModel>>();
+            Console.WriteLine($"Fetched {imageIdeas?.Count ?? 0} image ideas.");
+            return imageIdeas ?? new List<ImageIdeaModel>();
+        }
+        else
+        {
+            Console.WriteLine($"GetImageIdeas call failed: {response.StatusCode}");
+            return new List<ImageIdeaModel>();
+        }
+    }
+    public class ImageIdeaModel
+    {
+        public string Id { get; set; }
+        public string DeliverableType { get; set; }
+        public string SubCategory { get; set; }
+        public string ImagePrompt { get; set; }
+        public string ImageUrl { get; set; }
+        public string PromptId { get; set; }
+        public string TimeStamp { get; set; }
+        public string SceneNumber { get; set; }
+        public string CountId { get; set; }
+    }
+    private async Task SaveAllIdeasFromItems()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        bool isAuthorized = user.Identity.IsAuthenticated;
+        string userId = isAuthorized ? user.Identity.Name : "";
+
+        var timestamp = DateTime.UtcNow.Ticks.ToString();
+
+        var keys = await LocalStorage.KeysAsync();
+        var unsavedIdeaKeys = keys.Where(k => k.StartsWith("unsaved_ideas_")).ToList();
+        var unsavedCompanyKeys = keys.Where(k => k.StartsWith("unsaved_company_industry_")).ToList();
+
+        var companyRequest = new CompanyIndustryRequest
+            {
+                Name = Name,
+                Industry = Industry,
+                UserId = userId
+            };
+
+        var ideaRequests = new List<IdeaRequest>();
+        foreach (var item in Items)
+        {
+            if (string.IsNullOrWhiteSpace(item) || !item.Contains(":"))
+                continue;
+
+            var splitIndex = item.IndexOf(':');
+            var title = item.Substring(0, splitIndex).Trim();
+            var description = item.Substring(splitIndex + 1).Trim();
+
+            ideaRequests.Add(new IdeaRequest
+                {
+                    Title = title,
+                    Description = description,
+                    UserId = userId,
+                    CompanyIdeaId = existingInfo
+                });
+        }
+
+        if (isAuthorized)
+        {
+            ideaRequests = new List<IdeaRequest>();
+            foreach (var item in Items)
+            {
+                if (string.IsNullOrWhiteSpace(item) || !item.Contains(":"))
+                    continue;
+
+                var splitIndex = item.IndexOf(':');
+                var title = item.Substring(0, splitIndex).Trim();
+                var description = item.Substring(splitIndex + 1).Trim();
+
+                ideaRequests.Add(new IdeaRequest
+                    {
+                        Title = title,
+                        Description = description,
+                        UserId = userId,
+                        CompanyIdeaId = existingInfo
+                    });
+            }
+            string ideaFunctionUrl = $"{ApiConfig.ApiBaseUrl}api/SaveIdea?code=REDACTED_FOR_GROOMING";
+            string companyFunctionUrl = $"{ApiConfig.ApiBaseUrl}api/SaveCompanyIndustry?code=REDACTED_FOR_GROOMING";
+            HttpClient client = new HttpClient();
+            var companyResponse = await client.PostAsJsonAsync(companyFunctionUrl, companyRequest);
+
+            if (!companyResponse.IsSuccessStatusCode)
+            {
+                var error = await companyResponse.Content.ReadAsStringAsync();
+                Console.WriteLine($"❌ Failed to save company: {error}");
+            }
+
+            foreach (var idea in ideaRequests)
+            {
+                var response = await client.PostAsJsonAsync(ideaFunctionUrl, idea);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"❌ Failed to save idea '{idea.Title}': {error}");
+                }
+            }
+        }
+        else
+        {
+            string ideaKey = $"unsaved_ideas";
+            string companyKey = $"unsaved_company_industry";
+
+            if (!string.IsNullOrWhiteSpace(Name) || !string.IsNullOrWhiteSpace(Industry))
+            {
+                await LocalStorage.SetItemAsync(companyKey, companyRequest);
+            }
+
+            if (ideaRequests.Count > 0)
+            {
+                await LocalStorage.SetItemAsync(ideaKey, ideaRequests);
+            }
+        }
+    }
+
+    private async Task<List<string>> FetchIdeaFromOpenAI(string name, string industry, string url)
+    {
+        List<string> items = new List<string>();
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{url}api/GetAIIdeaResponse?code=REDACTED_FOR_GROOMING";
+
+        var response = await client.PostAsJsonAsync(functionUrl, new OpenAIIdeaRequest { Name = name, Industry = industry });
+
+        if (response.IsSuccessStatusCode)
+        {
+            items = await response.Content.ReadFromJsonAsync<List<string>>();
+            return items;
+        }
+        else
+        {
+            return new List<string>();
+        }
+    }
+
+    private async Task<InviteClientDataSuccess?> GetInviteClientByIdAsync(string id)
+    {
+        try
+        {
+            using HttpClient client = new HttpClient();
+
+            string functionUrl =
+                $"{ApiConfig.ApiBaseUrl}api/GetInviteClientById?code=REDACTED_FOR_GROOMING";
+
+            var requestBody = new
+            {
+                Id = id
+            };
+
+            var jsonContent = new StringContent(
+                JsonConvert.SerializeObject(requestBody),
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await client.PostAsync(functionUrl, jsonContent);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+
+                var inviteClientData = JsonConvert.DeserializeObject<InviteClientDataSuccess>(json);
+
+                return inviteClientData;
+            }
+
+            Console.WriteLine(
+                $"❌ Failed to fetch invite client. Status: {response.StatusCode}");
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"❌ Exception in GetInviteClientByIdAsync: {ex.Message}");
+
+            return null;
+        }
+    }
+
+    public class InviteClientResponse
+    {
+        public string Prompt { get; set; }
+        public string Name { get; set; }
+        public string Industry { get; set; }
+        public string Imagepath { get; set; }
+    }
+
+    private void SetBillingInterval(string interval)
+    {
+        billingInterval = interval;
+    }
+
+    private void StorePlanDetails(string planName, string price, string billingType)
+    {
+        selectedPlanName = planName;
+        priceDisplay = price;
+        billingDescription = billingType == "one-time" ? "One-time payment" : $"{billingType} billing";
+    }
+
+    private string? GetPlanFromStorage()
+    {
+        return null;
+    }
+
+    private string? GetPriceFromStorage()
+    {
+        return null;
+    }
+
+    private string? GetBillingFromStorage()
+    {
+        return null;
+    }
+
+    private void GoBack()
+    {
+        if (!string.IsNullOrEmpty(returnUrl))
+        {
+            NavigationManager.NavigateTo(returnUrl, true);
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/", true);
+        }
+    }
+
+    private void GoToDashboard()
+    {
+        CancelProcessing();
+        NavigationManager.NavigateTo("/dashboard", true);
+    }
+
+    private void GoToProjects()
+    {
+        CancelProcessing();
+        NavigationManager.NavigateTo("/projects", true);
+    }
+
+    private async void CopyInviteLink()
+    {
+        Console.WriteLine("Invite link copied!");
+    }
+
+    public void Dispose()
+    {
+        countdownTimer?.Dispose();
+        redirectTimer?.Dispose();
+    }
+
+    // Helper class for deliverable items
+    public class DeliverableItem
+    {
+        public string Name { get; set; }
+        public string ImageUrl { get; set; }
+        public bool IsGenerating { get; set; }
+    }
+}

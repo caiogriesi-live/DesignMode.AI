@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DesignMode Project Event",
+  "type": "object",
+  "required": [
+    "timestamp",
+    "projectId",
+    "type",
+    "message"
+  ],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "workItemId": {
+      "type": ["string", "null"]
+    },
+    "agent": {
+      "type": ["string", "null"]
+    },
+    "type": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,473 @@
+
+Azure Functions Core Tools
+Core Tools Version:       4.0.7030 Commit hash: N/A +bb4c949899cd5659d6bfe8b92cc923453a2e8f88 (64-bit)
+Function Runtime Version: 4.1037.0.23568
+
+[2026-06-09T11:38:47.835Z] Found C:\Users\caiog\source\repos\DesignMode.AI\DesignMode.AI.Server\DesignMode.AI.Server.csproj. Using for user secrets file configuration.
+[2026-06-09T11:38:49.822Z] Azure Functions .NET Worker (PID: 36812) initialized in debug mode. Waiting for debugger to attach...
+[2026-06-09T11:38:49.888Z] Worker process started and initialized.
+
+Functions:
+
+        Batch: [POST] http://localhost:7032/api/Batch
+
+        CallRunwareAPI: [POST] http://localhost:7032/api/CallRunwareAPI
+
+        CallRunwareAPIInit: [POST] http://localhost:7032/api/CallRunwareAPIInit
+
+        CallRunwareAPIWithReferenceImage: [POST] http://localhost:7032/api/CallRunwareAPIWithReferenceImage
+
+        CallRunwareAudio: [POST] http://localhost:7032/api/CallRunwareAudio
+
+        CheckCompanyIndustryAndIdeasExists: [POST] http://localhost:7032/api/CheckCompanyIndustryAndIdeasExists
+
+        CheckImageUrlExists: [POST,GET] http://localhost:7032/api/CheckImageUrlExists
+
+        CheckPackageLabelRelevance: [POST] http://localhost:7032/api/CheckPackageLabelRelevance
+
+        CheckUserOnboarded: [GET] http://localhost:7032/api/CheckUserOnboarded
+
+        CheckUserSubscription: [GET] http://localhost:7032/api/CheckUserSubscription
+
+        CheckVideoExists: [POST] http://localhost:7032/api/CheckVideoExists
+
+        CheckVideoIdExists: [GET] http://localhost:7032/api/CheckVideoIdExists/{videoId}
+
+        CopyImagesToNewVersion: [POST] http://localhost:7032/api/CopyImagesToNewVersion
+
+        CreateCheckoutSession: [POST] http://localhost:7032/api/CreateCheckoutSession
+
+        DeleteBlankImageIdeas: [POST] http://localhost:7032/api/DeleteBlankImageIdeas
+
+        DeleteConceptImage: [POST] http://localhost:7032/api/DeleteConceptImage
+
+        DownloadWebsite: [GET] http://localhost:7032/api/DownloadWebsite
+
+        ExtractSocialMediaImage: [POST] http://localhost:7032/api/ExtractSocialMediaImage
+
+        ExtractWebsiteBackground: [POST] http://localhost:7032/api/ExtractWebsiteBackground
+
+        ForgotPassword: [POST] http://localhost:7032/api/ForgotPassword
+
+        Function1: [GET,POST] http://localhost:7032/api/Function1
+
+        Function2: [GET,POST] http://localhost:7032/api/Function2
+
+        GenerateSocialPostFromImage: [POST] http://localhost:7032/api/GenerateSocialPostFromImage
+
+        GenerateSocialScreenshot: [POST] http://localhost:7032/api/GenerateSocialScreenshot
+
+        GenerateVideoPrompts: [POST] http://localhost:7032/api/GenerateVideoPrompts
+
+        GenerateWebsiteFromImage: [POST] http://localhost:7032/api/GenerateWebsiteFromImage
+
+        GenerateWebsiteScreenshot: [POST] http://localhost:7032/api/GenerateWebsiteScreenshot
+
+        GetAICommercialCTA: [POST] http://localhost:7032/api/GetAICommercialCTA
+
+        GetAICommercialResponse: [POST] http://localhost:7032/api/GetAICommercialResponse
+
+        GetAICommercialSceneOrder: [POST] http://localhost:7032/api/GetAICommercialSceneOrder
+
+        GetAICommercialVoiceOverScript: [POST] http://localhost:7032/api/GetAICommercialVoiceOverScript
+
+        GetAIIdeaResponse: [POST] http://localhost:7032/api/GetAIIdeaResponse
+
+        GetAIImageDescription: [POST] http://localhost:7032/api/GetAIImageDescription
+
+        GetAIResponse: [POST] http://localhost:7032/api/GetAIResponse
+
+        GetAISceneCameraDescription: [POST] http://localhost:7032/api/GetAISceneCameraDescription
+
+        GetAISceneDialogue: [POST] http://localhost:7032/api/GetAISceneDialogue
+
+        GetAIVideoPromptSequence: [POST] http://localhost:7032/api/GetAIVideoPromptSequence
+
+        GetAllConceptImagesWithIdeas: [GET] http://localhost:7032/api/GetAllConceptImagesWithIdeas
+
+        GetAudioSamplesByVideoTextUrlActor: [POST] http://localhost:7032/api/GetAudioSamplesByVideoTextUrlActor
+
+        GetCommercialDescription: [POST] http://localhost:7032/api/GetCommercialDescription
+
+        GetCompanyDescription: [POST] http://localhost:7032/api/GetCompanyDescription
+
+        GetCTAText: [POST] http://localhost:7032/api/GetCTAText
+
+        GetDeliverableDetail: [POST] http://localhost:7032/api/GetDeliverableDetail
+
+        GetIdeasByCompanyIdeaId: [GET] http://localhost:7032/api/GetIdeasByCompanyIdeaId
+
+        GetImageIdeaCountsByCompanyId: [GET] http://localhost:7032/api/GetImageIdeaCountsByCompanyId
+
+        GetImageIdeasByCompanyId: [GET] http://localhost:7032/api/GetImageIdeasByCompanyId
+
+        GetImageIdeasForCompanyIndustry: [GET] http://localhost:7032/api/GetImageIdeasForCompanyIndustry
+
+        GetImageUrlByImageId: [POST,GET] http://localhost:7032/api/GetImageUrlByImageId
+
+        GetIndustrySuggestions: [POST] http://localhost:7032/api/GetIndustrySuggestions
+
+        GetInviteClientByEmail: [POST,GET] http://localhost:7032/api/GetInviteClientByEmail
+
+        GetInviteClientByEmailAndId: [POST,GET] http://localhost:7032/api/GetInviteClientByEmailAndId
+
+        GetInviteClientById: [POST,GET] http://localhost:7032/api/GetInviteClientById
+
+        GetInviteClientImages: [GET,POST] http://localhost:7032/api/GetInviteClientImages
+
+        GetMainDeliverableCategory: [POST] http://localhost:7032/api/GetMainDeliverableCategory
+
+        GetNextSocialVersion: [POST] http://localhost:7032/api/GetNextSocialVersion
+
+        GetNextWebsiteVersion: [POST] http://localhost:7032/api/GetNextWebsiteVersion
+
+        GetPackageModularFormula: [POST] http://localhost:7032/api/GetPackageModularFormula
+
+        GetPromptById: [GET] http://localhost:7032/api/GetPromptById
+
+        GetPromptIdByCompanyIdeaIdAndPrompt: [POST] http://localhost:7032/api/GetPromptIdByCompanyIdeaIdAndPrompt
+
+        GetPromptIdForCompanyIdea: [GET] http://localhost:7032/api/GetPromptIdForCompanyIdea
+
+        GetPromptInviteClientByEmail: [POST,GET] http://localhost:7032/api/GetPromptInviteClientByEmail
+
+        GetSocialByCompany: [POST] http://localhost:7032/api/GetSocialByCompany
+
+        GetUserIdByUsername: [POST] http://localhost:7032/api/GetUserIdByUsername
+
+        GetVideoImagesByPromptId: [GET] http://localhost:7032/api/GetVideoImagesByPromptId
+
+        GetVideoImagesByVideoId: [GET] http://localhost:7032/api/GetVideoImagesByVideoId
+
+        GetWebsitesByCompany: [POST] http://localhost:7032/api/GetWebsitesByCompany
+
+        GoogleLogin: [POST] http://localhost:7032/api/GoogleLogin
+
+        Login: [POST] http://localhost:7032/api/Login
+
+        PostTestText: [POST] http://localhost:7032/api/PostTestText
+
+        RegenerateSceneFromImage: [POST] http://localhost:7032/api/RegenerateSceneFromImage
+
+        ResetPassword: [POST] http://localhost:7032/api/ResetPassword
+
+        SaveAudioSample: [POST] http://localhost:7032/api/SaveAudioSample
+
+        SaveCompanyIndustry: [POST] http://localhost:7032/api/SaveCompanyIndustry
+
+        SaveConceptImage: [POST] http://localhost:7032/api/SaveConceptImage
+
+        SaveCTAText: [POST] http://localhost:7032/api/SaveCTAText
+
+        SaveHeroBackground: [POST] http://localhost:7032/api/SaveHeroBackground
+
+        SaveHeroBackgroundFromBase64: [POST] http://localhost:7032/api/SaveHeroBackgroundFromBase64
+
+        SaveHtmlToCompanyFolder: [POST] http://localhost:7032/api/SaveHtmlToCompanyFolder
+
+        SaveIdea: [POST] http://localhost:7032/api/SaveIdea
+
+        SaveImageIdea: [POST] http://localhost:7032/api/SaveImageIdea
+
+        SaveImageToFolder: [POST] http://localhost:7032/api/SaveImageToFolder
+
+        SaveInviteClient: [POST] http://localhost:7032/api/SaveInviteClient
+
+        SaveInviteClientImage: [POST] http://localhost:7032/api/SaveInviteClientImage
+
+        SaveInviteFile: [POST] http://localhost:7032/api/SaveInviteFile
+
+        SavePrompt: [POST] http://localhost:7032/api/SavePrompt
+
+        SaveSocialContent: [POST] http://localhost:7032/api/SaveSocialContent
+
+        SaveSocialHeroBackgroundFromBase64: [POST] http://localhost:7032/api/SaveSocialHeroBackgroundFromBase64
+
+        SaveSocialPreview: [POST] http://localhost:7032/api/SaveSocialPreview
+
+        SaveSocialScreenshot: [POST] http://localhost:7032/api/SaveSocialScreenshot
+
+        SaveSubscription: [POST] http://localhost:7032/api/SaveSubscription
+
+        SaveVideoImage: [POST] http://localhost:7032/api/SaveVideoImage
+
+        SaveWebsitePreview: [POST] http://localhost:7032/api/SaveWebsitePreview
+
+        SaveWebsiteScreenshot: [POST] http://localhost:7032/api/SaveWebsiteScreenshot
+
+        SendInviteEmail: [POST] http://localhost:7032/api/SendInviteEmail
+
+        Signup: [POST] http://localhost:7032/api/Signup
+
+        StripeWebhook: [POST] http://localhost:7032/api/StripeWebhook
+
+        UpdateInviteClientImageIdByEmail: [POST] http://localhost:7032/api/UpdateInviteClientImageIdByEmail
+
+        UpdateOnboarded: [POST] http://localhost:7032/api/UpdateOnboarded
+
+        UpdateScriptByVideoIdAndScene: [POST] http://localhost:7032/api/UpdateScriptByVideoIdAndScene
+
+        UpdateVideoImageAudioAndResolution: [POST] http://localhost:7032/api/UpdateVideoImageAudioAndResolution
+
+        UpdateVideoImageIdByVideoIdAndScene: [POST] http://localhost:7032/api/UpdateVideoImageIdByVideoIdAndScene
+
+        ValidateResetToken: [POST] http://localhost:7032/api/ValidateResetToken
+
+For detailed output, run func with --verbose flag.
+[2026-06-09T11:39:01.933Z] Executing 'Functions.GetInviteClientByEmail' (Reason='This function was programmatically called via the host APIs.', Id=68e1af27-63ad-4af0-bca0-de197bb5af08)
+[2026-06-09T11:39:01.933Z] Executing 'Functions.GetImageIdeaCountsByCompanyId' (Reason='This function was programmatically called via the host APIs.', Id=34d9b35e-ed49-42a6-aec1-0b449bcae72d)
+[2026-06-09T11:39:01.933Z] Executing 'Functions.GetInviteClientById' (Reason='This function was programmatically called via the host APIs.', Id=8e8336de-e607-4c31-8a90-f20adbb4fabb)
+[2026-06-09T11:39:02.742Z] Executing BadRequestObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:03.040Z] Executed 'Functions.GetImageIdeaCountsByCompanyId' (Succeeded, Id=34d9b35e-ed49-42a6-aec1-0b449bcae72d, Duration=1142ms)
+[2026-06-09T11:39:03.745Z] Executing OkObjectResult, writing value of type 'DesignMode.AI.Server.DesignModeFunctions+InviteClientData'.[2026-06-09T11:39:03.746Z] Executing OkObjectResult, writing value of type 'Amazon.Runtime.Internal.Util.AlwaysSendDictionary`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[Amazon.DynamoDBv2.Model.AttributeValue, AWSSDK.DynamoDBv2, Version=4.0.0.0, Culture=neutral, PublicKeyToken=885c28607f98e604]]'.
+
+[2026-06-09T11:39:03.840Z] Executed 'Functions.GetInviteClientById' (Succeeded, Id=8e8336de-e607-4c31-8a90-f20adbb4fabb, Duration=1960ms)
+[2026-06-09T11:39:03.854Z] Executed 'Functions.GetInviteClientByEmail' (Succeeded, Id=68e1af27-63ad-4af0-bca0-de197bb5af08, Duration=1974ms)
+[2026-06-09T11:39:03.906Z] Executing 'Functions.GetImageUrlByImageId' (Reason='This function was programmatically called via the host APIs.', Id=738485b0-226b-43c1-a516-8ebb572d76a9)
+[2026-06-09T11:39:03.932Z] Executing 'Functions.GetPromptIdForCompanyIdea' (Reason='This function was programmatically called via the host APIs.', Id=82d91029-2bd8-4763-b574-2e1f46dbfa76)
+[2026-06-09T11:39:03.960Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType31`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:03.980Z] Executed 'Functions.GetImageUrlByImageId' (Succeeded, Id=738485b0-226b-43c1-a516-8ebb572d76a9, Duration=76ms)
+[2026-06-09T11:39:04.026Z] Executing NotFoundObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:04.036Z] Executed 'Functions.GetPromptIdForCompanyIdea' (Succeeded, Id=82d91029-2bd8-4763-b574-2e1f46dbfa76, Duration=105ms)
+[2026-06-09T11:39:04.056Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=22c9f18d-5b5a-4ce7-ae20-5c4d3a2f1f48)
+[2026-06-09T11:39:05.776Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:05.787Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=22c9f18d-5b5a-4ce7-ae20-5c4d3a2f1f48, Duration=1733ms)
+[2026-06-09T11:39:05.824Z] Executing 'Functions.GetCompanyDescription' (Reason='This function was programmatically called via the host APIs.', Id=c318765e-df5a-4e44-b86c-b9bb36469e5c)
+[2026-06-09T11:39:06.576Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:06.592Z] Executed 'Functions.GetCompanyDescription' (Succeeded, Id=c318765e-df5a-4e44-b86c-b9bb36469e5c, Duration=768ms)
+[2026-06-09T11:39:06.603Z] Executing 'Functions.GetDeliverableDetail' (Reason='This function was programmatically called via the host APIs.', Id=00ea8fe7-db8a-4295-89bb-d39427a48a8a)
+[2026-06-09T11:39:07.409Z] Executing ContentResult with HTTP Response ContentType of text/plain
+[2026-06-09T11:39:07.429Z] Executed 'Functions.GetDeliverableDetail' (Succeeded, Id=00ea8fe7-db8a-4295-89bb-d39427a48a8a, Duration=827ms)
+[2026-06-09T11:39:07.438Z] Executing 'Functions.GetInviteClientImages' (Reason='This function was programmatically called via the host APIs.', Id=1b7a9f1c-d3e5-46e6-8691-27686ab0744c)
+[2026-06-09T11:39:07.487Z] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[<>f__AnonymousType28`11[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+[2026-06-09T11:39:07.517Z] Executed 'Functions.GetInviteClientImages' (Succeeded, Id=1b7a9f1c-d3e5-46e6-8691-27686ab0744c, Duration=80ms)
+[2026-06-09T11:39:10.716Z] Executing 'Functions.GetUserIdByUsername' (Reason='This function was programmatically called via the host APIs.', Id=752e79b9-bc8e-4fa6-ba54-80939ff25154)
+[2026-06-09T11:39:10.745Z] Executing OkObjectResult, writing value of type 'DesignMode.AI.Server.DesignModeFunctions+GetUserIdResponse'.
+[2026-06-09T11:39:10.756Z] Executed 'Functions.GetUserIdByUsername' (Succeeded, Id=752e79b9-bc8e-4fa6-ba54-80939ff25154, Duration=40ms)
+[2026-06-09T11:39:10.795Z] Executing 'Functions.CreateCheckoutSession' (Reason='This function was programmatically called via the host APIs.', Id=714b25d5-195d-4f1f-8183-3943c93766ae)
+[2026-06-09T11:39:11.600Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType3`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:11.614Z] Executed 'Functions.CreateCheckoutSession' (Succeeded, Id=714b25d5-195d-4f1f-8183-3943c93766ae, Duration=821ms)
+[2026-06-09T11:39:31.518Z] Executing 'Functions.GetInviteClientById' (Reason='This function was programmatically called via the host APIs.', Id=757b547e-aa0f-49e5-b93f-ee56d990ce87)
+[2026-06-09T11:39:31.531Z] Executing OkObjectResult, writing value of type 'DesignMode.AI.Server.DesignModeFunctions+InviteClientData'.
+[2026-06-09T11:39:31.536Z] Executed 'Functions.GetInviteClientById' (Succeeded, Id=757b547e-aa0f-49e5-b93f-ee56d990ce87, Duration=17ms)
+[2026-06-09T11:39:32.119Z] Executing 'Functions.GetAIIdeaResponse' (Reason='This function was programmatically called via the host APIs.', Id=15467a32-9ba4-4a78-997d-c56afbe110bd)
+[2026-06-09T11:39:34.824Z] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:34.831Z] Executed 'Functions.GetAIIdeaResponse' (Succeeded, Id=15467a32-9ba4-4a78-997d-c56afbe110bd, Duration=2713ms)
+[2026-06-09T11:39:35.899Z] Executing 'Functions.SaveCompanyIndustry' (Reason='This function was programmatically called via the host APIs.', Id=bff26b81-a199-4cee-b1b7-50aaac0d9ef6)
+[2026-06-09T11:39:35.952Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType25`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:35.959Z] Executed 'Functions.SaveCompanyIndustry' (Succeeded, Id=bff26b81-a199-4cee-b1b7-50aaac0d9ef6, Duration=60ms)
+[2026-06-09T11:39:35.969Z] Executing 'Functions.SaveIdea' (Reason='This function was programmatically called via the host APIs.', Id=8f7de053-858e-406e-99bf-0eace9890667)
+[2026-06-09T11:39:36.052Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType24`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:36.057Z] Executed 'Functions.SaveIdea' (Succeeded, Id=8f7de053-858e-406e-99bf-0eace9890667, Duration=88ms)
+[2026-06-09T11:39:36.061Z] Executing 'Functions.SaveIdea' (Reason='This function was programmatically called via the host APIs.', Id=ee69a923-7ddd-443c-935e-bce0d2490944)
+[2026-06-09T11:39:36.086Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType24`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:36.092Z] Executed 'Functions.SaveIdea' (Succeeded, Id=ee69a923-7ddd-443c-935e-bce0d2490944, Duration=31ms)
+[2026-06-09T11:39:36.096Z] Executing 'Functions.SaveIdea' (Reason='This function was programmatically called via the host APIs.', Id=2f4f10ee-654a-4723-b831-6e5124279287)
+[2026-06-09T11:39:36.121Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType24`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:36.136Z] Executed 'Functions.SaveIdea' (Succeeded, Id=2f4f10ee-654a-4723-b831-6e5124279287, Duration=39ms)
+[2026-06-09T11:39:36.139Z] Executing 'Functions.SaveIdea' (Reason='This function was programmatically called via the host APIs.', Id=03fadde6-bdc4-4bf4-a6fb-39706d647427)
+[2026-06-09T11:39:36.161Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType24`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:36.165Z] Executed 'Functions.SaveIdea' (Succeeded, Id=03fadde6-bdc4-4bf4-a6fb-39706d647427, Duration=26ms)
+[2026-06-09T11:39:36.169Z] Executing 'Functions.SaveIdea' (Reason='This function was programmatically called via the host APIs.', Id=6d4d2823-c7bf-434a-b907-bb3fe31ab610)
+[2026-06-09T11:39:36.191Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType24`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:36.195Z] Executed 'Functions.SaveIdea' (Succeeded, Id=6d4d2823-c7bf-434a-b907-bb3fe31ab610, Duration=26ms)
+[2026-06-09T11:39:36.200Z] Executing 'Functions.SaveIdea' (Reason='This function was programmatically called via the host APIs.', Id=bdca864e-6b70-4c05-b811-c3dd1ac13857)
+[2026-06-09T11:39:36.221Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType24`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:36.226Z] Executed 'Functions.SaveIdea' (Succeeded, Id=bdca864e-6b70-4c05-b811-c3dd1ac13857, Duration=25ms)
+[2026-06-09T11:39:36.229Z] Executing 'Functions.SaveIdea' (Reason='This function was programmatically called via the host APIs.', Id=30d97b4a-d9c4-4df1-a22e-dfc4550d46cf)
+[2026-06-09T11:39:36.250Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType24`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:36.255Z] Executed 'Functions.SaveIdea' (Succeeded, Id=30d97b4a-d9c4-4df1-a22e-dfc4550d46cf, Duration=25ms)
+[2026-06-09T11:39:36.258Z] Executing 'Functions.SaveIdea' (Reason='This function was programmatically called via the host APIs.', Id=24d6abfe-38c3-48c2-834a-f43e026b4848)
+[2026-06-09T11:39:36.278Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType24`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:36.282Z] Executed 'Functions.SaveIdea' (Succeeded, Id=24d6abfe-38c3-48c2-834a-f43e026b4848, Duration=24ms)
+[2026-06-09T11:39:36.285Z] Executing 'Functions.SaveIdea' (Reason='This function was programmatically called via the host APIs.', Id=c696b8fc-4833-4d3f-a180-4e73ef394bd8)
+[2026-06-09T11:39:36.306Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType24`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:36.314Z] Executed 'Functions.SaveIdea' (Succeeded, Id=c696b8fc-4833-4d3f-a180-4e73ef394bd8, Duration=28ms)
+[2026-06-09T11:39:42.988Z] Executing 'Functions.GetImageIdeaCountsByCompanyId' (Reason='This function was programmatically called via the host APIs.', Id=1794d172-48e2-4c38-97aa-019f41b93726)
+[2026-06-09T11:39:43.028Z] Executing 'Functions.GetInviteClientByEmailAndId' (Reason='This function was programmatically called via the host APIs.', Id=ba91145b-78d4-4358-818c-0491822b461c)
+[2026-06-09T11:39:43.245Z] Executing NotFoundObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:43.250Z] Executed 'Functions.GetInviteClientByEmailAndId' (Succeeded, Id=ba91145b-78d4-4358-818c-0491822b461c, Duration=222ms)
+[2026-06-09T11:39:43.877Z] Executing NotFoundObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:43.882Z] Executed 'Functions.GetImageIdeaCountsByCompanyId' (Succeeded, Id=1794d172-48e2-4c38-97aa-019f41b93726, Duration=893ms)
+[2026-06-09T11:39:43.928Z] Executing 'Functions.SavePrompt' (Reason='This function was programmatically called via the host APIs.', Id=45a93c09-138f-4c88-aa24-13abc54651c2)
+[2026-06-09T11:39:43.963Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType27`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:39:43.968Z] Executed 'Functions.SavePrompt' (Succeeded, Id=45a93c09-138f-4c88-aa24-13abc54651c2, Duration=41ms)
+[2026-06-09T11:39:44.023Z] Executing 'Functions.GetPromptIdForCompanyIdea' (Reason='This function was programmatically called via the host APIs.', Id=d5bc5366-db40-4788-b74a-36e115a9347a)
+[2026-06-09T11:39:44.060Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:44.064Z] Executed 'Functions.GetPromptIdForCompanyIdea' (Succeeded, Id=d5bc5366-db40-4788-b74a-36e115a9347a, Duration=40ms)
+[2026-06-09T11:39:44.090Z] Executing 'Functions.GetAllConceptImagesWithIdeas' (Reason='This function was programmatically called via the host APIs.', Id=289b8d4b-8209-4c2e-b59c-f44a3ca4d5a2)
+[2026-06-09T11:39:46.127Z] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[DesignMode.AI.Server.DesignModeFunctions+ConceptImageWithIdeaDto, DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+[2026-06-09T11:39:46.133Z] Executed 'Functions.GetAllConceptImagesWithIdeas' (Succeeded, Id=289b8d4b-8209-4c2e-b59c-f44a3ca4d5a2, Duration=2043ms)
+[2026-06-09T11:39:46.194Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=8acf3023-2181-49ec-be8f-e3c14c053754)
+[2026-06-09T11:39:48.447Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:48.455Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=8acf3023-2181-49ec-be8f-e3c14c053754, Duration=2260ms)
+[2026-06-09T11:39:48.667Z] Executing 'Functions.GetCompanyDescription' (Reason='This function was programmatically called via the host APIs.', Id=597afdff-cb54-4791-9fab-c11e648956ff)
+[2026-06-09T11:39:49.207Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:49.222Z] Executed 'Functions.GetCompanyDescription' (Succeeded, Id=597afdff-cb54-4791-9fab-c11e648956ff, Duration=555ms)
+[2026-06-09T11:39:49.247Z] Executing 'Functions.CheckPackageLabelRelevance' (Reason='This function was programmatically called via the host APIs.', Id=6c28dc1a-2bec-49df-a649-0fac04972bf9)
+[2026-06-09T11:39:51.218Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:51.226Z] Executed 'Functions.CheckPackageLabelRelevance' (Succeeded, Id=6c28dc1a-2bec-49df-a649-0fac04972bf9, Duration=1980ms)
+[2026-06-09T11:39:51.265Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=ad8077ae-5a7d-404c-9762-5f07daac8368)
+[2026-06-09T11:39:52.069Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:52.075Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=ad8077ae-5a7d-404c-9762-5f07daac8368, Duration=810ms)
+[2026-06-09T11:39:52.096Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=687ad4a2-7710-4cd2-92e8-0f1291b1949b)
+[2026-06-09T11:39:52.812Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:52.819Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=687ad4a2-7710-4cd2-92e8-0f1291b1949b, Duration=723ms)
+[2026-06-09T11:39:52.845Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=5e028704-804a-4640-8af0-9ad332ca7453)
+[2026-06-09T11:39:53.346Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:53.351Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=5e028704-804a-4640-8af0-9ad332ca7453, Duration=505ms)
+[2026-06-09T11:39:53.366Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=3b511863-2041-4292-84d1-22416c2580c3)
+[2026-06-09T11:39:53.908Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:53.912Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=3b511863-2041-4292-84d1-22416c2580c3, Duration=546ms)
+[2026-06-09T11:39:53.937Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=f4b8745f-c9c1-4722-a377-1db70cc5efac)
+[2026-06-09T11:39:54.760Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:54.790Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=f4b8745f-c9c1-4722-a377-1db70cc5efac, Duration=853ms)
+[2026-06-09T11:39:54.814Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=7c4bb448-cdc3-4e65-b715-daf65851f562)
+[2026-06-09T11:39:55.653Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:55.658Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=7c4bb448-cdc3-4e65-b715-daf65851f562, Duration=844ms)
+[2026-06-09T11:39:55.688Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=c23b5366-fc8a-4775-bfc5-40f5bc65d2b3)
+[2026-06-09T11:39:57.284Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:57.293Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=c23b5366-fc8a-4775-bfc5-40f5bc65d2b3, Duration=1605ms)
+[2026-06-09T11:39:57.322Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=d9ecf5c1-b39c-4dec-8253-697ac1e82f8f)
+[2026-06-09T11:39:57.868Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:57.878Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=d9ecf5c1-b39c-4dec-8253-697ac1e82f8f, Duration=556ms)
+[2026-06-09T11:39:57.899Z] Executing 'Functions.GetMainDeliverableCategory' (Reason='This function was programmatically called via the host APIs.', Id=0c270e80-e29a-40ea-86c0-6e7320a5e5d0)
+[2026-06-09T11:39:58.512Z] Executing OkObjectResult, writing value of type 'System.String'.
+[2026-06-09T11:39:58.517Z] Executed 'Functions.GetMainDeliverableCategory' (Succeeded, Id=0c270e80-e29a-40ea-86c0-6e7320a5e5d0, Duration=618ms)
+[2026-06-09T11:39:58.557Z] Executing 'Functions.GetDeliverableDetail' (Reason='This function was programmatically called via the host APIs.', Id=21b515c1-672a-4627-ae7b-97d39f41e3ac)
+[2026-06-09T11:39:59.474Z] Executing ContentResult with HTTP Response ContentType of text/plain
+[2026-06-09T11:39:59.479Z] Executed 'Functions.GetDeliverableDetail' (Succeeded, Id=21b515c1-672a-4627-ae7b-97d39f41e3ac, Duration=922ms)
+[2026-06-09T11:39:59.498Z] Executing 'Functions.GetDeliverableDetail' (Reason='This function was programmatically called via the host APIs.', Id=d3df7439-ab80-45c9-a884-6e51f23f421f)
+[2026-06-09T11:40:00.361Z] Executing ContentResult with HTTP Response ContentType of text/plain
+[2026-06-09T11:40:00.365Z] Executed 'Functions.GetDeliverableDetail' (Succeeded, Id=d3df7439-ab80-45c9-a884-6e51f23f421f, Duration=867ms)
+[2026-06-09T11:40:00.391Z] Executing 'Functions.GetDeliverableDetail' (Reason='This function was programmatically called via the host APIs.', Id=1cc5a087-caf1-4cf3-b293-f88ed5f07756)
+[2026-06-09T11:40:01.868Z] Executing ContentResult with HTTP Response ContentType of text/plain
+[2026-06-09T11:40:01.875Z] Executed 'Functions.GetDeliverableDetail' (Succeeded, Id=1cc5a087-caf1-4cf3-b293-f88ed5f07756, Duration=1483ms)
+[2026-06-09T11:40:01.886Z] Executing 'Functions.GetDeliverableDetail' (Reason='This function was programmatically called via the host APIs.', Id=ce13d12f-b412-4ffe-81d0-7d22e93eef28)
+[2026-06-09T11:40:02.746Z] Executing ContentResult with HTTP Response ContentType of text/plain
+[2026-06-09T11:40:02.757Z] Executed 'Functions.GetDeliverableDetail' (Succeeded, Id=ce13d12f-b412-4ffe-81d0-7d22e93eef28, Duration=871ms)
+[2026-06-09T11:40:02.769Z] Executing 'Functions.GetDeliverableDetail' (Reason='This function was programmatically called via the host APIs.', Id=4b9b2437-9ad9-40ce-8fa9-d59fbe81068d)
+[2026-06-09T11:40:03.686Z] Executing ContentResult with HTTP Response ContentType of text/plain
+[2026-06-09T11:40:03.692Z] Executed 'Functions.GetDeliverableDetail' (Succeeded, Id=4b9b2437-9ad9-40ce-8fa9-d59fbe81068d, Duration=922ms)
+[2026-06-09T11:40:03.699Z] Executing 'Functions.GetDeliverableDetail' (Reason='This function was programmatically called via the host APIs.', Id=33e4b385-164a-4296-9f38-5f41207658c3)
+[2026-06-09T11:40:04.707Z] Executing ContentResult with HTTP Response ContentType of text/plain
+[2026-06-09T11:40:04.713Z] Executed 'Functions.GetDeliverableDetail' (Succeeded, Id=33e4b385-164a-4296-9f38-5f41207658c3, Duration=1014ms)
+[2026-06-09T11:40:04.714Z] Executing 'Functions.GetDeliverableDetail' (Reason='This function was programmatically called via the host APIs.', Id=5f2b3126-75d8-448b-8c40-99b3e527ed36)
+[2026-06-09T11:40:05.663Z] Executing ContentResult with HTTP Response ContentType of text/plain
+[2026-06-09T11:40:05.668Z] Executed 'Functions.GetDeliverableDetail' (Succeeded, Id=5f2b3126-75d8-448b-8c40-99b3e527ed36, Duration=953ms)
+[2026-06-09T11:40:05.683Z] Executing 'Functions.GetDeliverableDetail' (Reason='This function was programmatically called via the host APIs.', Id=90ed540b-18b2-4eb4-ba1f-47e860316130)
+[2026-06-09T11:40:06.990Z] Executing ContentResult with HTTP Response ContentType of text/plain
+[2026-06-09T11:40:06.996Z] Executed 'Functions.GetDeliverableDetail' (Succeeded, Id=90ed540b-18b2-4eb4-ba1f-47e860316130, Duration=1312ms)
+[2026-06-09T11:40:07.034Z] Executing 'Functions.CallRunwareAPI' (Reason='This function was programmatically called via the host APIs.', Id=d11b6383-74da-4271-a741-4f1f6535c961)
+[2026-06-09T11:40:11.208Z] Executing OkObjectResult, writing value of type 'DesignMode.AI.Shared.Models.RunwareResponse'.
+[2026-06-09T11:40:11.247Z] Executed 'Functions.CallRunwareAPI' (Succeeded, Id=d11b6383-74da-4271-a741-4f1f6535c961, Duration=4213ms)
+[2026-06-09T11:40:11.420Z] Executing 'Functions.SaveImageIdea' (Reason='This function was programmatically called via the host APIs.', Id=13615b51-7e85-449a-ada4-76034124b715)
+[2026-06-09T11:40:11.468Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType26`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:11.474Z] Executed 'Functions.SaveImageIdea' (Succeeded, Id=13615b51-7e85-449a-ada4-76034124b715, Duration=54ms)
+[2026-06-09T11:40:11.508Z] Executing 'Functions.GetImageIdeasByCompanyId' (Reason='This function was programmatically called via the host APIs.', Id=1d0a3e63-ebce-41e5-a867-8e27f6e701b3)
+[2026-06-09T11:40:11.969Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:12.321Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:12.618Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:12.951Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:13.207Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:13.428Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:13.576Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:13.705Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:13.791Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:13.794Z] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[DesignMode.AI.Server.DesignModeFunctions+ImageIdeaModel, DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+[2026-06-09T11:40:13.799Z] Executed 'Functions.GetImageIdeasByCompanyId' (Succeeded, Id=1d0a3e63-ebce-41e5-a867-8e27f6e701b3, Duration=2291ms)
+[2026-06-09T11:40:13.854Z] Executing 'Functions.CallRunwareAPI' (Reason='This function was programmatically called via the host APIs.', Id=fc188ad9-9c84-4c31-b33f-4c7e959322e0)
+[2026-06-09T11:40:13.900Z] Executing 'Functions.GetWebsitesByCompany' (Reason='This function was programmatically called via the host APIs.', Id=0fca7dbe-5376-4c46-b27e-235a6c9d470a)
+[2026-06-09T11:40:13.908Z] Executing 'Functions.GetSocialByCompany' (Reason='This function was programmatically called via the host APIs.', Id=09368a11-4126-48ce-b7c7-b6dc3f9d80e3)
+[2026-06-09T11:40:13.933Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType40`3[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType39`5[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:13.934Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType40`3[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType39`5[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:13.944Z] Executed 'Functions.GetSocialByCompany' (Succeeded, Id=09368a11-4126-48ce-b7c7-b6dc3f9d80e3, Duration=36ms)
+[2026-06-09T11:40:13.944Z] Executed 'Functions.GetWebsitesByCompany' (Succeeded, Id=0fca7dbe-5376-4c46-b27e-235a6c9d470a, Duration=44ms)
+[2026-06-09T11:40:13.945Z] Executing 'Functions.GetWebsitesByCompany' (Reason='This function was programmatically called via the host APIs.', Id=0ff9b9a2-4d8e-451d-956d-f6a7cfe1f265)
+[2026-06-09T11:40:13.946Z] Executing 'Functions.GetSocialByCompany' (Reason='This function was programmatically called via the host APIs.', Id=1371fee4-16ce-444d-adef-c89c5dfa0780)
+[2026-06-09T11:40:13.971Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType40`3[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType39`5[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:13.972Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType40`3[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType39`5[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:13.979Z] Executed 'Functions.GetSocialByCompany' (Succeeded, Id=1371fee4-16ce-444d-adef-c89c5dfa0780, Duration=32ms)
+[2026-06-09T11:40:13.980Z] Executed 'Functions.GetWebsitesByCompany' (Succeeded, Id=0ff9b9a2-4d8e-451d-956d-f6a7cfe1f265, Duration=35ms)
+[2026-06-09T11:40:13.980Z] Executing 'Functions.GetWebsitesByCompany' (Reason='This function was programmatically called via the host APIs.', Id=13d452c4-a4b0-4c76-9115-a313731a1c15)
+[2026-06-09T11:40:13.981Z] Executing 'Functions.GetSocialByCompany' (Reason='This function was programmatically called via the host APIs.', Id=7da58c8e-9ffb-4ba6-be16-cfdc48b83da6)
+[2026-06-09T11:40:14.007Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType40`3[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType39`5[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:14.008Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType40`3[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType39`5[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:14.014Z] Executed 'Functions.GetWebsitesByCompany' (Succeeded, Id=13d452c4-a4b0-4c76-9115-a313731a1c15, Duration=33ms)
+[2026-06-09T11:40:14.015Z] Executed 'Functions.GetSocialByCompany' (Succeeded, Id=7da58c8e-9ffb-4ba6-be16-cfdc48b83da6, Duration=33ms)
+[2026-06-09T11:40:14.016Z] Executing 'Functions.GetWebsitesByCompany' (Reason='This function was programmatically called via the host APIs.', Id=12f9bbae-4c65-4f06-abb8-e1571c61fa8b)
+[2026-06-09T11:40:14.017Z] Executing 'Functions.GetSocialByCompany' (Reason='This function was programmatically called via the host APIs.', Id=9e599fb4-29a9-4ad0-a973-445b1fcad409)
+[2026-06-09T11:40:14.062Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType40`3[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType39`5[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:14.071Z] Executed 'Functions.GetSocialByCompany' (Succeeded, Id=9e599fb4-29a9-4ad0-a973-445b1fcad409, Duration=53ms)
+[2026-06-09T11:40:14.072Z] Executing 'Functions.GetWebsitesByCompany' (Reason='This function was programmatically called via the host APIs.', Id=f35eb8f2-13aa-4eaa-982d-5b0c99b9515c)
+[2026-06-09T11:40:14.087Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType40`3[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType39`5[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:14.091Z] Executed 'Functions.GetWebsitesByCompany' (Succeeded, Id=12f9bbae-4c65-4f06-abb8-e1571c61fa8b, Duration=75ms)
+[2026-06-09T11:40:14.093Z] Executing 'Functions.GetSocialByCompany' (Reason='This function was programmatically called via the host APIs.', Id=d3949d8b-95ae-4b91-8763-5e480179f035)
+[2026-06-09T11:40:14.095Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType40`3[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType39`5[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:14.109Z] Executed 'Functions.GetWebsitesByCompany' (Succeeded, Id=f35eb8f2-13aa-4eaa-982d-5b0c99b9515c, Duration=36ms)
+[2026-06-09T11:40:14.120Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType40`3[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Collections.Generic.List`1[[<>f__AnonymousType39`5[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:14.128Z] Executed 'Functions.GetSocialByCompany' (Succeeded, Id=d3949d8b-95ae-4b91-8763-5e480179f035, Duration=35ms)
+[2026-06-09T11:40:18.338Z] Executing OkObjectResult, writing value of type 'DesignMode.AI.Shared.Models.RunwareResponse'.
+[2026-06-09T11:40:18.348Z] Executed 'Functions.CallRunwareAPI' (Succeeded, Id=fc188ad9-9c84-4c31-b33f-4c7e959322e0, Duration=4493ms)
+[2026-06-09T11:40:18.639Z] Executing 'Functions.SaveImageIdea' (Reason='This function was programmatically called via the host APIs.', Id=569417ff-60b8-4e69-b49d-fecadee2873f)
+[2026-06-09T11:40:18.697Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType26`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:18.702Z] Executed 'Functions.SaveImageIdea' (Succeeded, Id=569417ff-60b8-4e69-b49d-fecadee2873f, Duration=62ms)
+[2026-06-09T11:40:18.748Z] Executing 'Functions.CallRunwareAPI' (Reason='This function was programmatically called via the host APIs.', Id=358f7345-6e89-4ab7-8452-bafbd485ef9e)
+[2026-06-09T11:40:23.144Z] Executing OkObjectResult, writing value of type 'DesignMode.AI.Shared.Models.RunwareResponse'.
+[2026-06-09T11:40:23.162Z] Executed 'Functions.CallRunwareAPI' (Succeeded, Id=358f7345-6e89-4ab7-8452-bafbd485ef9e, Duration=4413ms)
+[2026-06-09T11:40:23.497Z] Executing 'Functions.SaveImageIdea' (Reason='This function was programmatically called via the host APIs.', Id=86356577-654e-41c6-8f65-d96eaae37a96)
+[2026-06-09T11:40:23.536Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType26`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:23.542Z] Executed 'Functions.SaveImageIdea' (Succeeded, Id=86356577-654e-41c6-8f65-d96eaae37a96, Duration=45ms)
+[2026-06-09T11:40:23.586Z] Executing 'Functions.CallRunwareAPI' (Reason='This function was programmatically called via the host APIs.', Id=5429bbef-35e6-4de3-9011-b8dcb7ba0b77)
+[2026-06-09T11:40:27.532Z] Executing OkObjectResult, writing value of type 'DesignMode.AI.Shared.Models.RunwareResponse'.
+[2026-06-09T11:40:27.542Z] Executed 'Functions.CallRunwareAPI' (Succeeded, Id=5429bbef-35e6-4de3-9011-b8dcb7ba0b77, Duration=3956ms)
+[2026-06-09T11:40:27.869Z] Executing 'Functions.SaveImageIdea' (Reason='This function was programmatically called via the host APIs.', Id=2a33026d-69b5-4543-af66-ac25a00ffaa8)
+[2026-06-09T11:40:27.908Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType26`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:27.915Z] Executed 'Functions.SaveImageIdea' (Succeeded, Id=2a33026d-69b5-4543-af66-ac25a00ffaa8, Duration=46ms)
+[2026-06-09T11:40:27.967Z] Executing 'Functions.CallRunwareAPI' (Reason='This function was programmatically called via the host APIs.', Id=6294939f-c0fa-4dfe-88ce-d33aa841868f)
+[2026-06-09T11:40:32.371Z] Executing OkObjectResult, writing value of type 'DesignMode.AI.Shared.Models.RunwareResponse'.
+[2026-06-09T11:40:32.380Z] Executed 'Functions.CallRunwareAPI' (Succeeded, Id=6294939f-c0fa-4dfe-88ce-d33aa841868f, Duration=4413ms)
+[2026-06-09T11:40:32.536Z] Executing 'Functions.SaveImageIdea' (Reason='This function was programmatically called via the host APIs.', Id=8e83d4d2-a143-4d75-abb4-c3f05dd72b72)
+[2026-06-09T11:40:32.558Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType26`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:32.563Z] Executed 'Functions.SaveImageIdea' (Succeeded, Id=8e83d4d2-a143-4d75-abb4-c3f05dd72b72, Duration=27ms)
+[2026-06-09T11:40:32.603Z] Executing 'Functions.SaveImageIdea' (Reason='This function was programmatically called via the host APIs.', Id=05553c2e-5c3e-4dc2-bbee-c8295d6c5033)
+[2026-06-09T11:40:32.623Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType26`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:32.627Z] Executed 'Functions.SaveImageIdea' (Succeeded, Id=05553c2e-5c3e-4dc2-bbee-c8295d6c5033, Duration=24ms)
+[2026-06-09T11:40:32.663Z] Executing 'Functions.SaveImageIdea' (Reason='This function was programmatically called via the host APIs.', Id=d806bcba-062a-44a7-8c81-24c382d044a6)
+[2026-06-09T11:40:32.690Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType26`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:32.698Z] Executed 'Functions.SaveImageIdea' (Succeeded, Id=d806bcba-062a-44a7-8c81-24c382d044a6, Duration=34ms)
+[2026-06-09T11:40:32.735Z] Executing 'Functions.SaveImageIdea' (Reason='This function was programmatically called via the host APIs.', Id=1694a0c4-459a-4be2-b5ef-f66543bee48e)
+[2026-06-09T11:40:32.767Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType26`2[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:32.772Z] Executed 'Functions.SaveImageIdea' (Succeeded, Id=1694a0c4-459a-4be2-b5ef-f66543bee48e, Duration=36ms)
+[2026-06-09T11:40:32.817Z] Executing 'Functions.GetImageIdeasByCompanyId' (Reason='This function was programmatically called via the host APIs.', Id=caa4c618-6006-42d5-99d8-b584518bfe53)
+[2026-06-09T11:40:33.226Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:33.616Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:33.932Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:34.200Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:34.436Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:34.646Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:34.780Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:34.926Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:35.009Z] Querying ImageIdeas for PromptId: 6d070975-2101-4874-915c-101cc04ede0f
+[2026-06-09T11:40:35.010Z] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[DesignMode.AI.Server.DesignModeFunctions+ImageIdeaModel, DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+[2026-06-09T11:40:35.016Z] Executed 'Functions.GetImageIdeasByCompanyId' (Succeeded, Id=caa4c618-6006-42d5-99d8-b584518bfe53, Duration=2198ms)
+[2026-06-09T11:40:35.074Z] Executing 'Functions.GetVideoImagesByPromptId' (Reason='This function was programmatically called via the host APIs.', Id=e3122895-722d-47b7-b125-8afc9e897437)
+[2026-06-09T11:40:35.101Z] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[DesignMode.AI.Server.DesignModeFunctions+VideoImageModel, DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+[2026-06-09T11:40:35.106Z] Executed 'Functions.GetVideoImagesByPromptId' (Succeeded, Id=e3122895-722d-47b7-b125-8afc9e897437, Duration=32ms)
+[2026-06-09T11:40:35.164Z] Executing 'Functions.GetAllConceptImagesWithIdeas' (Reason='This function was programmatically called via the host APIs.', Id=e8577a8d-39f3-4940-a294-e7058a26677e)
+[2026-06-09T11:40:37.394Z] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[DesignMode.AI.Server.DesignModeFunctions+ConceptImageWithIdeaDto, DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+[2026-06-09T11:40:37.402Z] Executed 'Functions.GetAllConceptImagesWithIdeas' (Succeeded, Id=e8577a8d-39f3-4940-a294-e7058a26677e, Duration=2238ms)
+[2026-06-09T11:40:37.458Z] Executing 'Functions.GetAllConceptImagesWithIdeas' (Reason='This function was programmatically called via the host APIs.', Id=cb8bbc24-a6f1-470f-aa36-fc023b7f56f3)
+[2026-06-09T11:40:39.699Z] Executing OkObjectResult, writing value of type 'System.Collections.Generic.List`1[[DesignMode.AI.Server.DesignModeFunctions+ConceptImageWithIdeaDto, DesignMode.AI.Server, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]'.
+[2026-06-09T11:40:39.704Z] Executed 'Functions.GetAllConceptImagesWithIdeas' (Succeeded, Id=cb8bbc24-a6f1-470f-aa36-fc023b7f56f3, Duration=2245ms)
+[2026-06-09T11:40:39.779Z] Executing 'Functions.GetNextWebsiteVersion' (Reason='This function was programmatically called via the host APIs.', Id=9082a91b-5e3a-4ee8-aec5-140d5564ed4c)
+[2026-06-09T11:40:39.792Z] Executing OkObjectResult, writing value of type '<>f__AnonymousType41`4[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'.
+[2026-06-09T11:40:39.798Z] Executed 'Functions.GetNextWebsiteVersion' (Succeeded, Id=9082a91b-5e3a-4ee8-aec5-140d5564ed4c, Duration=20ms)
+[2026-06-09T11:40:39.877Z] Executing 'Functions.SaveImageToFolder' (Reason='This function was programmatically called via the host APIs.', Id=f3c44edf-fdb6-4b86-904e-d69b89259522)
+[2026-06-09T11:40:40.342Z] Executed 'Functions.SaveImageToFolder' (Succeeded, Id=f3c44edf-fdb6-4b86-904e-d69b89259522, Duration=465ms)
+[2026-06-09T11:40:40.380Z] Executing 'Functions.SaveImageToFolder' (Reason='This function was programmatically called via the host APIs.', Id=39c9668d-c661-4e9a-9e3e-bd9b3b69d603)
+[2026-06-09T11:40:40.821Z] Executed 'Functions.SaveImageToFolder' (Succeeded, Id=39c9668d-c661-4e9a-9e3e-bd9b3b69d603, Duration=441ms)
+[2026-06-09T11:40:40.858Z] Executing 'Functions.SaveImageToFolder' (Reason='This function was programmatically called via the host APIs.', Id=3533c01b-f92b-44dd-a66b-033a4d1dff28)
+[2026-06-09T11:40:41.284Z] Executed 'Functions.SaveImageToFolder' (Succeeded, Id=3533c01b-f92b-44dd-a66b-033a4d1dff28, Duration=426ms)
+[2026-06-09T11:40:41.332Z] Executing 'Functions.SaveImageToFolder' (Reason='This function was programmatically called via the host APIs.', Id=75f2fa09-2d94-475a-8705-8812cb43c310)
+[2026-06-09T11:40:41.790Z] Executed 'Functions.SaveImageToFolder' (Succeeded, Id=75f2fa09-2d94-475a-8705-8812cb43c310, Duration=457ms)

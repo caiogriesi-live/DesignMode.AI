@@ -1,0 +1,67 @@
+@page "/init/website-success"
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Shared.Models.Attribution
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.WebUtilities
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject ApiConfigService Api
+@inject AttributionContextService Attribution
+@inject Blazored.LocalStorage.ILocalStorageService Storage
+
+<PageTitle>Your website workspace | DesignMode</PageTitle>
+@if (verifiedContext is not null)
+{
+    <Success WebsiteContext="verifiedContext" />
+}
+else
+{
+<main class="website-return" aria-live="polite">
+    <span class="website-return-icon" aria-hidden="true">✦</span>
+    <h1>Your website direction is ready</h1>
+    <p>@message</p>
+    @if (retry) { <button class="btn bg-gradient-primary" @onclick="ContinueAsync">Check again</button> }
+</main>
+}
+<style>
+    .website-return { max-width: 42rem; margin: 10vh auto; padding: 2rem; text-align: center; border-radius: 2rem; background: #fff; box-shadow: 0 24px 80px #5b4bd51a; }
+    .website-return-icon { display: block; font-size: 4rem; color: #8060df; }
+</style>
+@code {
+    private string message = "Confirming your unlock and opening your saved website project…";
+    private bool retry;
+    private WebsiteFunnelReturn? verifiedContext;
+    protected override Task OnAfterRenderAsync(bool firstRender) => firstRender ? ContinueAsync() : Task.CompletedTask;
+    private async Task ContinueAsync()
+    {
+        retry = false;
+        var token = await Storage.GetItemAsync<string>("authToken");
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(Navigation.Uri)}", true);
+            return;
+        }
+        try
+        {
+            var query = QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                $"{Api.ApiBaseUrl}api/WebsiteFunnelReturn?session_id={Uri.EscapeDataString(query["session_id"].ToString())}");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var context = await response.Content.ReadFromJsonAsync<WebsiteFunnelReturn>()
+                ?? throw new InvalidOperationException();
+            await Attribution.SetActiveProjectAsync(new ProjectContextResponse { ProjectId = context.ProjectId, FunnelId = context.FunnelId });
+            verifiedContext = context;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            message = "We couldn't confirm your unlock yet. Check again in a moment, or sign in with the account used at checkout.";
+            retry = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Dapper.ColumnMapper" Version="1.3.0" />
+    <PackageReference Include="Microsoft.Azure.Management.Sql" Version="3.1.0-preview" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0-preview.2.25163.2" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DesignMode.AI.Shared\DesignMode.AI.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="DesignMode.AI.Common">
+      <HintPath>..\..\DesignMode.AI.Common\DesignMode.AI.Common\bin\Release\net8.0\DesignMode.AI.Common.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

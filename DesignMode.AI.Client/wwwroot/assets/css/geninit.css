@@ -1,0 +1,669 @@
+﻿/* Whole page fade in */
+.page-header {
+    opacity: 0;
+    /* transform: translateY(5px); */
+    animation: pageFadeIn 0.3s ease-out forwards;
+    animation-delay: 0.1s;
+    overflow: hidden;
+}
+
+@keyframes pageFadeIn {
+    to {
+        opacity: 1;
+        /* transform: translateY(0); */
+    }
+}
+
+/* Card thumbnail animation */
+.design-card {
+    opacity: 0;
+    transform: translateY(10px);
+    animation: pageFadeIn 0.3s ease-out forwards;
+}
+
+.design-card-loading {
+    opacity: 0;
+    transform: translateY(10px);
+    animation: cardSlideIn 0.3s ease-out forwards;
+}
+
+    /* Apply staggered animation delay */
+    .design-card-loading:nth-child(1) {
+        animation-delay: 0.1s;
+    }
+
+    .design-card-loading:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .design-card-loading:nth-child(3) {
+        animation-delay: 0.3s;
+    }
+
+    .design-card-loading:nth-child(4) {
+        animation-delay: 0.4s;
+    }
+
+/* For second grid cards */
+.design-grid-loading:nth-of-type(2) .design-card-loading:nth-child(1) {
+    animation-delay: 0.6s;
+}
+
+.design-grid-loading:nth-of-type(2) .design-card-loading:nth-child(2) {
+    animation-delay: 0.7s;
+}
+
+.design-grid-loading:nth-of-type(2) .design-card-loading:nth-child(3) {
+    animation-delay: 0.8s;
+}
+
+.design-grid-loading:nth-of-type(2) .design-card-loading:nth-child(4) {
+    animation-delay: 0.9s;
+}
+
+/* Apply staggered animation delay */
+.design-card:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.design-card:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.design-card:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.design-card:nth-child(4) {
+    animation-delay: 0.4s;
+}
+
+/* For second grid cards */
+.design-grid:nth-of-type(2) .design-card:nth-child(1) {
+    animation-delay: 0.6s;
+}
+
+.design-grid:nth-of-type(2) .design-card:nth-child(2) {
+    animation-delay: 0.7s;
+}
+
+.design-grid:nth-of-type(2) .design-card:nth-child(3) {
+    animation-delay: 0.8s;
+}
+
+.design-grid:nth-of-type(2) .design-card:nth-child(4) {
+    animation-delay: 0.9s;
+}
+
+@keyframes cardSlideIn {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+
+.design-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 24px;
+    margin-top: 20px;
+}
+
+.design-grid-loading {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 24px;
+    margin-top: 20px;
+}
+
+.design-card {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 16px;
+    text-align: center;
+    font-family: 'SF Pro Display', sans-serif;
+}
+
+    .design-card img {
+        width: 100%;
+        height: 140px;
+        object-fit: cover;
+        /* border-radius: 8px; */
+        margin-bottom: 0px;
+    }
+
+    .design-card h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1f2951;
+        margin-top: 5px;
+        margin-bottom: 13px;
+    }
+
+.card-button {
+    background-color: #f2f3f8;
+    color: #1f2951;
+    border: none;
+    padding: 8px 14px;
+    /* border-radius: 5px; */
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+    .card-button:hover {
+        background-color: #e0e0e0;
+    }
+
+
+.loader-loop {
+    color: #ffa900; /* Set the text color to white */
+}
+
+/* Apply a shadow and blue background to the button */
+.blue-button {
+    background-color: #244d88; /* Set the background to blue */
+    color: white; /* Set the text color to white */
+    border-radius: 5px; /* Optional: round corners */
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2); /* Add a shadow */
+    padding: 10px 20px; /* Optional: adjust padding */
+    font-size: 16px; /* Optional: adjust font size */
+    transition: box-shadow 0.3s ease-in-out; /* Optional: smooth transition */
+}
+
+    .blue-button:hover {
+        box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.5); /* Stronger shadow on hover */
+        background-color: #244d88; /* Set the background to blue */
+    }
+
+/* Apply a shadow and blue background to the button */
+.grey-button {
+    background-color: white; /* Set the background to blue */
+    color: black; /* Set the text color to white */
+    border-radius: 5px; /* Optional: round corners */
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2); /* Add a shadow */
+    padding: 10px 20px; /* Optional: adjust padding */
+    font-size: 16px; /* Optional: adjust font size */
+    transition: box-shadow 0.3s ease-in-out; /* Optional: smooth transition */
+}
+
+    .grey-button:hover {
+        box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.5); /* Stronger shadow on hover */
+        background-color: white; /* Set the background to blue */
+    }
+
+.transparent-input {
+    border: none;
+    border-bottom: 2px solid #ffa900;
+    background: transparent;
+    outline: none;
+    font-size: 74px;
+    padding: 5px;
+    width: 441px;
+    border-radius: 0;
+    color: #244d88;
+    font-family: 'SF Pro Display','Arial';
+    font-weight: 650;
+    max-width: 1040px;
+}
+
+.transparent-input-industry {
+    border: none;
+    border-bottom: 2px solid #ffa900;
+    background: transparent;
+    outline: none;
+    font-size: 74px;
+    padding: 5px;
+    width: 455px;
+    border-radius: 0;
+    color: #244d88;
+    font-family: 'SF Pro Display','Arial';
+    font-weight: 650;
+    max-width: 654px;
+}
+
+.transparent-input::placeholder {
+    color: #838082;
+    font-family: 'SF Pro Display','Arial';
+    font-weight: 650;
+    font-size: 74px;
+}
+
+.transparent-input-industry::placeholder {
+    color: #838082;
+    font-family: 'SF Pro Display','Arial';
+    font-weight: 650;
+    font-size: 74px;
+}
+
+
+.transparent-input:focus {
+    border-bottom: 2px solid #000;
+}
+
+.page-fade {
+    opacity: 0;
+    /*     transform: translateY(2px); */
+    overflow: hidden;
+    animation: pageFadeUp 0.3s ease-out forwards;
+}
+
+@keyframes pageFadeUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+
+.design-card {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+}
+
+    .design-card img {
+        width: 100%;
+        height: 100%; /* or any height you prefer */
+        object-fit: cover;
+        display: block;
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+    }
+
+.card-content {
+    padding: 16px;
+    text-align: center;
+}
+
+.design-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2951;
+    margin-top: 5px;
+    margin-bottom: 13px;
+}
+
+.card-button {
+    background-color: #f2f3f8;
+    color: #1f2951;
+    border: none;
+    padding: 8px 14px;
+    /* border-radius: 5px; */
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+    .card-button:hover {
+        background-color: #e0e0e0;
+    }
+
+.design-card {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+    cursor: pointer;
+    /* 🔧 Smooth animation for scale and border */
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border 0.3s ease;
+    /* 🟦 Transparent border to allow animated transition */
+    border: 1px solid transparent;
+}
+
+    .design-card:hover {
+        border: 2px solid #244d88; /* Blue border on hover */
+    }
+
+.design-card-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 280px; /* or whatever height your card needs */
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+}
+
+.design-card {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0;
+    transition: transform 0.25s ease-in-out; /* Smooth scale transition */
+}
+
+.design-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transform-origin: center;
+    will-change: transform;
+}
+
+.design-card-wrapper {
+    position: relative;
+}
+
+.checkbox-overlay {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.design-card-wrapper:hover .checkbox-overlay {
+    opacity: 1;
+}
+
+.checkbox-overlay input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #244d88; /* Customize checkbox color */
+}
+
+.checkbox-overlay.visible {
+    opacity: 1 !important; /* Keep checkbox visible if selected */
+}
+
+.checkbox-container {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 1;
+}
+
+.design-card:hover .checkbox-container {
+    opacity: 1;
+}
+
+.card-checkbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    accent-color: #244d88;
+    opacity: 0.6;
+    cursor: pointer;
+}
+
+.design-card {
+    position: relative;
+    transition: border 0.3s, box-shadow 0.3s;
+}
+
+    .design-card.selected {
+        border: 2px solid #244d88;
+        box-shadow: 0 0 10px rgba(36, 77, 136, 0.3);
+    }
+
+/* Inside gen.css or a style tag */
+.card-checkbox {
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #bfa27c; /* Change to match the card border color */
+    border-radius: 50%;
+    background-color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 2;
+}
+
+    .card-checkbox:checked {
+        background-color: #bfa27c; /* Match selected color */
+        border: 2px solid #bfa27c;
+        background-repeat: no-repeat;
+        background-position: center;
+    }
+
+.checkbox-container {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 1;
+}
+
+/* Ensure the card can position elements inside it */
+.design-card {
+    position: relative;
+}
+
+/* Container for the checkbox */
+.checkbox-container {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 2;
+    opacity: 0; /* Hidden by default */
+    transition: opacity 0.2s ease;
+}
+
+/* Show checkbox on card hover */
+.design-card:hover .checkbox-container {
+    opacity: 1;
+}
+
+.design-card.selected .checkbox-container {
+    opacity: 1 !important; /* ✅ Extra fallback for selected state */
+}
+
+/* Custom round checkbox */
+.card-checkbox {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border: 2px solid #c8b28c;
+    border-radius: 50%;
+    background-color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-block;
+    position: relative;
+}
+
+.actions {
+    display: flex;
+    border-top: 1px solid #eee;
+    background: #f5f7fa;
+}
+
+.action-btn {
+    flex: 1;
+    text-align: center;
+    padding: 10px 0;
+    font-size: 14px;
+    border-right: 1px solid #eee;
+    cursor: pointer;
+}
+
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-window {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    max-width: 600px;
+    width: 90%;
+}
+
+
+    /* When checked, show golden background and a checkmark */
+    .card-checkbox:checked {
+        background-color: #244d88;
+        border-color: #c8b28c;
+        opacity: 1;
+        border: 2px solid white !important;
+    }
+
+        /* Show checkbox if it's checked */
+        .card-checkbox:checked .checkbox-container {
+            opacity: 1 !important;
+        }
+
+        /* White checkmark centered inside the round button */
+        .card-checkbox:checked::after {
+            content: '✔';
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -58%);
+        }
+
+.action-btn {
+    flex: 1;
+    text-align: center;
+    padding: 10px 0;
+    font-size: 14px;
+    border-right: 1px solid #eee;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    background-color: #f5f7fa;
+    color: #1f2951;
+    font-weight: 600;
+}
+
+    /* Hover effect */
+    .action-btn:hover {
+        background-color: #e0e7ff; /* Light blue hover */
+        color: #244d88;
+    }
+
+    /* Click (active) effect */
+    .action-btn:active {
+        background-color: #c7d2fe;
+        transform: scale(0.98);
+    }
+
+.custom-checkbox {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 22px;
+    height: 22px;
+    border: 2px solid #c8b28c;
+    border-radius: 50%;
+    background-color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* Default hidden */
+    z-index: 2;
+    font-size: 14px;
+    font-weight: bold;
+    color: white; /* ✔ color when selected */
+}
+
+.design-card:hover .custom-checkbox {
+    opacity: 1;
+}
+
+.design-card.selected .custom-checkbox {
+    opacity: 1 !important;
+}
+
+/* Selected state */
+.custom-checkbox.selected {
+    background-color: #244d88;
+    border: 2px solid white !important;
+}
+
+/* Hide checkmark if not selected */
+.custom-checkbox .checkbox-icon {
+    opacity: 1;
+}
+
+/* Show checkmark when selected */
+.custom-checkbox.selected .checkbox-icon {
+    opacity: 1;
+}
+
+.custom-checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 3px solid #6B75A1; /* Match the blue-gray color */
+    border-radius: 50%; /* Make it a circle */
+    background-color: white;
+    color: #2D4D87; /* Color of the checkmark */
+    font-size: 20px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+    .custom-checkbox .checkbox-icon {
+        display: block;
+    }
+
+    .custom-checkbox.selected .checkbox-icon {
+        display: block;
+    }
+
+    .custom-checkbox.selected .checkbox-icon {
+        color: white;
+    }
+
+.custom-checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 3px solid #6B75A1; /* Match the blue-gray color */
+    border-radius: 50%; /* Make it a circle */
+    background-color: white;
+    color: #2D4D87; /* Color of the checkmark */
+    font-size: 20px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+    .custom-checkbox .checkbox-icon {
+        display: block;
+        font-size: 14px;
+    }
+
+    .custom-checkbox.selected .checkbox-icon {
+        display: block;
+        font-size: 14px;
+    }
+

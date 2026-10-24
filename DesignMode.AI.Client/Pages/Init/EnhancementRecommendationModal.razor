@@ -1,0 +1,825 @@
+@inherits DesignMode.AI.Client.Components.GenerationAwareComponent
+@using Microsoft.AspNetCore.Components
+@inject IJSRuntime JSRuntime
+@using DesignMode.AI.Client.Services;
+@using Newtonsoft.Json;
+@using System.Text;
+@using System.Net.Http.Headers
+@inject AttributionContextService AttributionContext
+@inject AIUsageRefreshService UsageRefresh
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="() => { if (!isGenerating) CloseModal(); }">
+        <div class="commercial-modal" @onclick:stopPropagation>
+            <button class="modal-close" disabled="@(GenerationGuard is null && isGenerating)" @onclick="CloseModal">×</button>
+
+            <div class="content">
+                <h2 class="title">Make Your Commercial Even Better</h2>
+                <span class="ai-pill">AI RECOMMENDATION</span>
+
+                <p class="subtitle">
+                    Generate a few more video-ready images for a stronger commercial.
+                </p>
+
+                <p class="bi dot">Your commercial can be generated with your existing @SelectedImages.Count images.</p>
+                <p class="bi dot">But adding more close-ups, lifestyle shots, and background images will improve scene variety and transitions.</p>
+                <p class="bi dot">We can generate those for you in one click.</p>
+
+                @if (isGenerating)
+                {
+                    <div class="generating-overlay">
+                        <div class="loading-spinner"></div>
+                        <p>Generating @HowMuchMore new images... This may take a moment.</p>
+                        <div class="loading-counter">@loadingCounter</div>
+                        @if (generatedImages.Count > 0)
+                        {
+                            <div class="generated-preview">
+                                <p>Generated @generatedImages.Count/@HowMuchMore images so far:</p>
+                                <div class="preview-images">
+                                    @foreach (var image in generatedImages)
+                                    {
+                                        <img src="@image.ImageUrl" alt="Generated image" class="preview-image" />
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="button-row">
+                    <button class="primary-action-btn"
+                            style="background-color: #244d88;"
+                            @onclick="GenerateMore"
+                            disabled="@isGenerating">
+                        @(isGenerating ? "Generating..." : $"Generate More Images")
+                    </button>
+
+                    <button class="secondary-action-btn"
+                            @onclick="Skip"
+                            disabled="@isGenerating">
+                        Skip for Now → Continue
+                    </button>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="error-message">
+                        @errorMessage
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int HowMuchMore { get; set; } = 3; // Default to 3 images
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+
+    [Parameter] public EventCallback OnGenerateMore { get; set; }
+    [Parameter] public EventCallback OnSkip { get; set; }
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> SelectedImages { get; set; }
+
+    [Inject] private HttpClient Http { get; set; }
+    [Inject] private NavigationManager NavigationManager { get; set; }
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+
+    private bool ShowMakeVideoSelectImages { get; set; } = false;
+    private bool ShowNewVideoGenerationModal { get; set; } = false;
+    private bool IsBusy = false;
+    private bool isGenerating = false;
+    private string errorMessage = "";
+    private int loadingCounter = 0;
+    private Timer loadingTimer;
+    private List<GeneratedImage> generatedImages = new();
+
+    // 🔑 Forwarded from parent
+    [Parameter] public List<string> RunwareImageIds { get; set; } = new List<string>();
+    [Parameter] public List<string> SecondaryRunwareImageIds { get; set; } = new List<string>();
+    [Parameter] public EventCallback<List<string>> OnImagesRemoved { get; set; }
+    [Parameter] public EventCallback<bool> OnConfirm { get; set; }
+
+    // Add these parameters to receive the necessary data and methods from parent
+    [Parameter] public string MainDeliverable { get; set; } = "Video & Photography";
+    [Parameter] public string CompanyIdeaId { get; set; } = "";
+    [Parameter] public string PromptId { get; set; } = "";
+    [Parameter] public string VideoId { get; set; } = "";
+    [Parameter] public EventCallback<string> OnImageGenerated { get; set; }
+    [Parameter] public DesignMode.AI.Client.Pages.Init.MakeVideoModal.ImageIdeaCountResult AllIdeas { get; set; }
+
+    // Add this parameter to receive callback for opening the next modal
+    [Parameter] public EventCallback OnOpenMakeVideoSelectImages { get; set; }
+
+    // Add this parameter to send back newly generated images
+    [Parameter] public EventCallback<List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel>> OnNewImagesGenerated { get; set; }
+    [Parameter] public EventCallback OnAIUsageRecorded { get; set; }
+
+    private string? recommendationOperationId;
+
+    private HashSet<string> SelectedImageUrls = new();
+    private HashSet<string> SelectedImageIds = new();
+    private List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> OriginalImages = new();
+    private List<string> RemovedImages = new();
+    private bool HasChanges => RemovedImages.Count > 0;
+    private bool IsConceptPopoverVisible = false;
+    private bool isAuthorized = false;
+
+    public class GeneratedImage
+    {
+        public string ImageUrl { get; set; } = string.Empty;
+        public string ImageId { get; set; } = string.Empty;
+        public string Prompt { get; set; } = string.Empty;
+    }
+
+    protected override void OnInitialized()
+    {
+        // Set default HowMuchMore if not provided
+        if (HowMuchMore <= 0) HowMuchMore = 3;
+    }
+
+    private async Task CloseModal()
+    {
+        if (!await ConfirmGenerationCloseAsync()) return;
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+
+    private async Task GenerateMore()
+    {
+        await using var generationOperation = await BeginGenerationAsync();
+        try
+        {
+            var Ideas = AllIdeas;
+            var prompt = Ideas.ImageIdeas[0].RawPrompt;
+            PromptId = Ideas.PromptId;
+            var count = Ideas.ImageIdeas.Count + 1;
+            isGenerating = true;
+            errorMessage = "";
+            generatedImages.Clear();
+            StateHasChanged();
+
+            // Start loading counter
+            loadingCounter = 0;
+            loadingTimer = new Timer(async _ =>
+            {
+                loadingCounter++;
+                if (loadingCounter > 99) loadingCounter = 0;
+                await InvokeAsync(StateHasChanged);
+            }, null, 0, 1000);
+
+            // Get the current prompt text for video/commercial generation
+            var promptText = await GetPromptForCommercial();
+
+            if (string.IsNullOrEmpty(promptText))
+            {
+                errorMessage = "Unable to find suitable prompt for generating commercial images.";
+                return;
+            }
+
+            var newImageModels = new List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel>();
+
+            var rawPrompt = Ideas.ImageIdeas[0].RawPrompt;
+
+            var sections = rawPrompt
+                .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
+
+            // Replace sections as needed for video/commercial context
+            sections[0] = "Website, social media, online ads.";
+            sections[1] = promptText;
+            sections[4] = "Video & Photography Description: High-quality video and photography showcasing new product line. Display: Website, social media, online ads. Format: MP4, JPEG. Dimensions/Size: 1920x1080 pixels for video, 1080x1080 pixels for images. Quantity: 10 videos, 20 images. Technical Requirements: Include product close-ups and lifestyle shots.";
+            sections[5] = "Video & Photography";
+
+            // Rebuild final prompt
+            string formattedPrompt = $"{string.Join("|", sections)}";
+
+            // Keep one stable operation id while this recommendation is retried/rendered.
+            recommendationOperationId ??= Guid.NewGuid().ToString("N");
+
+            // Generate multiple images based on HowMuchMore parameter
+            for (int i = 0; i < HowMuchMore; i++)
+            {
+                try
+                {
+                    // Call Runware API directly for each image (similar to parent component)
+                    var imageUrl = await CallRunwareImageFunction(
+                        formattedPrompt, 1344, 768, 1, $"{recommendationOperationId}:{i}");
+                    //var imageUrl = await CallRunwareImageFunction(formattedPrompt, 896, 896, 1);
+                    if (!string.IsNullOrEmpty(imageUrl))
+                    {
+                        string timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+
+                        // Determine deliverable + subcategory based on MainDeliverable
+                        var lowerDeliverable = (MainDeliverable ?? "").ToLower();
+                        string deliverableType;
+                        string subCategory;
+
+                        if (lowerDeliverable.Contains("video") || lowerDeliverable.Contains("photo"))
+                        {
+                            deliverableType = "Video & Photography";
+                            subCategory = "Generic";
+                        }
+                        else
+                        {
+                            deliverableType = "Secondary";
+                            subCategory = "Video & Photography";
+                        }
+
+                        string imageId = await CallSaveImageIdeaFunction(
+                            deliverableType,
+                            subCategory,
+                            formattedPrompt,
+                            imageUrl,
+                            PromptId,
+                            timestamp,
+                            (i + count).ToString()
+                        );
+
+
+                        var generatedImage = new GeneratedImage
+                            {
+                                ImageUrl = imageUrl,
+                                ImageId = imageId ?? string.Empty,
+                                Prompt = formattedPrompt
+                            };
+
+                        generatedImages.Add(generatedImage);
+
+                        // Notify parent component about the new image
+                        if (OnImageGenerated.HasDelegate)
+                        {
+                            await OnImageGenerated.InvokeAsync(imageUrl);
+                        }
+
+                        StateHasChanged();
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to generate image {i + 1}");
+                    }
+
+                    // Small delay between generations to avoid rate limiting
+                    if (i < HowMuchMore - 1)
+                    {
+                        await Task.Delay(2000); // 2 second delay between API calls
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error generating image {i + 1}: {ex.Message}");
+                }
+            }
+
+            // Close the modal after successful generation
+            // Convert generated images into ImageIdeaModel for parent consumption
+            var newImages = generatedImages.Select(g => new DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel
+                {
+                    Id = g.ImageId,
+                    ImageUrl = g.ImageUrl,
+                    ImagePrompt = g.Prompt
+                }).ToList();
+
+            // Add new images to SelectedImages list
+            if (newImages.Any())
+            {
+                SelectedImages.AddRange(newImages);
+
+                // Notify parent if needed
+                if (OnNewImagesGenerated.HasDelegate)
+                    await OnNewImagesGenerated.InvokeAsync(newImages);
+            }
+
+            if (generatedImages.Count == HowMuchMore)
+                recommendationOperationId = null;
+
+            if (OnSkip.HasDelegate)
+                await OnSkip.InvokeAsync();
+
+            // Close this modal
+            if (generationOperation is not null) await generationOperation.DisposeAsync();
+            await CloseModal();
+
+            // Re-open MakeVideoSelectImages modal with UPDATED images
+            ShowMakeVideoSelectImages = true;
+            if (OnOpenMakeVideoSelectImages.HasDelegate)
+                await OnOpenMakeVideoSelectImages.InvokeAsync();
+
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error generating images: {ex.Message}";
+            Console.WriteLine($"❌ Error in GenerateMore: {ex.Message}");
+        }
+        finally
+        {
+            isGenerating = false;
+            loadingTimer?.Dispose();
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string> CallRunwareImageFunction(
+        string positivePrompt, int width, int height, int numberResults, string generationJobId)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            string functionUrl = $"{ApiConfig.ApiBaseUrl}api/CallRunwareAPI?code=REDACTED_FOR_GROOMING";
+
+            var context = await AttributionContext.GetContextAsync();
+            var requestBody = new
+            {
+                positivePrompt = positivePrompt,
+                width = width,
+                height = height,
+                numberResults = numberResults,
+                generationJobId,
+                projectId = context?.ProjectId,
+                funnelId = context?.FunnelId,
+                feature = "ai_recommendations"
+            };
+
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await client.PostAsJsonAsync(functionUrl, requestBody);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<RunwareResponse>();
+
+                if (result != null && result.Data != null)
+                {
+                    var firstUrl = result.Data
+                        .Where(img => !string.IsNullOrWhiteSpace(img.ImageURL))
+                        .Select(img => img.ImageURL)
+                        .FirstOrDefault();
+
+                    if (!string.IsNullOrWhiteSpace(firstUrl) && OnAIUsageRecorded.HasDelegate)
+                        await OnAIUsageRecorded.InvokeAsync();
+                    Console.WriteLine($"Generated Image URL: {firstUrl}");
+                    return firstUrl ?? string.Empty;
+                }
+            }
+            else if (await UsageRefresh.HandleResponseAsync(response))
+            {
+                    errorMessage = "You've used all your AI Credits for this billing period.";
+            }
+            else
+            {
+                Console.WriteLine($"Runware call failed: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception in CallRunwareImageFunction: {ex.Message}");
+        }
+
+        return string.Empty;
+    }
+    [Parameter] public EventCallback OnSecondaryModalClosed { get; set; }
+
+    private async Task HandleSecondaryModalClosed()
+    {
+        // you can do internal stuff here...
+
+        // 🔥 bubble upward to parent page
+        //StateHasChanged();
+        await OnSecondaryModalClosed.InvokeAsync();
+    }
+    private async Task<string> CallSaveImageIdeaFunction(string deliverableType, string subCategory, string imagePrompt, string imageUrl, string promptId, string timeStamp, string countId)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            string functionUrl = $"{ApiConfig.ApiBaseUrl}api/SaveImageIdea?code=REDACTED_FOR_GROOMING";
+
+            var requestBody = new
+            {
+                DeliverableType = deliverableType,
+                SubCategory = subCategory,
+                ImagePrompt = imagePrompt,
+                ImageUrl = imageUrl,
+                PromptId = promptId,
+                TimeStamp = timeStamp,
+                CountId = countId
+            };
+
+            var response = await client.PostAsJsonAsync(functionUrl, requestBody);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                // Deserialize the response to extract the ID
+                var responseObject = System.Text.Json.JsonSerializer.Deserialize<DesignMode.AI.Client.Pages.Init.Gen.SaveImageIdeaResponse>(responseContent, new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                Console.WriteLine($"ImageIdea saved successfully. Id: {responseObject?.Id}");
+                return responseObject?.Id;  // Return the imageId
+            }
+            else
+            {
+                Console.WriteLine($"SaveImageIdea call failed: {response.StatusCode}");
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception in CallSaveImageIdeaFunction: {ex.Message}");
+            return null;
+        }
+    }
+
+    // Runware response classes (same as in parent component)
+    public class RunwareResponse
+    {
+        public List<RunwareImage> Data { get; set; } = new();
+    }
+
+    public class RunwareImage
+    {
+        public string ImageURL { get; set; } = string.Empty;
+    }
+
+    private async Task<string> GetPromptForCommercial()
+    {
+        try
+        {
+            var uri = NavigationManager.Uri;
+            var queryString = new Uri(uri).Query;
+            string cid = GetQueryParameter(queryString, "cid", null);
+
+            if (!string.IsNullOrEmpty(cid))
+            {
+                var ideasResponse = await CallGetIdeasByCompanyIdeaId(cid);
+
+                if (ideasResponse?.Ideas == null || ideasResponse.Ideas.Count == 0)
+                    return "";
+
+                // Filter by "video" or "photo" in Title
+                var filteredIdea = ideasResponse.Ideas
+                    .FirstOrDefault(i =>
+                        (i.Title ?? "")
+                            .ToLower()
+                            .Contains("video") ||
+                        (i.Title ?? "")
+                            .ToLower()
+                            .Contains("photo"));
+
+                if (filteredIdea != null)
+                {
+                    return $"{filteredIdea.Title}: {filteredIdea.Description}".Trim();
+                }
+
+                // Fallback: any idea
+                var firstIdea = ideasResponse.Ideas.FirstOrDefault();
+                if (firstIdea != null)
+                {
+                    return $"{firstIdea.Title}: {firstIdea.Description}".Trim();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting prompt: {ex.Message}");
+        }
+
+        return "";
+    }
+
+    private async Task<IdeasResponse> CallGetIdeasByCompanyIdeaId(string companyIdeaId)
+    {
+        try
+        {
+            var url =
+                $"{ApiConfig.ApiBaseUrl}api/GetIdeasByCompanyIdeaId" +
+                $"?code=REDACTED_FOR_GROOMING&companyIdeaId={companyIdeaId}";
+
+            var response = await Http.GetAsync(url);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<IdeasResponse>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error calling GetIdeasByCompanyIdeaId: {ex.Message}");
+        }
+
+        return new IdeasResponse
+            {
+                Ideas = new List<IdeaDto>(),
+                Count = 0
+            };
+    }
+
+    public class IdeaDto
+    {
+        public string Title { get; set; }
+        public string Description { get; set; }
+    }
+
+    public class IdeasResponse
+    {
+        public List<IdeaDto> Ideas { get; set; }
+        public int Count { get; set; }
+    }
+
+    private string GetQueryParameter(string queryString, string key, string defaultValue)
+    {
+        try
+        {
+            var query = System.Web.HttpUtility.ParseQueryString(queryString);
+            return query[key] ?? defaultValue;
+        }
+        catch
+        {
+            return defaultValue;
+        }
+    }
+
+    private async Task CloseMakeVideoSelectImages()
+    {
+        ShowMakeVideoSelectImages = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+
+    private async Task Skip()
+    {
+        Show = false;
+        ShowMakeVideoSelectImages = true;
+        if (OnSkip.HasDelegate)
+            await OnSkip.InvokeAsync();
+
+        await CloseModal();
+    }
+
+    public void Dispose()
+    {
+        loadingTimer?.Dispose();
+    }
+}
+
+<style>
+    /* Modal overlay */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    /* Modal wrapper */
+    .commercial-modal {
+        width: 640px;
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+        position: relative;
+        max-width: 90vw;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    /* Close button */
+    .modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        font-size: 24px;
+        border: none;
+        background: #f3f4f6;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        line-height: 1;
+    }
+
+        .modal-close:hover {
+            background: #e5e7eb;
+        }
+
+    /* Title */
+    .title {
+        font-size: 28px;
+        font-weight: 700;
+        margin: 8px 0 18px 0;
+        color: #111827;
+        line-height: 1.2;
+    }
+
+    /* Pill Tag */
+    .ai-pill {
+        display: inline-block;
+        background: #fef3c7;
+        color: #92400e;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 11px;
+    }
+
+    /* Subtitle */
+    .subtitle {
+        font-size: 18px;
+        color: #374151;
+        margin: 8px 0 20px 0;
+        line-height: 1.5;
+        font-weight: 500;
+    }
+
+    /* Buttons Row */
+    .button-row {
+        display: flex;
+        gap: 16px;
+        margin-top: 31px;
+    }
+
+    /* Primary button */
+    .primary-action-btn {
+        background: #275cf1;
+        color: #fff;
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        flex: 1;
+        transition: background-color 0.2s;
+    }
+
+        .primary-action-btn:hover:not(:disabled) {
+            background: #1f50d4;
+        }
+
+    /* Secondary button */
+    .secondary-action-btn {
+        background: #fff;
+        border: 1px solid #d1d5db;
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: 500;
+        border-radius: 8px;
+        cursor: pointer;
+        color: #374151;
+        flex: 1;
+        transition: background-color 0.2s;
+    }
+
+        .secondary-action-btn:hover:not(:disabled) {
+            background: #f9fafb;
+        }
+
+    /* New styles for generating state */
+    .generating-overlay {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        margin: 20px 0;
+    }
+
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #244d88;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 15px;
+    }
+
+    .loading-counter {
+        font-size: 14px;
+        color: #666;
+        margin-top: 10px;
+        font-family: monospace;
+    }
+
+    .error-message {
+        background: #fee;
+        border: 1px solid #fcc;
+        color: #c33;
+        padding: 10px 15px;
+        border-radius: 5px;
+        margin-top: 15px;
+        font-size: 14px;
+    }
+
+    .bi {
+        padding-left: 1.6rem;
+        background-repeat: no-repeat;
+        background-position: 0 center;
+        margin: .35rem 0;
+        line-height: 1.5;
+    }
+
+    .dot {
+        background-image: radial-gradient(circle, black 50%, transparent 51%);
+        background-size: .5rem .5rem;
+        font-size: 17px;
+        font-weight: 350;
+        margin-top: 0;
+    }
+
+    .generated-preview {
+        margin-top: 15px;
+        text-align: center;
+    }
+
+    .preview-images {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+
+    .preview-image {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 5px;
+        border: 2px solid #244d88;
+    }
+
+    button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Responsive adjustments */
+    @@media (max-width: 768px) {
+        .commercial-modal {
+            padding: 24px;
+            width: 95%;
+        }
+
+        .button-row {
+            flex-direction: column;
+        }
+
+        .title {
+            font-size: 24px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+        }
+
+        .preview-images {
+            gap: 5px;
+        }
+
+        .preview-image {
+            width: 60px;
+            height: 60px;
+        }
+    }
+</style>
+
+<MakeVideoSelectImages Show="@ShowMakeVideoSelectImages"
+                       ShowChanged="CloseMakeVideoSelectImages"
+                       SelectedImages="@SelectedImages"
+                       RunwareImageIds="@RunwareImageIds"
+                       SecondaryRunwareImageIds="@SecondaryRunwareImageIds"
+                       OnImagesRemoved="@OnImagesRemoved"
+                       AllIdeas="@AllIdeas"
+                       OnConfirm="@OnConfirm"
+                       OnClose="HandleSecondaryModalClosed"
+                       GenerateNew=true
+                       VideoId="@VideoId"/>

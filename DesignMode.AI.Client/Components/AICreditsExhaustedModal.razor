@@ -1,0 +1,193 @@
+@using DesignMode.AI.Shared.Models
+@inject DesignMode.AI.Client.Services.AIUsageRefreshService Usage
+@inject IJSRuntime JS
+@inject DesignMode.AI.Client.Services.IAICreditPurchaseClient Purchases
+@implements IAsyncDisposable
+
+<dialog @ref="dialog" class="credits-modal" aria-labelledby="credits-title" aria-describedby="credits-message" @oncancel="Close" @onclose="Close">
+    <header class="credits-heading">
+        <h2 id="credits-title">AI Credits</h2>
+        <button type="button" class="credits-close" aria-label="Close AI Credits" @onclick="Close" autofocus>×</button>
+    </header>
+    <div class="credits-content">
+        <p id="credits-message">@(Usage.Summary is { } balance && AIUsageSummaryDisplay.IsExhausted(balance)
+            ? "You've used all your AI Credits for this billing period."
+            : "Add AI Credits or upgrade your plan.")</p>
+        @if (Usage.Summary is { } summary)
+        {
+            <div class="credits-balance"><strong>@AIUsageSummaryDisplay.PrimaryText(summary)</strong><span>@AIUsageSummaryDisplay.RemainingText(summary)</span></div>
+            @if (summary.RecoveryOptions is { } options)
+            {
+                @if (options.IsSandbox)
+                {
+                    <p class="credits-note" role="status">Sandbox · Test purchases only</p>
+                }
+                @if (options.CreditPacks.Count > 0)
+                {
+                    <h3>Add Credits</h3>
+                    <div class="credits-packs">
+                        @foreach (var pack in options.CreditPacks)
+                        {
+                            <section class="credits-pack">
+                                <h4>@pack.Name</h4>
+                                <p class="credits-price">$@pack.Price<span> one time</span></p>
+                                <p>@pack.Credits AI Credits</p>
+                                <button type="button" class="btn bg-gradient-primary" disabled="@(!pack.CanPurchase || purchasing)" @onclick="() => Purchase(pack.Id)">Add @pack.Credits Credits — $@pack.Price</button>
+                            </section>
+                        }
+                    </div>
+                }
+                else if (options.CreditPackConfigured)
+                {
+                    <section class="credits-pack">
+                        <h3>Add Credits</h3>
+                        <p>@options.CreditPackUnits AI Credits · @options.CreditPackDisplayPrice</p>
+                        <button type="button" class="btn bg-gradient-primary" disabled>Add Credits — unavailable</button>
+                    </section>
+                }
+                @if (options.Upgrades.Count > 0)
+                {
+                    <h3>Upgrade Plan</h3>
+                    <div class="credits-plans">
+                        @foreach (var plan in options.Upgrades)
+                        {
+                            <section class="credits-plan">
+                                <h4>@plan.Name</h4>
+                                <p class="credits-price">$@plan.MonthlyPrice<span>/month</span></p>
+                                @if (plan.IncludedCredits is { } included && included > summary.GenerationLimit)
+                                {
+                                    <p>@included included AI Credits per billing period</p>
+                                }
+                                <button type="button" class="btn bg-gradient-primary" disabled="@(!plan.CanUpgrade || purchasing)" @onclick="() => Upgrade(plan.Plan)">Upgrade to @plan.Name</button>
+                            </section>
+                        }
+                    </div>
+                    @if (options.Upgrades.Any(x => x.CanUpgrade))
+                    {
+                        <p class="credits-note">Review your plan change and any prorated charge in Stripe before confirming. Requires an active monthly subscription.</p>
+                    }
+                    else
+                    {
+                        <p class="credits-note">Plan changes are currently unavailable. Please check back later.</p>
+                    }
+                }
+                else
+                {
+                    <p>No higher plan is available.</p>
+                }
+                @if (!options.CanPurchaseCredits)
+                {
+                    <p class="credits-note">Additional credit purchases are currently unavailable. Your included credits renew with your billing period.</p>
+                }
+            }
+        }
+        else
+        {
+            <p role="status">Your credit summary is unavailable. Try refreshing it.</p>
+        }
+        @if (refreshError is not null) { <p role="alert">@refreshError</p> }
+        @if (purchaseMessage is not null) { <p role="status">@purchaseMessage</p> }
+        <div class="credits-actions">
+            <button type="button" class="btn btn-outline-secondary" disabled="@refreshing" @onclick="Refresh">@(refreshing ? "Refreshing…" : "Refresh credits")</button>
+            <button type="button" class="btn btn-outline-secondary" @onclick="Close">Maybe later</button>
+        </div>
+    </div>
+</dialog>
+
+@code {
+    private ElementReference dialog;
+    private IJSObjectReference? module;
+    private bool refreshing;
+    private string? refreshError;
+    private string? purchaseMessage;
+    private bool purchasing;
+    private readonly CancellationTokenSource polling = new();
+    private Task? pollingTask;
+    protected override void OnInitialized() => Usage.Changed += OnChanged;
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+    private void Close() => Usage.Close();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/ai-credits-modal.js");
+        await module.InvokeVoidAsync("setOpen", dialog, Usage.IsModalOpen);
+        if (firstRender) pollingTask = PollPurchase();
+    }
+    private async Task Purchase(string packageId)
+    {
+        purchasing = true;
+        refreshError = null;
+        try
+        {
+            var checkout = await Purchases.StartAsync(packageId);
+            await JS.InvokeVoidAsync("location.assign", checkout.Url);
+        }
+        catch { refreshError = "We couldn't open checkout. Please try again."; purchasing = false; }
+    }
+    private async Task Upgrade(string plan)
+    {
+        purchasing = true;
+        refreshError = null;
+        try
+        {
+            var checkout = await Purchases.UpgradeAsync(plan);
+            await JS.InvokeVoidAsync("location.assign", checkout.Url);
+        }
+        catch (InvalidOperationException ex) { refreshError = ex.Message; purchasing = false; }
+        catch { refreshError = "We couldn't open the plan change confirmation. Please try again."; purchasing = false; }
+    }
+    private async Task PollPurchase()
+    {
+        try
+        {
+            var id = await Purchases.PendingAsync();
+            polling.Token.ThrowIfCancellationRequested();
+            if (string.IsNullOrEmpty(id)) return;
+            purchaseMessage = "Payment processing… Your balance updates after payment is verified.";
+            Usage.Open();
+            for (var attempt = 0; attempt < 60; attempt++)
+            {
+                var status = await Purchases.StatusAsync(id, polling.Token);
+                polling.Token.ThrowIfCancellationRequested();
+                if (status is null) { purchaseMessage = null; return; }
+                if (status.Paid)
+                {
+                    await Usage.RequestRefreshAsync();
+                    purchaseMessage = status.CreditsAdded > 0
+                        ? $"{status.CreditsAdded} AI Credits added. New balance: {status.Remaining} credits."
+                        : "This payment was reversed. Your balance reflects the current payment status.";
+                    await Purchases.ClearAsync();
+                    polling.Token.ThrowIfCancellationRequested();
+                    Usage.Open();
+                    return;
+                }
+                await Task.Delay(TimeSpan.FromSeconds(2), polling.Token);
+            }
+            purchaseMessage = "Payment is not yet confirmed. Use Refresh credits to check again after checkout.";
+        }
+        catch (OperationCanceledException) { }
+        catch { purchaseMessage = "We couldn't confirm payment yet. Use Refresh credits to try again."; }
+        finally { if (!polling.IsCancellationRequested) await InvokeAsync(StateHasChanged); }
+    }
+    private async Task Refresh()
+    {
+        refreshing = true;
+        refreshError = null;
+        try
+        {
+            await Usage.RequestRefreshAsync();
+            if (pollingTask is null || pollingTask.IsCompleted) pollingTask = PollPurchase();
+            if (Usage.Summary is null) refreshError = "We couldn't refresh your credits. Please try again.";
+        }
+        catch { refreshError = "We couldn't refresh your credits. Please try again."; }
+        finally { refreshing = false; }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        Usage.Changed -= OnChanged;
+        polling.Cancel();
+        Usage.Close();
+        if (pollingTask is not null) await pollingTask;
+        polling.Dispose();
+        if (module is not null) await module.DisposeAsync();
+    }
+}

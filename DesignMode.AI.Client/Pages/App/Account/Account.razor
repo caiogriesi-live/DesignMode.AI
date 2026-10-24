@@ -1,0 +1,125 @@
+@page "/app/account"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using DesignMode.AI.Shared.Models
+@using System.Net.Http.Headers
+@using Microsoft.AspNetCore.Components.Authorization
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject DesignMode.AI.Client.Services.ApiConfigService ApiConfig
+@inject AuthenticationStateProvider AuthStateProvider
+@inject Blazored.LocalStorage.ILocalStorageService Storage
+
+<PageTitle>Account | DesignMode.AI</PageTitle>
+@if (authenticated)
+{
+    <main class="account-page">
+        <DesignMode.AI.Client.Pages.Init.ClientLeftNav />
+        <section class="account-content">
+            <header>
+                <span class="profile-icon" aria-hidden="true">👤</span><h1>Account</h1>
+                <a class="account-button logout-link" href="/app/logout">Log Out</a>
+            </header>
+            @if (loading)
+            {
+                <p role="status">Loading your account…</p>
+            }
+            @if (error is not null)
+            {
+                <div role="alert" class="account-error">@error</div>
+                <button class="account-button" disabled="@busy" @onclick="LoadAsync">Refresh Account</button>
+            }
+            @if (account is not null)
+            {
+                <section class="account-card" aria-label="Account details">
+                    <h2>Username</h2><p>@account.Username</p>
+                    <h2>Current Subscription</h2><p>@account.Plan</p>
+                    <h2>Subscription signups</h2><p>@account.SubscriptionSignupCount</p>
+                    <h2>AI Credits</h2><DesignMode.AI.Client.Components.AIUsageMeter ShowPurchaseAction="false" />
+                    @if (account.Plan != "None") { <p>Status: @account.Status</p> }
+                    @if (account.CancellationScheduled)
+                    {
+                        <p role="status">Cancellation scheduled for the end of your billing period.</p>
+                    }
+                    else if (account.CanCancel && error is null)
+                    {
+                        <button class="account-button cancel-button" disabled="@busy" @onclick="() => showConfirmation = true">Cancel Subscription</button>
+                    }
+                </section>
+            }
+        </section>
+    </main>
+}
+@if (showConfirmation)
+{
+    <div class="modal-overlay" @onkeydown="OnDialogKeyDown">
+        <section class="account-modal" role="dialog" aria-modal="true" aria-labelledby="cancel-title" aria-describedby="cancel-description">
+            <h2 id="cancel-title">Cancel subscription?</h2>
+            <p id="cancel-description">Your subscription will remain active until the end of your current billing period.</p>
+            <div class="modal-actions">
+                <button class="account-button" disabled="@busy" @onclick="() => showConfirmation = false" autofocus>Keep Subscription</button>
+                <button class="account-button cancel-button" disabled="@busy" @onclick="CancelAsync">@(busy ? "Scheduling cancellation…" : "Cancel at End of Billing Period")</button>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    private AccountSummary? account;
+    private bool authenticated;
+    private bool loading = true;
+    private bool busy;
+    private bool showConfirmation;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        authenticated = (await AuthStateProvider.GetAuthenticationStateAsync()).User.Identity?.IsAuthenticated == true;
+        if (!authenticated)
+        {
+            Navigation.NavigateTo("/login?returnUrl=%2Fapp%2Faccount");
+            return;
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (busy) return;
+        loading = true;
+        busy = true;
+        error = null;
+        account = null;
+        try { account = await SendAsync(HttpMethod.Get, "api/account"); }
+        catch { error = "We couldn't load your account. Please retry or contact contact@designmode.ai for help."; }
+        finally { busy = false; loading = false; }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (busy || !showConfirmation || account?.CanCancel != true) return;
+        busy = true;
+        error = null;
+        try { account = await SendAsync(HttpMethod.Post, "api/account/cancel"); }
+        catch { error = "We couldn't confirm cancellation. Refresh your account before retrying, or contact contact@designmode.ai for help."; }
+        finally { busy = false; showConfirmation = false; }
+    }
+
+    private void OnDialogKeyDown(KeyboardEventArgs args)
+    {
+        if (!busy && args.Key == "Escape") showConfirmation = false;
+    }
+
+    private async Task<AccountSummary?> SendAsync(HttpMethod method, string path)
+    {
+        var token = await Storage.GetItemAsync<string>("authToken");
+        using var request = new HttpRequestMessage(method, $"{ApiConfig.ApiBaseUrl.TrimEnd('/')}/{path}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var response = await Http.SendAsync(request);
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            Navigation.NavigateTo("/login?returnUrl=%2Fapp%2Faccount");
+        }
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<AccountSummary>() ?? throw new InvalidOperationException();
+    }
+}

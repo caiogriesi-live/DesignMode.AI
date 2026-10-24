@@ -1,0 +1,94 @@
+@using DesignMode.AI.Shared.Models
+@using System.Net.Http.Headers
+@inject DesignMode.AI.Client.Services.ApiConfigService ApiConfig
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject HttpClient Http
+@inject DesignMode.AI.Client.Services.AIUsageRefreshService UsageRefresh
+@implements IDisposable
+
+@if (_authenticated)
+{
+    <div class="ai-usage-meter" aria-label="AI credits usage">
+        @if (_summary is null)
+        {
+            <span class="ai-usage-primary"><strong>@AIUsageSummaryDisplay.PrimaryLabel</strong><span role="status">@(_refreshFailed ? "Balance unavailable. Refresh credits in the dialog to retry." : "Loading balance…")</span></span>
+        }
+        else if (_summary.GenerationLimit is not null)
+        {
+            <span class="ai-usage-primary"><strong>@AIUsageSummaryDisplay.PrimaryLabel</strong><span class="ai-usage-count">@AIUsageSummaryDisplay.PrimaryText(_summary)</span></span>
+            <span class="ai-usage-remaining">@AIUsageSummaryDisplay.RemainingText(_summary)</span>
+            @if (ShowPurchaseAction && AIUsageSummaryDisplay.IsExhausted(_summary))
+            {
+                <button type="button" class="ai-usage-exhausted" @onclick="UsageRefresh.Open">You've used all your AI Credits for this billing period.</button>
+            }
+        }
+        else
+        {
+            <span class="ai-usage-primary"><strong>@AIUsageSummaryDisplay.PrimaryLabel</strong><span class="ai-usage-count">@AIUsageSummaryDisplay.PrimaryText(_summary)</span></span>
+            <span class="ai-usage-remaining">@AIUsageSummaryDisplay.RemainingText(_summary)</span>
+        }
+        @if (_refreshFailed && _summary is not null)
+        {
+            <span role="status">Last known balance · refresh unavailable</span>
+        }
+        @if (ShowPurchaseAction)
+        {
+            <button type="button" class="btn btn-sm btn-outline-primary mb-0" aria-haspopup="dialog" @onclick="UsageRefresh.Open">Add Credits</button>
+        }
+        else
+        {
+            <a href="/init/dashboard">Manage AI Credits on the dashboard</a>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public bool ShowPurchaseAction { get; set; } = true;
+    private AIUsageSummary? _summary;
+    private bool _authenticated;
+    private bool _refreshFailed;
+    private bool _disposed;
+    private int _refreshVersion;
+    protected override Task OnInitializedAsync()
+    {
+        UsageRefresh.RefreshRequested += RefreshAsync;
+        return RefreshAsync();
+    }
+
+    public async Task RefreshAsync()
+    {
+        var version = ++_refreshVersion;
+        var token = await LocalStorage.GetItemAsync<string>("authToken");
+        if (_disposed || version != _refreshVersion) return;
+        _authenticated = !string.IsNullOrWhiteSpace(token);
+        if (!_authenticated) { _summary = null; UsageRefresh.SetSummary(null); UsageRefresh.Close(); return; }
+        var url = $"{ApiConfig.ApiBaseUrl}api/ai-usage-summary?code=REDACTED_FOR_GROOMING";
+        AIUsageSummary? summary;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await Http.SendAsync(request);
+            summary = response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<AIUsageSummary>() : null;
+        }
+        catch (HttpRequestException) { summary = null; }
+        catch (System.Text.Json.JsonException) { summary = null; }
+        catch (TaskCanceledException) { summary = null; }
+        if (_disposed || version != _refreshVersion) return;
+        _refreshFailed = summary is null;
+        if (summary is not null)
+        {
+            _summary = summary;
+            UsageRefresh.SetSummary(summary);
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        UsageRefresh.RefreshRequested -= RefreshAsync;
+        UsageRefresh.SetSummary(null);
+        UsageRefresh.Close();
+    }
+}

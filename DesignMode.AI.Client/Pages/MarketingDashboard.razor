@@ -1,0 +1,153 @@
+@page "/init/marketing-dashboard"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using DesignMode.AI.Shared.Models.MarketingReporting
+@inject HttpClient Http
+@inject DesignMode.AI.Client.Services.ApiConfigService ApiConfig
+@inject Blazored.LocalStorage.ILocalStorageService Storage
+<PageTitle>Marketing Dashboard | DesignMode.AI</PageTitle>
+
+<main class="marketing-page">
+    <DesignMode.AI.Client.Pages.Init.ClientLeftNav />
+    <div class="marketing-content">
+        <DesignMode.AI.Client.Components.WorkspaceBrandHeader />
+        <header class="marketing-heading">
+            <div><p class="eyebrow">PERFORMANCE ANALYTICS</p><h1>Marketing Dashboard</h1><p>Financial performance from available reporting sources.</p></div>
+            <div class="range-controls">
+                <label>Preset <select aria-label="Reporting date preset" value="@selectedRange" @onchange="RangeChanged"><option value="today">Today</option><option value="last7">Last 7 days</option><option value="last30">Last 30 days</option><option value="month">Month to date</option><option value="previousMonth">Previous month</option><option value="year">Year to date</option><option value="custom">Custom range</option></select></label>
+                <label>From <input aria-label="Start date" type="date" @bind="startDate" @bind:after="MarkCustom" /></label>
+                <label>To <input aria-label="End date" type="date" @bind="endDate" @bind:after="MarkCustom" /></label>
+                <button class="refresh-button" @onclick="Load" disabled="@(loading && data is null)">@(loading ? "Loading…" : "↻ Refresh")</button>
+            </div>
+        </header>
+        @if (loading && data is null) { <div class="state-card" role="status">Loading reporting data…</div> }
+        else if (!string.IsNullOrWhiteSpace(error)) { <div class="state-card error-state" role="alert"><strong>Reporting data could not be loaded</strong><p>@error</p><button class="refresh-button" @onclick="Load">Retry</button></div> }
+        else if (data is not null)
+        {
+            <div class="report-meta"><span class="status-dot"></span><span>@StateLabel(data.Report.State)</span><span>Updated @data.GeneratedAt.ToLocalTime().ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture)</span><span>USD reporting</span></div>
+            <section class="kpi-grid" aria-label="Financial metrics">
+                <DesignMode.AI.Client.Components.MetricCard Title="Ad spend" Measure="@data.Report.SelectedMeasures.AdvertisingSpend" Format="money" />
+                <DesignMode.AI.Client.Components.MetricCard Title="Attributed revenue" Measure="@data.Report.SelectedMeasures.GoogleAttributedRevenue" Format="money" />
+                <DesignMode.AI.Client.Components.MetricCard Title="ROAS" Measure="@data.Report.SelectedMeasures.ReturnOnAdSpend" Format="ratio" />
+                <DesignMode.AI.Client.Components.MetricCard Title="New customers" Count="@data.Report.SelectedMeasures.NewCustomers" />
+                <DesignMode.AI.Client.Components.MetricCard Title="CAC" Measure="@data.Report.SelectedMeasures.CustomerAcquisitionCost" Format="money" />
+                <DesignMode.AI.Client.Components.MetricCard Title="Contribution before ads" Measure="@data.Report.SelectedMeasures.ContributionBeforeAds" Format="money" />
+                <DesignMode.AI.Client.Components.MetricCard Title="Contribution after ads" Measure="@data.Report.SelectedMeasures.ContributionAfterAds" Format="money" />
+                <DesignMode.AI.Client.Components.MetricCard Title="Revenue / customer" Measure="@data.Report.SelectedMeasures.AverageRevenuePerCustomer" Format="money" />
+                <DesignMode.AI.Client.Components.MetricCard Title="Contribution / customer" Measure="@data.Report.SelectedMeasures.ContributionPerCustomer" Format="money" />
+                <DesignMode.AI.Client.Components.MetricCard Title="Acquisition payback" Measure="@data.Report.SelectedMeasures.CustomerAcquisitionPaybackMonths" Format="months" />
+            </section>
+            <section class="chart-grid" aria-label="Performance trends">
+                <DesignMode.AI.Client.Components.TrendPanel Title="Spend & revenue" Subtitle="Observed daily USD" Points="@data.Daily" Mode="money" />
+                <DesignMode.AI.Client.Components.TrendPanel Title="New customers" Subtitle="Google-attributed first subscription payments" Points="@data.Daily" Mode="customers" />
+                <DesignMode.AI.Client.Components.TrendPanel Title="ROAS trend" Subtitle="Calculated daily by the WORK-05 financial calculator" Points="@data.Daily" Mode="roas" />
+            </section>
+            <section class="lower-grid">
+                <article class="panel campaign-panel"><div class="panel-heading"><div><h2>Campaign performance</h2><p>Google Ads campaign facts and verified paid purchases</p></div><span class="state-pill">@data.CampaignCoverage.State</span></div><div class="campaign-table-wrap"><table class="campaign-table"><thead><tr><th>Campaign</th><th>Spend</th><th>Verified revenue</th><th>ROAS</th><th>CAC</th><th>New customers</th><th>Platform conversions</th><th>Suggested budget change</th><th>Action</th></tr></thead><tbody>
+                    @if (data.Campaigns.Count == 0)
+                    { <tr><td colspan="9" class="table-empty">No campaign rows are available for this date range. @data.CampaignCoverage.Explanation</td></tr> }
+                    else
+                    {
+                        @foreach (var campaign in data.Campaigns)
+                        {
+                            <tr><td><strong>@campaign.CampaignName</strong><small>@campaign.CampaignId · @campaign.ReportingTimeZone</small></td><td>@Display(campaign.AdvertisingSpend, "money")</td><td>@Display(campaign.AttributedRevenue, "money")<small>@campaign.VerifiedPurchases.Count verified purchases</small></td><td>@Display(campaign.Roas, "ratio")</td><td>@Display(campaign.CustomerAcquisitionCost, "money")</td><td>@(campaign.NewCustomers.Count?.ToString(CultureInfo.InvariantCulture) ?? "Unavailable")</td><td>@Display(campaign.PlatformReportedConversions, "number")<small>Platform-reported; not verified purchases</small></td><td>@(campaign.SuggestedBudgetChangePercent is null ? "Unavailable" : $"{campaign.SuggestedBudgetChangePercent.Value.ToString("+0.##;-0.##;0", CultureInfo.InvariantCulture)}%")<small>@Display(campaign.SuggestedAverageDailyBudgetChange, "money") / day</small></td><td><span class="recommendation-pill">@campaign.Recommendation</span><small>@campaign.RecommendationRationale</small><small>@campaign.RecommendationConfidence</small><small>@string.Join(" ", campaign.Limitations)</small></td></tr>
+                        }
+                    }
+                </tbody></table></div><p class="campaign-note">@data.CampaignCoverage.Explanation @data.CampaignAttributionCoverage.Explanation @data.RecommendationPolicyCoverage.Explanation Recommendations are advisory only; no Google Ads changes are sent.</p></article>
+                <article class="panel marginal-panel"><div class="panel-heading"><div><h2>Marginal performance</h2><p>Selected period compared with the prior equal-length period</p></div><span class="state-pill">@data.Marginal.State</span></div><div class="marginal-metrics">
+                    <DesignMode.AI.Client.Components.MetricCard Title="Spend change" Measure="@data.Marginal.AdvertisingSpendChange" Format="money" Compact="true" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="Revenue change" Measure="@data.Marginal.AttributedRevenueChange" Format="money" Compact="true" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="Customer change" Count="@data.Marginal.NewCustomersChange" Compact="true" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="Marginal ROAS" Measure="@data.Marginal.MarginalRoas" Format="ratio" Compact="true" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="Marginal CAC" Measure="@data.Marginal.MarginalCac" Format="money" Compact="true" />
+                </div><p class="limitation">@data.Marginal.Explanation Incremental contribution: @Display(data.Marginal.IncrementalContribution, "money").</p></article>
+                <article class="panel funnel-panel"><div class="panel-heading"><div><h2>Acquisition funnel</h2><p>GA4 property reporting</p></div><span class="unavailable-pill">Unavailable</span></div><p>@data.Ga4Coverage.Explanation</p></article>
+            </section>
+            <section class="revenue-breakdown" aria-label="Revenue and expense summary">
+                <h2>Revenue and expense summary</h2>
+                <div>
+                    <DesignMode.AI.Client.Components.MetricCard Title="Business expenses" Measure="@data.Report.SelectedMeasures.BusinessExpenses" Format="money" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="Overall business profit" Measure="@data.Report.SelectedMeasures.OverallBusinessProfit" Format="money" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="Marketing profit" Measure="@data.Report.SelectedMeasures.MarketingProfit" Format="money" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="Marketing profit margin" Measure="@data.Report.SelectedMeasures.MarketingProfitMarginPercent" Format="percent" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="Total collected revenue" Measure="@data.Report.SelectedMeasures.TotalCollectedRevenue" Format="money" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="Subscription revenue" Measure="@data.Report.SelectedMeasures.SubscriptionRevenue" Format="money" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="AI credit revenue" Measure="@data.Report.SelectedMeasures.AICreditRevenue" Format="money" />
+                    <DesignMode.AI.Client.Components.MetricCard Title="Google-attributed revenue" Measure="@data.Report.SelectedMeasures.GoogleAttributedRevenue" Format="money" />
+                </div>
+            </section>
+            @if (data.Report.SelectedMeasures.NonUsdAmounts.Count > 0)
+            {
+                <p class="currency-note">Foreign-currency purchases are excluded from USD totals and are not converted: @string.Join(" · ", data.Report.SelectedMeasures.NonUsdAmounts.Select(x => $"{x.Currency} {x.Amount.ToString("N2", CultureInfo.InvariantCulture)}"))</p>
+            }
+        }
+    </div>
+</main>
+
+@code {
+    private MarketingDashboardData? data;
+    private DateTime startDate = DateTime.Today.AddDays(-29);
+    private DateTime endDate = DateTime.Today;
+    private bool loading;
+    private string? error;
+    private string selectedRange = "last30";
+
+    protected override Task OnInitializedAsync() { ApplyRange("last30"); return Load(); }
+
+    private void RangeChanged(ChangeEventArgs args)
+    {
+        selectedRange = args.Value?.ToString() ?? "custom";
+        ApplyRange(selectedRange);
+    }
+
+    private void MarkCustom() => selectedRange = "custom";
+
+    private void ApplyRange(string range)
+    {
+        var today = DateTime.Today;
+        switch (range)
+        {
+            case "today": startDate = endDate = today; break;
+            case "last7": startDate = today.AddDays(-6); endDate = today; break;
+            case "last30": startDate = today.AddDays(-29); endDate = today; break;
+            case "month": startDate = new DateTime(today.Year, today.Month, 1); endDate = today; break;
+            case "previousMonth": endDate = new DateTime(today.Year, today.Month, 1).AddDays(-1); startDate = new DateTime(endDate.Year, endDate.Month, 1); break;
+            case "year": startDate = new DateTime(today.Year, 1, 1); endDate = today; break;
+            default: selectedRange = "custom"; break;
+        }
+    }
+
+    private async Task Load()
+    {
+        if (endDate.Date < startDate.Date) { error = "The end date must be on or after the start date."; return; }
+        if ((endDate.Date - startDate.Date).TotalDays > 365) { error = "Choose a date range of 1 to 366 days."; return; }
+        loading = true; error = null;
+        try
+        {
+            var token = await Storage.GetItemAsync<string>("authToken");
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                $"{ApiConfig.ApiBaseUrl.TrimEnd('/')}/api/marketing-dashboard?start={startDate:yyyy-MM-dd}&end={endDate:yyyy-MM-dd}");
+            if (!string.IsNullOrWhiteSpace(token)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await Http.SendAsync(request);
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                throw new InvalidOperationException("This report is restricted to company operators. Sign in with an authorized operator account.");
+            if (!response.IsSuccessStatusCode)
+            {
+                var message = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(message) ? "The reporting service returned an error." : message);
+            }
+            data = await response.Content.ReadFromJsonAsync<MarketingDashboardData>();
+            if (data is null) throw new InvalidOperationException("The reporting service returned an empty response.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TaskCanceledException)
+        { error = ex.Message; }
+        finally { loading = false; }
+    }
+
+    private static string StateLabel(ReportingDataState state) => state switch
+    { ReportingDataState.Complete => "All sources current", ReportingDataState.Partial => "Partial source coverage", ReportingDataState.Stale => "Some data may be stale", ReportingDataState.Error => "Some sources returned errors", _ => "Sources unavailable or unconfigured" };
+    private static string Display(ReportingMeasure value, string format) => value.Amount is null ? "Unavailable" : format switch
+    { "money" => $"{value.Currency} {value.Amount.Value.ToString("N2", CultureInfo.InvariantCulture)}", "ratio" => $"{value.Amount.Value.ToString("N2", CultureInfo.InvariantCulture)}×", "months" => $"{value.Amount.Value.ToString("N1", CultureInfo.InvariantCulture)} months", "percent" => $"{value.Amount.Value.ToString("N2", CultureInfo.InvariantCulture)}%", _ => value.Amount.Value.ToString("N2", CultureInfo.InvariantCulture) };
+}

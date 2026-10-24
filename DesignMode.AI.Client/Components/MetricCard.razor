@@ -1,0 +1,23 @@
+@using System.Globalization
+@using DesignMode.AI.Shared.Models.MarketingReporting
+<article class="metric-card @(Compact ? "compact" : "")">
+    <span class="metric-title">@Title</span>
+    <strong class="metric-value">@Value</strong>
+    <span class="metric-state" title="@Explanation">@State</span>
+</article>
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public ReportingMeasure? Measure { get; set; }
+    [Parameter] public ReportingCount? Count { get; set; }
+    [Parameter] public string Format { get; set; } = "money";
+    [Parameter] public bool Compact { get; set; }
+    private string Value => Measure is not null ? Measure.Amount is null ? "Unavailable" : Format switch
+    {
+        "money" => $"{Measure.Currency} {Measure.Amount.Value.ToString("N2", CultureInfo.InvariantCulture)}",
+        "ratio" => $"{Measure.Amount.Value.ToString("N2", CultureInfo.InvariantCulture)}×",
+        "months" => $"{Measure.Amount.Value.ToString("N1", CultureInfo.InvariantCulture)} months",
+        _ => Measure.Amount.Value.ToString("N2", CultureInfo.InvariantCulture)
+    } : Count?.Count?.ToString("N0", CultureInfo.InvariantCulture) ?? "Unavailable";
+    private string State => Measure?.State.ToString() ?? Count?.State.ToString() ?? "Unavailable";
+    private string? Explanation => Measure?.Explanation ?? Count?.Explanation;
+}

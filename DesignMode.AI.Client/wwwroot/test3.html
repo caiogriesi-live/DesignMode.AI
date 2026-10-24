@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>DesignMode — Selection Transition Mockup</title>
+<style>
+:root{--purple:#5b35f5;--purple2:#7c3cff;--ink:#090d2d;--muted:#66708f;--line:#e8eaf4;--bg:#fbfcff;--card:#fff;--shadow:0 24px 70px rgba(20,25,70,.12);--soft:0 14px 40px rgba(30,30,80,.08);}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button{font:inherit}.topbar{position:sticky;top:0;z-index:30;height:74px;background:rgba(255,255,255,.86);backdrop-filter:blur(18px);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 42px;gap:28px}.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px}.mark{width:33px;height:33px;border-radius:9px;background:linear-gradient(135deg,#41d4ff,#6b35ff 55%,#af39ff);display:grid;place-items:center;color:#fff;font-weight:900}.steps{margin:auto;display:flex;gap:28px;align-items:center;color:#23284a;font-size:13px;font-weight:700}.step{display:flex;align-items:center;gap:9px}.num{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#eef0f8;color:#626b86;font-size:12px}.step.active .num{background:var(--purple);color:#fff}.headerCta{display:flex;align-items:center;gap:14px}.miniValue{font-weight:750;font-size:14px;display:flex;gap:8px;align-items:center}.pillBtn,.primary{border:0;border-radius:11px;background:linear-gradient(135deg,var(--purple),#7b2cff);color:#fff;font-weight:800;cursor:pointer;box-shadow:0 10px 25px rgba(91,53,245,.22)}.pillBtn{padding:13px 20px}.ghost{border:1px solid var(--line);background:white;border-radius:10px;padding:11px 18px;font-weight:750;color:#11183c}
+.page{position:relative;min-height:calc(100vh - 74px);padding:38px 42px 70px}.screen{display:none}.screen.active{display:block}.selectWrap{max-width:1220px;margin:0 auto;text-align:center;padding-top:28px}.eyebrow{display:inline-flex;gap:9px;align-items:center;background:#f2efff;color:var(--purple);border-radius:999px;padding:11px 17px;font-weight:800;margin-bottom:20px}.selectWrap h1{font-size:42px;line-height:1.05;margin:0 0 12px}.selectWrap p{font-size:18px;color:var(--muted);margin:0 0 46px}.conceptGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}.concept{position:relative;background:white;border:1px solid var(--line);border-radius:22px;padding:14px 14px 24px;text-align:left;box-shadow:var(--soft);transition:transform .22s ease,box-shadow .22s ease,border .22s ease,opacity .22s ease;cursor:pointer}.concept:hover{transform:translateY(-4px);box-shadow:var(--shadow)}.concept.selected{border:2px solid var(--purple);box-shadow:0 28px 80px rgba(91,53,245,.22)}.concept img{width:100%;height:270px;object-fit:cover;border-radius:16px;display:block}.concept h3{font-size:22px;margin:18px 10px 8px}.concept p{font-size:14px;margin:0 10px;color:var(--muted);line-height:1.45}.selectBtn{margin:18px 10px 0;background:#e5e5e8;color:#111;border:0;border-radius:10px;padding:12px 22px;font-weight:800}.concept.selected .selectBtn{background:linear-gradient(135deg,var(--purple),#7740ff);color:#fff}.check{position:absolute;top:24px;right:24px;width:33px;height:33px;border-radius:50%;background:var(--purple);color:#fff;display:grid;place-items:center;font-weight:900;opacity:0}.concept.selected .check{opacity:1}.hint{margin-top:30px;color:#8991a8;font-size:14px}.unlockLayout{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:56px;align-items:start}.mainCol{max-width:1040px}.sideCol{position:sticky;top:102px}.sectionTitle{display:flex;gap:16px;align-items:flex-start;margin-bottom:26px}.badgeNum{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--purple);color:white;font-weight:900}.sectionTitle h2{font-size:28px;line-height:1.1;margin:0 0 8px}.sectionTitle p{margin:0;color:var(--muted);font-size:16px}.topValueBar{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:26px;padding:22px 26px;border-radius:18px;background:linear-gradient(135deg,#faf8ff,#f4efff);border:1px solid #ede8ff}.valueItems{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;flex:1}.valueItem{display:flex;gap:12px;align-items:center;font-weight:800;color:#1a2148}.valueIcon{width:38px;height:38px;border-radius:50%;background:white;color:var(--purple);display:grid;place-items:center;box-shadow:0 6px 20px rgba(91,53,245,.1)}.barPrice{font-size:27px;font-weight:900;white-space:nowrap}.barPrice span{font-size:13px;color:var(--muted);font-weight:600}.assetGrid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:24px}.asset{position:relative;background:white;border:1px solid var(--line);border-radius:15px;padding:14px;min-height:198px;box-shadow:0 8px 24px rgba(10,15,50,.04);transition:transform .18s ease}.asset:hover{transform:translateY(-3px)}.lock{position:absolute;top:13px;right:13px;width:22px;height:22px;border-radius:50%;background:#f5efff;color:var(--purple);font-size:12px;display:grid;place-items:center;font-weight:900}.asset img{height:78px;width:100%;object-fit:contain;filter:saturate(.92);opacity:.88;margin:16px 0 12px}.asset h3{font-size:14px;margin:0 0 9px}.asset p{font-size:13px;color:#313b6a;margin:0;line-height:1.45}.more{background:#f5f0ff;border-radius:14px;padding:18px 24px;display:flex;gap:14px;align-items:center;color:#2d315b;margin-bottom:30px;font-size:14px}.divider{height:1px;background:var(--line);margin:22px 0}.brandGrid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}.brandCard{background:white;border:1px solid var(--line);border-radius:15px;min-height:136px;padding:16px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:12px}.brandCard h4{margin:0;font-size:12px}.swatches{display:flex;gap:7px;justify-content:center}.sw{width:30px;height:30px;border-radius:6px}.bottomCta{margin-top:28px;padding:26px 30px;background:linear-gradient(135deg,#f6f2ff,#fff);border:1px solid #ece6ff;border-radius:18px;display:flex;align-items:center;justify-content:space-between;gap:24px}.bottomCta h2{margin:0 0 8px;font-size:25px}.bottomCta p{margin:0;color:var(--muted)}.stickyCard{background:white;border:1px solid var(--line);border-radius:24px;padding:24px;box-shadow:var(--shadow)}.selectedLine{color:var(--purple);font-weight:850;display:flex;align-items:center;gap:9px;font-size:14px;margin-bottom:18px}.stickyCard img.hero{width:100%;height:178px;object-fit:cover;border-radius:15px;display:block}.stickyCard h2{font-size:26px;line-height:1.05;margin:18px 0 8px}.stickyCard .desc{color:#303a66;line-height:1.5;margin:0 0 20px}.designer{display:flex;gap:13px;align-items:center;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:17px 0}.avatar{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#f1c7a0,#624237);position:relative;overflow:hidden}.avatar:after{content:'👩🏻';font-size:42px;position:absolute;left:7px;top:6px}.online{width:12px;height:12px;border-radius:50%;background:#16c76f;border:2px solid white;position:absolute;right:1px;bottom:3px}.designer b{display:block}.designer span{color:var(--muted);font-size:13px}.infoBox{background:#f4efff;border-radius:16px;padding:17px;margin:20px 0;display:flex;gap:13px}.infoBox strong{display:block;margin-bottom:5px}.infoBox p{margin:0;color:#39416f;font-size:14px;line-height:1.45}.price{font-size:36px;font-weight:900;margin:18px 0 2px}.price span{font-size:14px;color:var(--muted);font-weight:600}.bill{font-size:13px;color:var(--muted);margin-bottom:15px}.primary{width:100%;padding:16px 20px;font-size:16px}.safe{text-align:center;color:#778099;font-size:13px;margin-top:12px}.logos{border-top:1px solid var(--line);margin-top:22px;padding-top:22px;text-align:center;color:#9aa0b4;font-size:13px}.logosRow{margin-top:14px;display:flex;justify-content:space-between;color:#7d849a;font-weight:700}.transitionLayer{position:fixed;inset:74px 0 0;z-index:50;pointer-events:none;display:none}.transitionLayer.show{display:block}.clone{position:fixed;z-index:60;border-radius:16px;object-fit:cover;box-shadow:0 28px 80px rgba(91,53,245,.28);transition:all .55s cubic-bezier(.2,.85,.2,1)}.fadeOut{opacity:.16!important;transform:scale(.96)!important}.elevate{transform:scale(1.035)!important;box-shadow:0 36px 90px rgba(91,53,245,.28)!important}.reveal{animation:reveal .45s ease both}.reveal2{animation:reveal .55s .08s ease both}@keyframes reveal{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:1100px){.unlockLayout{grid-template-columns:1fr}.sideCol{position:relative;top:0}.assetGrid{grid-template-columns:repeat(3,1fr)}.brandGrid{grid-template-columns:repeat(3,1fr)}.headerCta{display:none}.steps{display:none}.conceptGrid{grid-template-columns:1fr}.topbar{padding:0 20px}.page{padding:24px 18px}.topValueBar,.bottomCta{flex-direction:column;align-items:stretch}.valueItems{grid-template-columns:1fr}.stickyCard img.hero{height:220px}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="logo"><div class="mark">D</div>DesignMode</div>
+  <nav class="steps"><div class="step"><span class="num">1</span>Brief</div><div class="step"><span class="num">2</span>Concepts</div><div class="step active"><span class="num">3</span>Select</div><div class="step"><span class="num">4</span>Customize</div><div class="step"><span class="num">5</span>Launch</div></nav>
+  <div class="headerCta"><div class="miniValue">✓ 12 Deliverables Included</div><button class="pillBtn" id="headerUnlock">🔒 Unlock Brand System</button></div>
+</header>
+<main class="page">
+  <section class="screen active" id="selectScreen">
+    <div class="selectWrap">
+      <div class="eyebrow">✨ Designer recommendations ready</div>
+      <h1>Choose a direction to get started</h1>
+      <p>Each concept is a unique starting point for your complete brand system.</p>
+      <div class="conceptGrid">
+        <article class="concept selected" data-select>
+          <div class="check">✓</div>
+          <img id="selectedImg" src="https://images.unsplash.com/photo-1615485290382-441e4d049cb5?q=80&w=1200&auto=format&fit=crop" alt="Playful product concept">
+          <h3>Playful & Illustration-Driven</h3><p>Fun, vibrant and full of character.</p><button class="selectBtn">Select Concept</button>
+        </article>
+        <article class="concept"><img src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=1200&auto=format&fit=crop" alt="Modern minimal"><h3>Modern & Minimal</h3><p>Clean, purposeful and timeless.</p><button class="selectBtn">Select Concept</button></article>
+        <article class="concept"><img src="https://images.unsplash.com/photo-1633356122544-f134324a6cee?q=80&w=1200&auto=format&fit=crop" alt="Bold editorial"><h3>Bold & Editorial</h3><p>Striking, high-impact and confident.</p><button class="selectBtn">Select Concept</button></article>
+      </div>
+      <div class="hint">🔒 You can change this later after unlocking.</div>
+    </div>
+  </section>
+
+  <section class="screen" id="unlockScreen">
+    <div class="unlockLayout">
+      <div class="mainCol reveal">
+        <div class="sectionTitle"><div class="badgeNum">1</div><div><h2>Unlock this direction to create ✨</h2><p>Turn your concept into every asset your brand needs.</p></div></div>
+        <div class="topValueBar">
+          <div class="valueItems"><div class="valueItem"><span class="valueIcon">✓</span>12 Deliverables Included</div><div class="valueItem"><span class="valueIcon">⬡</span>Complete Brand System</div><div class="valueItem"><span class="valueIcon">♙</span>Assigned Designer</div></div>
+          <button class="pillBtn">🔒 Unlock Brand System</button>
+        </div>
+        <div class="assetGrid">
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=600&auto=format&fit=crop"><h3>Websites</h3><p>Modern, responsive website concepts</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?q=80&w=600&auto=format&fit=crop"><h3>Social Posts</h3><p>On-brand content for every platform</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1607082350899-7e105aa886ae?q=80&w=600&auto=format&fit=crop"><h3>Packaging</h3><p>Labels & packaging that sell</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1611162616475-46b635cb6868?q=80&w=600&auto=format&fit=crop"><h3>Video Concepts</h3><p>Short form videos that engage</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop"><h3>Brand Identity</h3><p>Logos, colors, fonts, guidelines</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1557838923-2985c318be48?q=80&w=600&auto=format&fit=crop"><h3>Digital Marketing</h3><p>Campaigns, email & ad templates</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1586953208448-b95a79798f07?q=80&w=600&auto=format&fit=crop"><h3>Print Materials</h3><p>Brochures, flyers and more</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1505373877841-8d25f7d46678?q=80&w=600&auto=format&fit=crop"><h3>Event Branding</h3><p>Booth, signage, and event assets</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1523381294911-8d3cead13475?q=80&w=600&auto=format&fit=crop"><h3>Merchandise</h3><p>Branded merch and promo items</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?q=80&w=600&auto=format&fit=crop"><h3>E-commerce Assets</h3><p>Product pages, banners and visuals</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=600&auto=format&fit=crop"><h3>Presentation Decks</h3><p>Investor decks, pitch & sales</p></div>
+          <div class="asset"><span class="lock">🔒</span><img src="https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?q=80&w=600&auto=format&fit=crop"><h3>App & UI Design</h3><p>Branded interfaces and app experiences</p></div>
+        </div>
+        <div class="more">✨ <b>And much more!</b> From email templates and ads to icon sets and custom illustrations — your brand system covers every touchpoint.</div>
+        <div class="divider"></div>
+        <div class="sectionTitle"><div class="badgeNum">2</div><div><h2>Your Brand System</h2><p>Everything stays consistent. Everything is connected.</p></div></div>
+        <div class="brandGrid"><div class="brandCard"><h4>Logo</h4><div style="font-size:40px">🐻</div></div><div class="brandCard"><h4>Color Palette</h4><div class="swatches"><span class="sw" style="background:#075447"></span><span class="sw" style="background:#ff7b00"></span><span class="sw" style="background:#ffd56a"></span><span class="sw" style="background:#bfd0bf"></span></div></div><div class="brandCard"><h4>Typography</h4><div style="font-size:34px;font-weight:900">Aa</div></div><div class="brandCard"><h4>Illustration Style</h4><div style="font-size:44px">🧸</div></div><div class="brandCard"><h4>Photography Style</h4><img src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=400&auto=format&fit=crop" style="width:100%;height:58px;object-fit:cover;border-radius:9px"></div><div class="brandCard"><h4>Brand Voice</h4><p style="margin:0;color:#3a416c">Playful, friendly, optimistic.</p></div></div>
+        <div class="bottomCta"><div><h2>Ready to unlock your complete brand system?</h2><p>Turn this direction into a powerful brand experience.</p></div><div style="min-width:260px"><button class="pillBtn" style="width:100%">🔒 Unlock Brand System</button><div class="safe">Cancel anytime • 100% secure</div></div></div>
+      </div>
+      <aside class="sideCol reveal2">
+        <div class="stickyCard">
+          <div class="selectedLine">✓ You selected this direction</div>
+          <img class="hero" id="stickyHero" src="https://images.unsplash.com/photo-1615485290382-441e4d049cb5?q=80&w=1200&auto=format&fit=crop" alt="selected direction">
+          <p style="color:#58617f;margin:18px 0 6px">Selected Direction</p>
+          <h2>Playful &<br>Illustration-Driven</h2>
+          <p class="desc">A fun, memorable direction designed to stand out and connect.</p>
+          <div class="designer"><div class="avatar"><span class="online"></span></div><div><b>Sarah Johnson</b><span>Senior Brand Designer<br>Assigned to your project</span></div></div>
+          <div class="infoBox"><div class="valueIcon">✦</div><div><strong>Unlock your complete brand system</strong><p>Get 12+ deliverables, unlimited edits, and expert review from your designer.</p></div></div>
+          <div class="price">$49 <span>/month</span></div><div class="bill">Billed monthly</div><button class="primary">🔒 Unlock Brand System</button><div class="safe">Cancel anytime • 100% secure</div>
+          <div class="logos"><div>Trusted by founders and teams</div><div class="logosRow"><span>Vertika</span><span>Spherule</span><span>LUMEN</span><span>Cactus</span></div></div>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+<script>
+const selected = document.querySelector('[data-select]');
+const selectScreen = document.getElementById('selectScreen');
+const unlockScreen = document.getElementById('unlockScreen');
+let transitioning=false;
+selected.addEventListener('click',()=>{ if(transitioning) return; transitioning=true; const img=document.getElementById('selectedImg'); const rect=img.getBoundingClientRect(); selected.classList.add('elevate'); document.querySelectorAll('.concept:not(.selected)').forEach(c=>c.classList.add('fadeOut'));
+ const clone=img.cloneNode(); clone.className='clone'; clone.style.left=rect.left+'px'; clone.style.top=rect.top+'px'; clone.style.width=rect.width+'px'; clone.style.height=rect.height+'px'; document.body.appendChild(clone);
+ setTimeout(()=>{ selectScreen.classList.remove('active'); unlockScreen.classList.add('active'); window.scrollTo(0,0); const target=document.getElementById('stickyHero').getBoundingClientRect(); clone.style.left=target.left+'px'; clone.style.top=target.top+'px'; clone.style.width=target.width+'px'; clone.style.height=target.height+'px'; },180);
+ setTimeout(()=>{clone.remove(); transitioning=false;},780);
+});
+</script>
+</body>
+</html>

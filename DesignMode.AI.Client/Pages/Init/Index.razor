@@ -1,0 +1,23 @@
+﻿@page "/init/"
+@* @page "/"
+@using YourAppNamespace.Components *@
+
+<h3>Show Image Modal</h3>
+<button @onclick="ShowModal">Open Image Modal</button>
+
+<ImageModal IsVisible="@isModalVisible" ImageUrl="images/image1.jpg" OnClose="CloseModal" />
+
+@code {
+    private bool isModalVisible = false;
+
+    private void ShowModal()
+    {
+        isModalVisible = true;
+    }
+
+    private void CloseModal()
+    {
+        isModalVisible = false;
+    }
+}
+

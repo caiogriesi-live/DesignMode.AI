@@ -1,0 +1,763 @@
+@inherits DesignMode.AI.Client.Components.GenerationAwareComponent
+@using System.Collections.Generic
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.AspNetCore.Components.Authorization;
+@using System.Text.RegularExpressions;
+@if (IsBusy)
+{
+    <div class="modal-busy-overlay">
+        <div class="loader-container" style="
+    background-color: #fff;
+    width: 250px;
+    height: 250px;
+    opacity: 1;
+    border-radius: 10px;
+    box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.15);
+    padding-bottom: 7px;
+    ">
+            <div class="generating-text" style="
+    font-size: 20px;
+    ">
+                Generating Image
+            </div>
+            <dotlottie-player src="https://lottie.host/fef2cd20-1bdf-4bd1-b1e3-5b8479431618/HUaIdfX7EN.lottie" background="transparent" speed="1" style="width: 150px;height: 150px;" direction="1" playmode="normal" loop="" autoplay=""></dotlottie-player>
+        </div>
+    </div>
+    <!-- Lottie script -->
+    <script src="https://unpkg.com/@@dotlottie/player-component@latest/dist/dotlottie-player.mjs" type="module"></script>
+}
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="vertical-modal-wrapper" style="height: auto;min-height: fit-content;padding-bottom: 0px;width: 720px;padding-right: 41px;" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+
+            <div class="modal-scroll-content" style="margin-left: 0px; margin-right: 0px; overflow-y: auto;">
+                <div class="modal-header">
+                    <h2 style="font-size: 25px;">Generate New Image for Your @DeliverableName</h2>
+                </div>
+
+                <div class="style-options">
+                    <div class="style-option">
+                        <label class="checkbox-container">
+                            <input type="checkbox" checked="@KeepBrandStyle" @onchange="@((e) => KeepBrandStyle = (bool)e.Value)" />
+                            <span class="checkmark"></span>
+                            Keep brand style
+                        </label>
+                    </div>
+                    <div class="style-option">
+                        <label class="checkbox-container">
+                            <input type="checkbox" checked="@ExploreNewStyle" @onchange="@((e) => ExploreNewStyle = (bool)e.Value)" />
+                            <span class="checkmark"></span>
+                            Explore new style
+                        </label>
+                    </div>
+                </div>
+                <!-- === Brand Image Selection Section === -->
+                <div class="brand-image-section" style="    border: 2px solid #e6e7eb;
+    border-radius: 10px;
+    padding: 20px;">
+                    <h4 style="font-size: 1.15rem;">Brand Image <span style="color: #9ca3af; font-weight: normal;">(optional)</span></h4>
+                    <p class="brand-image-note" style="color: #000;font-size: 16px;font-weight:450;">Use a preloaded brand image or upload a new one to apply your brand style to the next generated image.</p>
+
+                    <div class="brand-image-actions" style="
+    margin-bottom: -4px;
+    ">
+                        <div class="preloaded-images">
+                            @if (PreloadedBrandImages?.Count > 0)
+                            {
+                                <div class="brand-image-list">
+                                    @foreach (var image in PreloadedBrandImages)
+                                    {
+                                        <img src="@image"
+                                             class="brand-thumb @(SelectedBrandImage == image ? "selected" : "")"
+                                             @onclick="@(() => SelectBrandImage(image))"
+                                             alt="Brand image" />
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="no-images-note" style="
+    padding-top: 8px;
+        ">
+                                    No preloaded images found.
+                                </div>
+                            }
+                        </div>
+
+                        <div class="upload-section" style="
+    margin-right: 9px;
+    ">
+                            <label class="upload-button" style="background-color:black;color:white;">
+                                <input type="file" accept="image/*" @onchange="UploadNewBrandImage" style="display:none;background-color:black;color:white;" />
+                                Upload Brand Image
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="prompt-input-section">
+                    <h4 style="font-size: 1.15rem;">Description <span style="color: #9ca3af; font-weight: normal;">(optional)</span></h4>
+                    <textarea class="prompt-textarea"
+                              placeholder="Describe what you want in your next image. You can include campaign goals, mood, or style details.  E.g., Create a bright, energetic image showcasing fitness and citrus vibes for a summer campaign."
+                              @bind="ImageDescription"
+                              rows="4"></textarea>
+                </div>
+
+                <div class="campaign-note">
+                    This image will be added to your current @DeliverableName set.
+                </div>
+
+                <div class="generate-button-section">
+                    <button class="generate-button" style="background-color: #244d88;" @onclick="GenerateImage">
+                        Generate Image
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; }
+    [Inject] private HttpClient Http { get; set; }
+
+    private bool IsBusy = false;
+
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public List<string> RunwareImageIds { get; set; } = new List<string>();
+    [Parameter] public List<string> SecondaryRunwareImageIds { get; set; } = new List<string>();
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ConceptImageWithIdeaDto> SelectedImages { get; set; }
+    [Parameter] public EventCallback<List<string>> OnImagesRemoved { get; set; }
+    [Parameter] public EventCallback<bool> OnConfirm { get; set; }
+    [Parameter] public string DeliverableName { get; set; } = "Social Media Campaign";
+    [Parameter] public List<string> PromptTexts { get; set; } = new List<string>();
+    [Parameter] public string PromptText { get; set; } = "";
+
+    // Form state
+    private string ImageDescription { get; set; } = "";
+    private string finalPrompt { get; set; } = "";
+    private bool KeepBrandStyle { get; set; } = true;
+    private bool ExploreNewStyle { get; set; } = false;
+
+    private List<string> PreloadedBrandImages { get; set; } = new(); // preloaded URLs
+    private string SelectedBrandImage { get; set; }
+
+    private void SelectBrandImage(string image)
+    {
+        SelectedBrandImage = image;
+    }
+
+    protected async override void OnParametersSet()
+    {
+        if (Show)
+        {
+            var deliverableName = DeliverableName;
+            var normalizedDeliverable = Normalize(deliverableName);
+
+            Console.WriteLine($"CreateNewImage modal opened for deliverable: {deliverableName}");
+
+            // Check single PromptText
+            if (!string.IsNullOrEmpty(PromptText))
+            {
+                var parts = PromptText.Split('|');
+                if (parts.Length > 5)
+                {
+                    var normalizedPart = Normalize(parts[5]);
+
+                    if (normalizedPart.Contains(normalizedDeliverable) ||
+                        normalizedDeliverable.Contains(normalizedPart))
+                    {
+                        finalPrompt = PromptText;
+                    }
+                }
+            }
+
+            // Check PromptTexts list
+            if (PromptTexts != null)
+            {
+                foreach (var prompt in PromptTexts)
+                {
+                    var parts = prompt.Split('|');
+                    if (parts.Length > 5)
+                    {
+                        var normalizedPart = Normalize(parts[5]);
+
+                        if (normalizedPart.Contains(normalizedDeliverable) ||
+                            normalizedDeliverable.Contains(normalizedPart))
+                        {
+                            finalPrompt = prompt;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            ImageDescription = "";
+            KeepBrandStyle = true;
+            ExploreNewStyle = false;
+        }
+    }
+
+    private string Normalize(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return string.Empty;
+
+        return Regex.Replace(input, @"[\s\-_\|]", "")
+                    .ToLowerInvariant()
+                    .Trim();
+    }
+
+    private string RunwareImageUrl { get; set; }
+
+    private RunwareResponse RunwareResult { get; set; }
+
+    private async Task<string> CallRunwareImageFunction(string positivePrompt, int width, int height, int numberResults)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/CallRunwareAPI?code=REDACTED_FOR_GROOMING";
+
+        var requestBody = new
+        {
+            positivePrompt = positivePrompt,
+            width = width,
+            height = height,
+            numberResults = numberResults
+        };
+
+        var response = await client.PostAsJsonAsync(functionUrl, requestBody);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadFromJsonAsync<RunwareResponse>();
+
+            if (result != null && result.Data != null)
+            {
+                var firstUrl = result.Data
+                    .Where(img => !string.IsNullOrWhiteSpace(img.ImageURL))
+                    .Select(img => img.ImageURL)
+                    .FirstOrDefault();
+
+                RunwareImageUrl = firstUrl;
+                RunwareResult = result;
+
+                Console.WriteLine($"Image URL: {RunwareImageUrl}");
+
+                return RunwareImageUrl ?? string.Empty;
+            }
+        }
+        else
+        {
+            Console.WriteLine($"Runware call failed: {response.StatusCode}");
+        }
+
+        return string.Empty;
+    }
+
+
+    private async Task UploadNewBrandImage(ChangeEventArgs e)
+    {
+        // Upload logic here
+    }
+
+    @code {
+        // Add this parameter to receive the callback
+        [Parameter]
+        public EventCallback<string> OnImageGenerated { get; set; } // or whatever data type you need
+
+        private async Task GenerateImage()
+        {
+            //IsBusy = true;
+            //StateHasChanged();
+
+            try
+            {
+                Console.WriteLine($"Generating image for deliverable: {DeliverableName}");
+                Console.WriteLine($"Generating image with description: {ImageDescription}");
+                Console.WriteLine($"Keep brand style: {KeepBrandStyle}");
+                Console.WriteLine($"Explore new style: {ExploreNewStyle}");
+
+                //var imageUrl = await CallRunwareImageFunction(finalPrompt, 896, 896, 1);
+
+                var final = finalPrompt + "$$$" + DeliverableName;
+
+                // Notify parent through the chain
+                if (OnImageGenerated.HasDelegate)
+                {
+                    IsBusy = false;
+                    await CloseModal();
+
+                    if (Show) return;
+                    await OnImageGenerated.InvokeAsync(final); // Pass whatever data you need
+                    StateHasChanged();
+                }
+
+                // Simulate API call
+                //await Task.Delay(1000);
+                //await CloseModal();
+
+                // Notify parent component (existing functionality)
+                if (OnConfirm.HasDelegate)
+                {
+                    await OnConfirm.InvokeAsync(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error generating image: {ex.Message}");
+            }
+            finally
+            {
+                IsBusy = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        if (GenerationGuard is null && (IsBusy)) return;
+        if (!await ConfirmGenerationCloseAsync()) return;
+
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+}
+
+<style>
+    /* === Modal Core === */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(5px);
+        background-color: rgba(0, 0, 0, 0.7);
+        animation: blurIn 0.3s ease-out forwards;
+        z-index: 1000;
+    }
+
+    .vertical-modal-wrapper {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 30px rgba(0,0,0,0.2);
+        animation: zoomFadeIn 0.3s ease-out forwards;
+        position: relative;
+        width: 100%;
+        max-width: 600px;
+        height: auto;
+        min-height: fit-content;
+        padding: 0;
+    }
+
+    .modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 32px;
+        height: 32px;
+        background: rgba(255,255,255,0.4);
+        border: none;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #000;
+        backdrop-filter: blur(6px);
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .modal-close:hover {
+            background: rgba(255,255,255,0.6);
+        }
+
+    .modal-scroll-content {
+        padding: 40px;
+        overflow-y: auto;
+        max-height: 80vh;
+    }
+
+    /* === Header Section === */
+    .modal-header {
+        text-align: left;
+        margin-bottom: 24px;
+    }
+
+        .modal-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 12px;
+            color: #111827;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .modal-header p {
+            color: #6b7280;
+            font-size: 1rem;
+            margin: 0;
+            line-height: 1.5;
+        }
+
+    /* === Prompt Example === */
+    .prompt-example {
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+    }
+
+    .example-text {
+        color: #64748b;
+        font-size: 0.95rem;
+        font-style: italic;
+        line-height: 1.4;
+    }
+
+    /* === Style Options === */
+    .style-options {
+        display: flex;
+        gap: 24px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+
+    .style-option {
+        display: flex;
+        align-items: center;
+    }
+
+    .checkbox-container {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        font-size: 0.95rem;
+        color: #374151;
+        gap: 8px;
+    }
+
+        .checkbox-container input[type="checkbox"] {
+            display: none;
+        }
+
+    .checkmark {
+        width: 18px;
+        height: 18px;
+        border: 2px solid #d1d5db;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+
+    .checkbox-container input[type="checkbox"]:checked + .checkmark {
+        background-color: #2563eb;
+        border-color: #2563eb;
+    }
+
+        .checkbox-container input[type="checkbox"]:checked + .checkmark::after {
+            content: "✓";
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+    /* === Prompt Input === */
+    .prompt-input-section {
+        margin-bottom: 20px;
+    }
+
+    .prompt-textarea {
+        width: 100%;
+        padding: 16px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 1rem;
+        line-height: 1.5;
+        resize: vertical;
+        min-height: 120px;
+        transition: border-color 0.2s ease;
+        font-family: inherit;
+    }
+
+        .prompt-textarea:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .prompt-textarea::placeholder {
+            color: #9ca3af;
+        }
+
+    /* === Campaign Note === */
+    .campaign-note {
+        text-align: center;
+        color: #6b7280;
+        font-size: 0.9rem;
+        margin-bottom: 24px;
+        padding: 12px;
+        background-color: #f9fafb;
+        border-radius: 6px;
+        border-left: 4px solid #244d88;
+    }
+
+    /* === Generate Button === */
+    .generate-button-section {
+        text-align: center;
+    }
+
+    .generate-button {
+        background-color: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 14px 32px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        min-width: 200px;
+    }
+
+        .generate-button:hover {
+            background-color: #1d4ed8;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .generate-button:active {
+            transform: translateY(0);
+        }
+
+        .generate-button:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+    /* === Animations === */
+    @@keyframes zoomFadeIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes blurIn {
+        0% {
+            backdrop-filter: blur(0px);
+            background-color: rgba(0,0,0,0);
+        }
+
+        100% {
+            backdrop-filter: blur(5px);
+            background-color: rgba(0,0,0,0.7);
+        }
+    }
+
+    /* === Loader === */
+    .modal-busy-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255,255,255,0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-radius: 12px;
+    }
+
+    .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #2563eb;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* === Responsive Design === */
+    @@media (max-width: 640px) {
+        .vertical-modal-wrapper {
+            margin: 20px;
+            max-width: calc(100vw - 40px);
+        }
+
+        .modal-scroll-content {
+            padding: 24px;
+        }
+
+        .modal-header h2 {
+            font-size: 1.5rem;
+        }
+
+        .style-options {
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .generate-button {
+            width: 100%;
+            min-width: auto;
+        }
+    }
+
+    .brand-image-section {
+        margin-bottom: 24px;
+    }
+
+    .brand-image-note {
+        color: #6b7280;
+        font-size: 0.9rem;
+        margin-bottom: 12px;
+    }
+
+    .brand-image-actions {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .brand-image-list {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        max-width: 100%;
+    }
+
+    .brand-thumb {
+        width: 64px;
+        height: 64px;
+        border-radius: 8px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        object-fit: cover;
+        transition: all 0.2s ease;
+    }
+
+        .brand-thumb:hover {
+            transform: scale(1.05);
+        }
+
+        .brand-thumb.selected {
+            border-color: #244d88;
+            box-shadow: 0 0 0 2px rgba(36,77,136,0.2);
+        }
+
+    .upload-button {
+        background-color: #f3f4f6;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+
+        .upload-button:hover {
+            background-color: #e5e7eb;
+        }
+
+    /* === Enhanced Loader Styles === */
+    .modal-busy-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(2px);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-radius: 12px;
+    }
+
+    .loader-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+    }
+
+    .generating-text {
+        font-family: 'SF Pro Display', sans-serif;
+        font-size: 18px;
+        font-weight: 600;
+        color: #1f2951;
+        text-align: center;
+        animation: pulse 2s infinite;
+    }
+
+    /* Disable button when loading */
+    .generate-button:disabled {
+        background-color: #9ca3af !important;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+        .generate-button:disabled:hover {
+            background-color: #9ca3af !important;
+            transform: none;
+        }
+
+    /* Pulse animation for text */
+    @@keyframes pulse {
+        0% {
+            opacity: 0.7;
+        }
+
+        50% {
+            opacity: 1;
+        }
+
+        100% {
+            opacity: 0.7;
+        }
+    }
+
+    /* Ensure modal content is disabled when busy */
+    .modal-scroll-content.busy {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+</style>

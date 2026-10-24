@@ -1,0 +1,25 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 800" width="1000" height="800">
+	<title>0504-24</title>
+	<defs>
+		<radialGradient id="g1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(-452.176,682.767,-682.767,-452.176,516.174,218.069)">
+			<stop offset="0" stop-color="#eaad3e"/>
+			<stop offset="1" stop-color="#d38531"/>
+		</radialGradient>
+		<radialGradient id="g2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(-60.46,371.745,-371.745,-60.46,622.003,219.637)">
+			<stop offset="0" stop-color="#d38531"/>
+			<stop offset="1" stop-color="#eac251"/>
+		</radialGradient>
+	</defs>
+	<style>
+		.s0 { fill: url(#g1) } 
+		.s1 { fill: url(#g2) } 
+	</style>
+	<g id="_Artboards_">
+	</g>
+	<g id="Layer 3">
+		<g id="&lt;Group&gt;">
+			<path id="&lt;Path&gt;" class="s0" d="m535.9 447c-61.6 32.8-79-29.1-79-29.1v-0.1c-12.9-28.7-23.1-72.8-52.8-85.7 15-5.8 25.6-20.4 25.6-37.4 0-22.2-17.9-40.1-40.1-40.1-22.2 0-40.1 17.9-40.1 40.1 0 16.4 9.8 30.5 23.9 36.7-54.6 20.5-106 146.3-127.1 157.9-23.7 13.1-34.3-25.3-34.3-25.3 40.9 171.5 121.7-83.4 164.2-83.4 39.2 0 42.5 71.9 80.1 119.3 19.9 25.1 51.7-11.3 79.9-52.5z"/>
+			<path id="&lt;Path&gt;" class="s1" d="m626.8 305.6c17.7-4.2 30.9-20.1 30.9-39.1 0-22.1-18-40.1-40.1-40.1-22.2 0-40.2 18-40.2 40.1 0 16.4 9.8 30.4 23.8 36.7-55.8 12.5-84.4 136.6-116.3 140.3-12.8 1.5-20.8-9.7-28-25.7v0.1c0 0 17.7 62.3 79.3 29.5 24.7-36.3 46.6-76.3 54.9-81.5 41.7-26.1 65.4 125 98.9 178.9 33.5 54 98 15.6 98 15.6-102.5 29.1-92.4-223-161.2-254.8z"/>
+		</g>
+	</g>
+</svg>

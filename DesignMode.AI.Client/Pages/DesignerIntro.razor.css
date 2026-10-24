@@ -1,0 +1,4 @@
+/* Match the Website intro to the Social card width. */
+#introContainer[data-website="true"] {
+    max-width: 780px;
+}

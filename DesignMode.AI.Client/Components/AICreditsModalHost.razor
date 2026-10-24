@@ -1,0 +1,12 @@
+@if (PageType == typeof(DesignMode.AI.Client.Pages.Dashboard) || PageType == typeof(DesignMode.AI.Client.Pages.Init.Gen))
+{
+    <AuthorizeView>
+        <Authorized>
+            <AICreditsExhaustedModal />
+        </Authorized>
+    </AuthorizeView>
+}
+
+@code {
+    [Parameter] public Type? PageType { get; set; }
+}

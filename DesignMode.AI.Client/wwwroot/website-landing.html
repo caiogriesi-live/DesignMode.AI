@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Explore Website Directions | DesignMode</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-width: 320px;
+        }
+
+        .dm-page {
+            min-height: 100vh;
+            background: radial-gradient(circle at 50% 20%, #f8f8fb 0%, #fff 45%, #f7f7f9 100%);
+            color: #0f172a;
+            font-family: Inter, "SF Pro Display", Arial, sans-serif;
+            padding: 14px 64px;
+            width: 100%;
+        }
+
+        .dm-hero {
+            display: grid;
+            grid-template-columns: 0.9fr 1.1fr;
+            align-items: start;
+            gap: 80px;
+            max-width: 1440px;
+            margin: 0 auto;
+            min-height: auto;
+            padding-top: 18px;
+        }
+
+        .dm-copy {
+            margin-top: 0;
+        }
+
+        .dm-brand-line {
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .dm-brand-symbol {
+            width: 20px;
+            height: 20px;
+            margin-top: -9px;
+            object-fit: contain;
+        }
+
+        .dm-brand-name {
+            margin-left: 4px;
+            font-family: "SF Pro Display", Arial, sans-serif;
+            font-weight: 650;
+            font-size: 24px;
+            color: #1f2951;
+        }
+
+        .dm-brand-mark {
+            width: 30px;
+            margin: 0 3px 3px;
+            vertical-align: middle;
+        }
+
+        .dm-copy h1 {
+            font-family: "SF Pro Display", "Lexend", Arial, sans-serif;
+            font-size: clamp(48px, 5vw, 74px);
+            line-height: 1.04;
+            letter-spacing: -0.055em;
+            margin: 20px 0 24px;
+            font-weight: 650;
+            color: #3c4764;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+        }
+
+            .dm-copy h1 span {
+                color: #5a55f4;
+            }
+
+        .dm-copy > p {
+            max-width: 560px;
+            color: #818898;
+            font-size: 24px;
+            line-height: 1.45;
+            font-weight: 650;
+            margin-bottom: 42px;
+        }
+
+        .dm-form {
+            max-width: 500px;
+            margin-top: -26px;
+        }
+
+            .dm-form label {
+                display: block;
+                font-weight: 800;
+                margin: 24px 0 9px;
+            }
+
+            .dm-form > input {
+                width: 100%;
+                height: 54px;
+                border: 1px solid #dde1ea;
+                border-radius: 9px;
+                padding: 0 18px;
+                font-size: 17px;
+                color: #000;
+                background: #fff;
+                outline: none;
+            }
+
+                .dm-form > input:focus {
+                    border-color: #5a55f4;
+                    box-shadow: 0 0 0 3px rgba(90, 85, 244, 0.1);
+                }
+
+        .industry-input {
+            width: 100%;
+            height: 54px;
+            border: 1px solid #dde1ea;
+            border-radius: 9px;
+            padding: 0 18px;
+            font-size: 17px;
+            color: #1f2951;
+            background: #fff;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+            .industry-input::placeholder {
+                color: #8b93a5;
+            }
+
+            .industry-input:hover {
+                border-color: #b0b8c9;
+            }
+
+            .industry-input:focus {
+                border-color: #5a55f4;
+                box-shadow: 0 0 0 3px rgba(90, 85, 244, 0.1);
+            }
+
+        .dm-form button[type="submit"] {
+            border: 0;
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #5a55f4, #bd38cf);
+            box-shadow: 0 12px 28px rgba(93, 72, 235, .25);
+            width: 100%;
+            margin-top: 28px;
+            height: 66px;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+            .dm-form button[type="submit"]:disabled {
+                opacity: 0.7;
+                cursor: not-allowed;
+            }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin .8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .dm-form small {
+            display: block;
+            margin-top: 28px;
+            color: #8b93a5;
+            font-size: 15px;
+        }
+
+        .industry-proof {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #9ca3af;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        .form-error {
+            min-height: 20px;
+            margin: 12px 0 0;
+            color: #b42318;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .dm-preview {
+            background: rgba(255,255,255,.82);
+            border: 1px solid #ececf1;
+            border-radius: 12px;
+            box-shadow: 0 22px 55px rgba(15,23,42,.09);
+            padding: 34px;
+            text-align: center;
+        }
+
+            .dm-preview h4 {
+                margin: 0 0 15px;
+                font-size: 17px;
+                font-weight: 850;
+            }
+
+        .dm-direction-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 34px;
+        }
+
+        .dm-card {
+            overflow: hidden;
+            border-radius: 10px;
+            border: 1px solid #e7e7ef;
+            background: #fff;
+            box-shadow: 0 10px 18px rgba(15,23,42,.08);
+        }
+
+            .dm-card.active {
+                border: 2px solid #6858f5;
+            }
+
+        .dm-card-image {
+            position: relative;
+            height: 278px;
+            padding: 34px 24px;
+            text-align: left;
+            overflow: hidden;
+        }
+
+            .dm-card-image p,
+            .dm-post p {
+                position: relative;
+                z-index: 2;
+                margin: 0;
+                font-family: Georgia, serif;
+                line-height: 1.15;
+            }
+
+        .minimal .dm-card-image {
+            background: linear-gradient(rgba(217,185,168,.25), rgba(242,223,210,.25)), url("assets/img/vase1-new-0722-102.png") center/cover no-repeat;
+        }
+
+        .bold .dm-card-image,
+        .dm-post {
+            background: url("assets/img/vase2-new-0722-102.png") center/cover no-repeat;
+        }
+
+        .editorial .dm-card-image {
+            background: url("assets/img/vase3-new-0722-102.png") center/cover no-repeat;
+        }
+
+        .dm-card footer {
+            height: 56px;
+            padding: 0 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+            .dm-card footer span {
+                width: 22px;
+                height: 22px;
+                border-radius: 50%;
+                border: 2px solid #9aa1b2;
+                display: grid;
+                place-items: center;
+                font-size: 12px;
+            }
+
+        .dm-card.active footer span {
+            background: #6257f6;
+            color: white;
+            border-color: #6257f6;
+        }
+
+        .dm-arrow {
+            color: #c5cad5;
+            margin: 3px 0;
+            font-size: 26px;
+        }
+
+        .dm-social-strip {
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 12px 28px rgba(15,23,42,.08);
+            padding: 20px 14px 24px;
+            display: grid;
+            grid-template-columns: 1.2fr .7fr .8fr .8fr;
+            gap: 12px;
+            align-items: end;
+        }
+
+        .dm-post,
+        .dm-phone {
+            height: 174px;
+            border-radius: 7px;
+            padding: 28px 18px;
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dm-phone {
+            height: 210px;
+            border: 6px solid #111;
+            border-radius: 22px;
+            background: url("assets/img/vase4.png") center/cover no-repeat;
+        }
+
+        .video span {
+            position: absolute;
+            right: 36px;
+            top: 61px;
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            color: white;
+            display: grid;
+            place-items: center;
+            font-size: 24px;
+        }
+
+        .dm-platforms {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 28px;
+            font-weight: 900;
+            font-size: 25px;
+        }
+
+        .float-icon {
+            position: absolute;
+            user-select: none;
+            pointer-events: none;
+        }
+
+            .float-icon:nth-child(1) {
+                top: 10%;
+                left: 12%;
+                font-size: 22px;
+            }
+
+            .float-icon:nth-child(2) {
+                top: 18%;
+                right: 8%;
+                font-size: 30px;
+                opacity: .8;
+            }
+
+            .float-icon:nth-child(3) {
+                top: 40%;
+                left: 20%;
+                font-size: 18px;
+            }
+
+            .float-icon:nth-child(4) {
+                bottom: 4%;
+                right: 5%;
+                font-size: 26px;
+            }
+
+            .float-icon:nth-child(5) {
+                top: 65%;
+                left: 8%;
+                font-size: 26px;
+            }
+
+            .float-icon:nth-child(6) {
+                top: 55%;
+                right: 25%;
+                font-size: 17px;
+                opacity: .6;
+            }
+
+        /* High-resolution desktop positioning */
+        @media (min-width: 1367px) {
+            .dm-page {
+                padding-top: 8px;
+            }
+
+            .dm-hero {
+                padding-top: 8px;
+            }
+
+            /* Move the logo, headline, description, and form slightly lower */
+            .dm-copy {
+                margin-top: 20px;
+            }
+        }
+
+        /* Standard desktop / laptop positioning */
+        @media (min-width: 1025px) and (max-width: 1366px) {
+            .dm-copy {
+                margin-top: 28px;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .dm-page {
+                padding: 24px;
+            }
+
+            .dm-hero {
+                grid-template-columns: 1fr;
+                gap: 48px;
+                padding-top: 0;
+            }
+
+            .dm-copy {
+                margin-top: 4px;
+            }
+
+            .dm-direction-row {
+                gap: 14px;
+            }
+
+            .dm-card-image {
+                height: 220px;
+                padding: 22px 16px;
+            }
+
+            .dm-social-strip {
+                grid-template-columns: repeat(2, minmax(0,1fr));
+            }
+
+            .video span {
+                top: 50%;
+                left: 50%;
+                right: auto;
+                transform: translate(-50%, -50%);
+            }
+        }
+
+        @media (max-width: 767px) {
+            .dm-direction-row {
+                grid-template-columns: repeat(3, minmax(0,1fr));
+                gap: 10px;
+            }
+
+            .dm-card-image {
+                height: 180px;
+                padding: 18px 12px;
+            }
+
+                .dm-card-image p {
+                    font-size: 16px !important;
+                }
+        }
+
+        @media (max-width: 520px) {
+            .dm-page {
+                padding: 18px;
+            }
+
+            .dm-copy h1 {
+                font-size: 43px;
+            }
+
+            .dm-copy > p {
+                font-size: 19px;
+            }
+
+            .dm-direction-row {
+                grid-template-columns: 1fr;
+            }
+
+            .dm-card-image {
+                height: 240px;
+            }
+
+            .dm-social-strip {
+                grid-template-columns: 1fr;
+            }
+
+            .dm-post, .dm-phone {
+                height: auto;
+                min-height: 170px;
+            }
+
+            .dm-phone {
+                min-height: 220px;
+            }
+        }
+    </style>
+<meta name="description" content="Explore three website concepts for your company. Choose a homepage direction, preview website motion, and unlock your design workspace.">
+<style>
+        .website-browser { min-height: 330px; padding: 20px; overflow: hidden; background: #f2eee6; color: #29251f; text-align: left; }
+        .website-browser > span { display: block; padding-bottom: 16px; border-bottom: 1px solid currentColor; font-size: 10px; letter-spacing: .1em; }
+        .website-browser h2 { font-size: clamp(20px, 2.2vw, 32px); line-height: 1.08; letter-spacing: -.05em; margin: 26px 0 16px; }
+        .bold .website-browser { background: #173e35; color: #ecf497; }
+        .editorial .website-browser { background: #e8daf1; color: #3c2849; }
+        .editorial h2 { font-family: Georgia, serif; font-weight: 400; }
+        .website-art { height: 100px; margin-bottom: 18px; border-radius: 70px 70px 8px 8px; background: radial-gradient(ellipse at 25% 25%, #efbf8c, #a76847 50%, #443c35); }
+        .art-two { border-radius: 50%; background: radial-gradient(circle at 25% 30%, #eefbd8, #a8b546 45%, #536837 70%); }
+        .art-three { border-radius: 6px; background: linear-gradient(120deg, #d99576, #efe6cb 48%, #b8a1c9 49%, #665078); }
+        .website-browser b { font-size: 10px; border-bottom: 1px solid; padding-bottom: 4px; }
+        .website-lines { height: 28px; margin-top: 18px; background: repeating-linear-gradient(0deg, transparent 0 7px, currentColor 7px 8px); opacity: .2; }
+        .website-system { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+        .website-system figure { margin: 0; overflow: hidden; background: #fff; border: 1px solid #e7e7ef; border-radius: 12px; box-shadow: 0 8px 20px #173e3510; }
+        .website-system img { display: block; width: 100%; height: auto; }
+        .website-system figcaption { padding: 12px 8px; color: #3c4764; font-size: 12px; font-weight: 700; }
+        .website-caption { font-size: 14px; line-height: 1.7; margin-top: 22px; color: #716a7d; }
+        .website-preview { min-width: 0; }
+        @media (max-width: 520px) { .website-system { grid-template-columns: 1fr; } .website-browser h2 { font-size: 32px; } }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+
+<body>
+    <div class="dm-page" id="page">
+        <main class="dm-hero">
+            <section class="dm-copy">
+                <div class="dm-brand-line">
+                    <img src="assets/img/logo-left.png" class="dm-brand-symbol" alt="Design Mode logo" />
+                    <span class="dm-brand-name">
+                        design<img src="images/logo-m3.svg" class="dm-brand-mark" alt="" />ode.ai
+                    </span>
+                </div>
+
+                <h1>
+                    Explore Website<br />
+                    Design Directions<span>.</span>
+                </h1>
+
+                <p>
+                    Discover designer-built creative directions and generate
+                    a distinctive website experience tailored to your brand.
+                </p>
+
+                <form class="dm-form" id="companyForm" novalidate>
+                    <label for="companyName">Company name</label>
+                    <input id="companyName" name="companyName" maxlength="200"
+                           placeholder="Enter your company name" autocomplete="organization" />
+
+                    <label for="industrySearch">Industry</label>
+                    <input id="industrySearch"
+                           class="industry-input"
+                           name="industry" maxlength="200"
+                           placeholder="e.g. Beauty, SaaS, Real Estate, Fitness"
+                           autocomplete="organization-title" />
+
+                    <button type="submit" id="submitButton">
+                        <span id="buttonText">See My Website Directions ➝</span>
+                    </button>
+
+                    <p class="form-error" id="formError" aria-live="polite"></p>
+
+                    <small>No credit card required</small>
+
+                    <div class="industry-proof">
+                        Trusted across Beauty • Fashion • Food • SaaS • Ecommerce
+                    </div>
+                </form>
+            </section>
+
+            <section class="dm-preview website-preview" aria-label="Example website design directions">
+                <div class="dm-direction-row">
+                    <article class="dm-card minimal"><div class="website-browser"><span>studio / home</span><h2>Space to<br>think bigger.</h2><div class="website-art art-one"></div><b>Discover our work ↗</b><div class="website-lines"></div></div><footer><b>Minimal</b><span></span></footer></article>
+                    <article class="dm-card active bold"><div class="website-browser"><span>form / studio</span><h2>Made for<br>what's next.</h2><div class="website-art art-two"></div><b>Explore the possibilities ↗</b><div class="website-lines"></div></div><footer><b>Immersive</b><span>✓</span></footer></article>
+                    <article class="dm-card editorial"><div class="website-browser"><span>atelier / collection</span><h2>Every detail.<br>A purpose.</h2><div class="website-art art-three"></div><b>Find your inspiration ↗</b><div class="website-lines"></div></div><footer><b>Editorial</b><span></span></footer></article>
+                </div>
+                <div class="dm-arrow">↓</div><h4>One direction. A cohesive website.</h4>
+                <div class="website-system">
+                    <figure><img src="assets/img/website-homepage.svg" width="480" height="400" alt="Desktop homepage with botanical hero, navigation and content sections" /><figcaption>Desktop homepage</figcaption></figure>
+                    <figure><img src="assets/img/website-mobile.svg" width="480" height="400" alt="Matching responsive website shown on a mobile phone" /><figcaption>Mobile experience</figcaption></figure>
+                    <figure><img src="assets/img/website-system.svg" width="480" height="400" alt="Matching website typography, color palette, buttons and form components" /><figcaption>Website design system</figcaption></figure>
+                </div>
+                <p class="website-caption">Choose your concept. Preview it in motion. Unlock your website workspace.</p>
+            </section>
+        </main>
+    </div>
+
+    <script src="/js/designmode-attribution.js"></script>
+    <script src="/js/designmode-analytics.js"></script>
+    <script>
+        "use strict";
+
+        // Register the static route with the same canonical tracker used by Blazor.
+        // The wrapper queues this request until GA4 is ready and deduplicates it.
+        window.designModeAnalytics.page(window.location.href);
+
+        /*
+          Set this to the same value as ApiConfig.ApiBaseUrl in the Blazor app.
+          Example: "https://example.azurewebsites.net/"
+          Leave blank to skip the API request while preserving localStorage and redirect behavior.
+        */
+
+        let API_BASE_URL;
+
+        if (
+            window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1"
+        ) {
+            API_BASE_URL = "http://localhost:7032/";
+        } else {
+            API_BASE_URL = "https://designmodeaiserver20250401080115.azurewebsites.net/";
+        }
+
+        try { window.designModePrivacy?.initialize(API_BASE_URL)?.catch(() => {}); } catch { /* Preferences must not block the funnel. */ }
+        window.designModeAttribution.markFunnelComplete();
+        const acquisitionCapture = window.designModeAttribution.capture(API_BASE_URL, "website-funnel")
+            .catch(error => {
+                console.error("[ATTRIBUTION] initialization failed", error);
+                throw error;
+            });
+
+        const companyForm = document.getElementById("companyForm");
+        const companyNameInput = document.getElementById("companyName");
+        const industryInput = document.getElementById("industrySearch");
+        const submitButton = document.getElementById("submitButton");
+        const buttonText = document.getElementById("buttonText");
+        const formError = document.getElementById("formError");
+
+        let isLoading = false;
+
+        companyNameInput.addEventListener("input", () => {
+            if (companyNameInput.value.trim()) window.designModeAnalytics?.once("social_form_start", { landing_page_id: "website" });
+            formError.textContent = "";
+        });
+
+        industryInput.addEventListener("input", () => {
+            if (industryInput.value.trim()) window.designModeAnalytics?.once("social_form_start", { landing_page_id: "website" });
+            formError.textContent = "";
+        });
+
+        function generateAnonymousUserId() {
+            if (window.crypto && typeof window.crypto.randomUUID === "function") {
+                return window.crypto.randomUUID().replaceAll("-", "");
+            }
+
+            const bytes = new Uint8Array(16);
+            window.crypto.getRandomValues(bytes);
+            return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+        }
+
+        function setLoading(loading) {
+            isLoading = loading;
+            submitButton.disabled = loading;
+            buttonText.textContent = loading ? "Loading..." : "See My Website Directions →";
+
+            const existingSpinner = submitButton.querySelector(".spinner");
+            if (loading && !existingSpinner) {
+                const spinner = document.createElement("span");
+                spinner.className = "spinner";
+                submitButton.insertBefore(spinner, buttonText);
+            } else if (!loading && existingSpinner) {
+                existingSpinner.remove();
+            }
+        }
+
+        companyForm.addEventListener("submit", async event => {
+            event.preventDefault();
+            if (isLoading) return;
+
+            const companyName = companyNameInput.value.trim();
+            const industry = industryInput.value.trim();
+
+            if (!companyName || !industry) {
+                formError.textContent = "Enter both a company name and an industry.";
+                return;
+            }
+
+            formError.textContent = "";
+            setLoading(true);
+
+            try {
+                const anonymousUserKey = "dm_anonymous_user_id";
+                let anonymousUserId = localStorage.getItem(anonymousUserKey);
+                if (!anonymousUserId) {
+                    anonymousUserId = generateAnonymousUserId();
+                    localStorage.setItem(anonymousUserKey, anonymousUserId);
+                }
+
+                const pendingCompany = {
+                    Name: companyName,
+                    Industry: industry,
+                    UserId: anonymousUserId,
+                    Local: anonymousUserId
+                };
+
+                localStorage.setItem(
+                    "unsaved_company_industry",
+                    JSON.stringify(pendingCompany)
+                );
+
+                const savedCompany = await fetch(API_BASE_URL + "api/SaveWebsiteCompany", {
+                    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pendingCompany)
+                });
+                if (!savedCompany.ok) throw new Error("Company details could not be saved.");
+                const saved = await savedCompany.json();
+                const companyIndustryId = saved.companyId ?? saved.CompanyId;
+                if (!companyIndustryId) throw new Error("The saved company ID is missing.");
+                await acquisitionCapture;
+                const project = await window.designModeAttribution.createSocialProject(API_BASE_URL);
+                window.designModeAnalytics?.track("company_profile_saved", { funnel_stage: "landing" });
+                window.designModeAnalytics?.track("funnel_start", { funnel_stage: "landing", auth_state: "anonymous" });
+
+                const query = new URLSearchParams(window.location.search);
+                Object.entries({
+                    name: companyName,
+                    industry,
+                    type: "website",
+                    companyIndustryId,
+                    funnelId: project.funnelId,
+                    projectId: project.projectId,
+                    landing_variant: "website-funnel"
+                }).forEach(([key, value]) => query.set(key, value));
+
+                console.info("[ATTRIBUTION] navigation starting");
+                window.location.replace(`/designerintrowebsite?${query.toString()}`);
+            } catch (error) {
+                console.error(error);
+                formError.textContent =
+                    "Your details could not be saved. Check the API URL and try again.";
+                setLoading(false);
+            }
+        });
+    </script>
+    <style>
+        @font-face {
+            font-family: "SF Pro Display";
+            font-style: normal;
+            font-weight: 500;
+            src: url("https://raw.githubusercontent.com/blaisck/sfwin/master/SFPro/TrueType/SFProDisplay-Medium.ttf");
+        }
+
+        @font-face {
+            font-family: "SF Pro Display";
+            font-style: normal;
+            font-weight: 600;
+            src: url("https://raw.githubusercontent.com/blaisck/sfwin/master/SFPro/TrueType/SFProDisplay-SemiBold.ttf");
+        }
+    </style>
+    <iframe id="blazor-preload"
+            style="
+            position:absolute;
+            width:1px;
+            height:1px;
+            border:0;
+            left:-9999px;
+            top:-9999px;
+            visibility:hidden;
+        "
+            aria-hidden="true"
+            tabindex="-1">
+    </iframe>
+
+    <script>
+        const iframe = document.getElementById("blazor-preload");
+
+        const isLocalhost =
+            window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1";
+
+        iframe.src = isLocalhost
+            ? "https://localhost:7178/warmup" // change to your local path
+            : "https://designmode.ai/warmup";
+    </script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+@using System.Globalization
+@using DesignMode.AI.Shared.Models.MarketingReporting
+<article class="chart-panel">
+    <h2 class="chart-title">@Title</h2><p class="chart-subtitle">@Subtitle</p>
+    @if (SeriesA.Count == 0)
+    {
+        <div class="chart-empty">No supported values in this date range.<br />Unavailable days are not filled with estimates.</div>
+    }
+    else
+    {
+        @if (Mode == "money") { <div class="chart-legend"><span><i class="legend-key"></i>Spend</span><span><i class="legend-key revenue"></i>Google-attributed revenue</span></div> }
+        else if (Mode == "customers") { <div class="chart-legend"><span><i class="legend-key customer"></i>New customers</span></div> }
+        else { <div class="chart-legend"><span><i class="legend-key"></i>Daily ROAS</span></div> }
+        <svg class="chart-svg" viewBox="0 0 600 180" role="img" aria-label="@Title chart for @SeriesA.Count observed dates">
+            <line class="chart-gridline" x1="0" y1="30" x2="600" y2="30" /><line class="chart-gridline" x1="0" y1="90" x2="600" y2="90" /><line class="chart-gridline" x1="0" y1="150" x2="600" y2="150" />
+            <polyline class="chart-line" points="@Coordinates(SeriesA)" />
+            @if (Mode == "money" && SeriesB.Count > 0) { <polyline class="chart-line secondary" points="@Coordinates(SeriesB)" /> }
+            @foreach (var point in PlottedA) { <circle cx="@X(point.Index)" cy="@Y(point.Value, MaxA)" r="3.5" class="chart-dot" /> }
+        </svg>
+        <div class="chart-dates"><span>@Points.FirstOrDefault()?.Date.ToString("MMM d", CultureInfo.InvariantCulture)</span><span>Observed reporting dates</span><span>@Points.LastOrDefault()?.Date.ToString("MMM d", CultureInfo.InvariantCulture)</span></div>
+    }
+</article>
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Subtitle { get; set; } = "";
+    [Parameter] public IReadOnlyList<MarketingDashboardPoint> Points { get; set; } = Array.Empty<MarketingDashboardPoint>();
+    [Parameter] public string Mode { get; set; } = "money";
+    private List<(int Index, decimal Value)> SeriesA => Mode switch
+    {
+        "money" => Points.Select((p, i) => (i, p.SpendUsd)).Where(x => x.Item2 is not null).Select(x => (x.i, x.Item2!.Value)).ToList(),
+        "customers" => Points.Select((p, i) => (i, p.NewCustomers)).Where(x => x.Item2 is not null).Select(x => (x.i, (decimal)x.Item2!.Value)).ToList(),
+        "roas" => Points.Select((p, i) => (i, p.Roas)).Where(x => x.Item2 is not null).Select(x => (x.i, x.Item2!.Value)).ToList(),
+        _ => []
+    };
+    private List<(int Index, decimal Value)> SeriesB => Mode == "money"
+        ? Points.Select((p, i) => (i, p.RevenueUsd)).Where(x => x.Item2 is not null).Select(x => (x.i, x.Item2!.Value)).ToList() : [];
+    private List<(int Index, decimal Value)> PlottedA => SeriesA;
+    private decimal MaxA => Math.Max(SeriesA.Select(x => x.Value).DefaultIfEmpty(0).Max(), SeriesB.Select(x => x.Value).DefaultIfEmpty(0).Max());
+    private string Coordinates(List<(int Index, decimal Value)> values) => string.Join(" ", values.Select(p => $"{X(p.Index)},{Y(p.Value, MaxA)}"));
+    private string X(int index) => (Points.Count <= 1 ? 300 : 20 + 560d * index / (Points.Count - 1)).ToString("0.0", CultureInfo.InvariantCulture);
+    private string Y(decimal value, decimal max) => (max <= 0 ? 150 : 150 - 120 * (double)(value / max)).ToString("0.0", CultureInfo.InvariantCulture);
+}

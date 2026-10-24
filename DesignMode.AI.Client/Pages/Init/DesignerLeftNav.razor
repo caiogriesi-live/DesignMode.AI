@@ -1,0 +1,87 @@
+﻿<div class="sidebar-nav @(IsMobileMenuOpen ? "mobile-visible" : "")">
+    <button class="d-lg-none mobile-close-btn" @onclick="OnToggleMobileMenu">
+        ✕
+    </button>
+
+    <div class="d-none d-lg-flex align-items-center gap-2 mb-4 logo-wrap">
+        <span class="logo-icon">D</span>
+        <span class="logo-text">
+            design<span style="color:#ff9f1c;">⚡</span>ode
+        </span>
+    </div>
+
+    <div class="nav-list">
+        @foreach (var item in PrimaryItems)
+        {
+            <NavLink class="nav-item"
+                     href="@item.Url"
+                     Match="NavLinkMatch.Prefix"
+                     @onclick="OnNavigate">
+                <span class="nav-icon">@item.Icon</span>
+                <span class="nav-label">@item.Label</span>
+            </NavLink>
+        }
+
+        <div class="nav-section">
+            @foreach (var item in SecondaryItems)
+            {
+                <NavLink class="nav-item"
+                         href="@item.Url"
+                         Match="NavLinkMatch.Prefix"
+                         @onclick="OnNavigate">
+                    <span class="nav-icon">@item.Icon</span>
+                    <span class="nav-label">@item.Label</span>
+                </NavLink>
+            }
+        </div>
+    </div>
+
+    <div class="profile-box">
+        <div class="profile-row">
+            <div class="profile-text">
+                <div class="profile-name">@UserName</div>
+                <div class="profile-role">@UserRole</div>
+            </div>
+            <span class="online-dot"></span>
+        </div>
+
+        <div class="credits-pill">
+            <span class="credits-dot"></span>
+            <DesignMode.AI.Client.Components.AIUsageMeter ShowPurchaseAction="false" />
+            <span class="credits-bolt">⚡</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool IsMobileMenuOpen { get; set; }
+    [Parameter] public EventCallback OnToggleMobileMenu { get; set; }
+
+    [Parameter] public string UserName { get; set; } = "Sarah Chen";
+    [Parameter] public string UserRole { get; set; } = "Design lead";
+
+    private async Task OnNavigate()
+    {
+        if (IsMobileMenuOpen)
+        {
+            await OnToggleMobileMenu.InvokeAsync();
+        }
+    }
+
+    private readonly List<NavItem> PrimaryItems =
+    [
+        new("📋", "Dashboard", "/init/designerdashboard"),
+    new("👜", "Projects", "/init/projects"),
+    new("👥", "Clients", "/init/clients"),
+    new("💰", "Earnings", "/init/earnings"),
+    new("💡", "Resources", "/init/resources")
+    ];
+
+    private readonly List<NavItem> SecondaryItems =
+    [
+        new("⚙️", "Settings", "/init/settings"),
+    new("🆘", "Support", "/init/support")
+    ];
+
+    private record NavItem(string Icon, string Label, string Url);
+}

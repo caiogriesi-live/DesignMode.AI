@@ -1,0 +1,84 @@
+@page "/pipeline-validation"
+
+<main class="pipeline-validation" data-testid="pipeline-validation-page">
+    <section class="pipeline-validation__panel" aria-labelledby="pipeline-validation-heading">
+        <h1 id="pipeline-validation-heading" data-testid="pipeline-validation-heading">
+            Pipeline Validation
+        </h1>
+
+        <p class="pipeline-validation__count" aria-live="polite">
+            Current count: <span data-testid="pipeline-validation-count">@count</span>
+        </p>
+
+        <button class="pipeline-validation__button"
+                type="button"
+                data-testid="pipeline-validation-increment"
+                @onclick="IncrementCount">
+            Increment count
+        </button>
+    </section>
+</main>
+
+<style>
+    .pipeline-validation {
+        box-sizing: border-box;
+        display: grid;
+        min-height: 100vh;
+        padding: clamp(1rem, 4vw, 3rem);
+        place-items: start center;
+        width: 100%;
+    }
+
+    .pipeline-validation *,
+    .pipeline-validation *::before,
+    .pipeline-validation *::after {
+        box-sizing: border-box;
+    }
+
+    .pipeline-validation__panel {
+        background: #fff;
+        border: 1px solid #e6e8ef;
+        border-radius: 0.75rem;
+        box-shadow: 0 0.5rem 1.5rem rgb(30 41 59 / 8%);
+        max-width: 36rem;
+        padding: clamp(1.25rem, 5vw, 2rem);
+        width: 100%;
+    }
+
+    .pipeline-validation__panel h1 {
+        font-size: clamp(1.5rem, 5vw, 2rem);
+        margin: 0 0 1.5rem;
+        overflow-wrap: anywhere;
+    }
+
+    .pipeline-validation__count {
+        font-size: 1.125rem;
+        margin: 0 0 1.5rem;
+    }
+
+    .pipeline-validation__button {
+        background: #5e72e4;
+        border: 0;
+        border-radius: 0.375rem;
+        color: #fff;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+        min-height: 2.75rem;
+        padding: 0.625rem 1rem;
+    }
+
+    .pipeline-validation__button:focus-visible {
+        outline: 3px solid #1d4ed8;
+        outline-offset: 3px;
+    }
+</style>
+
+@code {
+    private int count;
+
+    private void IncrementCount()
+    {
+        count++;
+    }
+}

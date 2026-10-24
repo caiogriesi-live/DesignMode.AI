@@ -1,0 +1,1406 @@
+@page "/signup"
+@using System.ComponentModel.DataAnnotations
+@using DesignMode.AI.Shared.Security
+@using DesignMode.AI.Client.Services
+@using DesignMode.AI.Shared.Util
+@using System.Text
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject PostAuthNavigationService PostAuthNavigation
+@inject SavePending SavePending
+@inject ApiConfigService ApiConfig
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+
+<link href="assets/css/brief-landing.css" rel="stylesheet" />
+
+<!--
+    Google Identity Services.
+    Keep this Client ID in sync with the working Google auth used elsewhere
+    in the app. This must be an OAuth 2.0 "Web application" Client ID, and
+    every deployed origin must be listed in Authorized JavaScript origins.
+-->
+<meta name="google-signin-client_id"
+      content="920601965266-dio1oduk6jek0jnlti1t8nbgsnb5a7g9.apps.googleusercontent.com" />
+
+<div class="signup-page">
+    <div class="signup-background">
+
+        <!-- Logo above the card -->
+        <button type="button"
+                class="signup-logo-button"
+                disabled="@isProcessing"
+                @onclick="GoToHome"
+                aria-label="Go to home">
+            <img src="assets/img/logo-left.png"
+                 class="signup-logo-left"
+                 alt="DesignMode logo" />
+
+            <span class="signup-logo-wordmark">
+                design<span class="signup-logo-accent">
+                    <img src="images/logo-m3.svg"
+                         class="signup-logo-m3"
+                         alt="" />
+                </span>ode.ai
+            </span>
+        </button>
+
+        <!-- Sign Up card -->
+        <div class="signup-card">
+
+            <h1 class="signup-title" tabindex="-1">
+                Sign up
+            </h1>
+
+            <p class="signup-subtitle">
+                Create your account to transform ideas into designs and connect with creators.
+            </p>
+
+            <!-- Google is intentionally first, matching the account modal -->
+            <div class="signup-google-wrap @(isProcessing ? "is-disabled" : "")">
+                <div id="signupGoogleButton"
+                     class="signup-google-button"
+                     aria-label="Continue with Google">
+                </div>
+            </div>
+
+            <div class="signup-divider" aria-hidden="true">
+                <hr />
+                <span>OR</span>
+                <hr />
+            </div>
+
+            <!-- Standard account creation -->
+            <div class="signup-form">
+
+                <input @bind="email"
+                       type="email"
+                       name="email"
+                       autocomplete="username"
+                       placeholder="Email address"
+                       disabled="@isProcessing"
+                       class="signup-input" />
+
+                @if (!string.IsNullOrEmpty(email) && !IsValidEmail(email) && !isProcessing)
+                {
+                    <div class="signup-field-error">
+                        Please enter a valid email address
+                    </div>
+                }
+
+                <input @bind="phoneNumber"
+                       type="tel"
+                       name="phone"
+                       autocomplete="tel"
+                       placeholder="Phone number (optional)"
+                       disabled="@isProcessing"
+                       class="signup-input" />
+
+                <input @bind="password"
+                       type="password"
+                       name="password"
+                       autocomplete="new-password"
+                       placeholder="Password"
+                       disabled="@isProcessing"
+                       class="signup-input" />
+
+                <input @bind="confirmPassword"
+                       type="password"
+                       name="confirm-password"
+                       autocomplete="new-password"
+                       placeholder="Confirm Password"
+                       disabled="@isProcessing"
+                       class="signup-input" />
+
+
+                @if (errorMessage is not null)
+                {
+                    <p class="signup-message signup-message-error">
+                        @errorMessage
+                    </p>
+                }
+
+                @if (successMessage is not null)
+                {
+                    <p class="signup-message signup-message-success">
+                        @successMessage
+                    </p>
+                }
+
+                <button @onclick="HandleSignup"
+                        disabled="@isProcessing"
+                        class="signup-primary-button">
+                    @if (isProcessing && !isGoogleProcessing)
+                    {
+                        <span>Signing up...</span>
+                    }
+                    else
+                    {
+                        <span>Sign up</span>
+                    }
+                </button>
+
+                <!-- Login link -->
+                <div class="signup-login-row">
+                    <span>Already have an account?</span>
+                    <a href="@PostAuthNavigation.AuthenticationLink("/login")"
+                       class="signup-link @(isProcessing ? "disabled-link" : "")">
+                        Log in
+                    </a>
+                </div>
+
+                <!-- Legal copy also covers the Google path -->
+                <div class="signup-legal">
+                    By continuing with Google or creating an account, you agree to our
+                    <a href="/terms.html"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="signup-link">
+                        Terms
+                    </a>
+                    and
+                    <a href="/privacy.html"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="signup-link">
+                        Privacy Policy
+                    </a>.
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    html,
+    body,
+    #app {
+        margin: 0;
+        min-height: 100%;
+    }
+
+    .signup-page {
+        width: 100%;
+        min-height: 100vh;
+        overflow-x: hidden;
+        overflow-y: auto;
+        background: #f2f3f8;
+    }
+
+    .signup-background {
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 25px 18px 48px;
+        background: url('images/header-bg.png') center calc(100% + 350px) / cover no-repeat, linear-gradient(180deg, #ffffff 2%, #CDE8EE 60%);
+        animation: signupFadeIn 0.8s ease forwards;
+    }
+
+    @@keyframes signupFadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    .signup-logo-button {
+        border: 0;
+        padding: 0;
+        margin: 0 0 20px;
+        background: transparent;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+        .signup-logo-button:disabled {
+            cursor: default;
+            opacity: 0.65;
+        }
+
+    .signup-logo-left {
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
+        margin-top: -9px;
+    }
+
+    .signup-logo-wordmark {
+        font-family: 'SF Pro Display', 'Arial', sans-serif;
+        font-weight: 650;
+        font-size: 24px;
+        color: #1f2951;
+        text-transform: none;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .signup-logo-accent {
+        color: #ffa900;
+        font-weight: 650;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .signup-logo-m3 {
+        width: 30px;
+        margin-left: 3px;
+        margin-right: 3px;
+        margin-bottom: 3px;
+        display: block;
+    }
+
+    .signup-card {
+        width: min(100%, 430px);
+        background: rgba(255, 255, 255, 0.97);
+        padding: 40px;
+        border-radius: 24px;
+        box-shadow: 0 22px 50px rgba(0, 0, 0, 0.12), 0 4px 20px rgba(0, 0, 0, 0.08);
+        text-align: center;
+        overflow: hidden;
+    }
+
+    .signup-title {
+        margin: 0 0 10px;
+        color: #1f2951;
+        font-size: 28px;
+        line-height: 1.15;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+    }
+
+    .signup-subtitle {
+        max-width: 340px;
+        margin: 0 auto 22px;
+        color: #5d5d5d;
+        font-size: 16px;
+        line-height: 1.5;
+        font-weight: 400;
+    }
+
+    .signup-google-wrap {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        transition: opacity 0.2s ease;
+    }
+
+        .signup-google-wrap.is-disabled {
+            opacity: 0.55;
+            pointer-events: none;
+        }
+
+    .signup-google-button {
+        width: 100%;
+        max-width: 400px;
+        min-width: 0;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+        /*
+                Google Identity Services renders an iframe at the exact pixel width
+                passed to renderButton(). Do not stretch the iframe after rendering;
+                doing so can clip the right side on narrow mobile screens.
+            */
+        .signup-google-button > div {
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin: 0 auto !important;
+        }
+
+        .signup-google-button iframe {
+            display: block !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+        }
+
+    .signup-divider {
+        width: 100%;
+        margin: 14px 0;
+        display: flex;
+        align-items: center;
+        text-align: center;
+    }
+
+        .signup-divider hr {
+            flex: 1;
+            border: 0;
+            border-top: 1px solid #ddd;
+            margin: 0;
+        }
+
+        .signup-divider span {
+            margin: 0 11px;
+            color: #999;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+    .signup-form {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .signup-input {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 11px 16px 12px 22px;
+        border: 1px solid #ccc;
+        border-radius: 25px;
+        outline: none;
+        background: #fff;
+        color: #1c1c1e;
+        font-family: inherit;
+        font-size: 16px;
+        line-height: 1.25;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+
+        .signup-input:focus {
+            border-color: #244d88;
+            box-shadow: 0 0 0 4px rgba(36, 77, 136, 0.12);
+        }
+
+        .signup-input::placeholder {
+            color: #9aa3b0;
+        }
+
+        .signup-input:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+
+    .signup-field-error {
+        margin: -5px 0 0;
+        padding-left: 15px;
+        color: #dc3545;
+        font-size: 12px;
+        line-height: 1.35;
+        text-align: left;
+    }
+
+    .signup-link {
+        color: #244d88;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+        .signup-link:hover {
+            text-decoration: underline;
+        }
+
+        .signup-link.disabled-link {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+    .signup-message {
+        margin: 2px 0 0;
+        font-size: 14px;
+        line-height: 1.4;
+        text-align: center;
+    }
+
+    .signup-message-error {
+        color: #dc3545;
+    }
+
+    .signup-message-success {
+        color: #218838;
+    }
+
+    .signup-primary-button {
+        width: 100%;
+        border: 0;
+        border-radius: 25px;
+        margin-top: 3px;
+        padding: 12px 16px;
+        background: #244d88;
+        color: #fff;
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 7px 18px rgba(36, 77, 136, 0.23);
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+    }
+
+        .signup-primary-button:hover:not(:disabled) {
+            background: #1d3f70;
+            transform: translateY(-1px);
+            box-shadow: 0 10px 22px rgba(36, 77, 136, 0.27);
+        }
+
+        .signup-primary-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+    .signup-login-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        width: 100%;
+        margin-top: 2px;
+        color: #666;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    .signup-legal {
+        margin-top: 2px;
+        color: #777;
+        font-size: 11px;
+        line-height: 1.5;
+    }
+
+    @@media (max-width: 500px) {
+        .signup-background {
+            padding: 20px 14px 34px;
+        }
+
+        .signup-logo-button {
+            margin-bottom: 16px;
+        }
+
+        .signup-card {
+            width: 100%;
+            max-width: 100%;
+            padding: 30px 22px 27px;
+            border-radius: 26px;
+        }
+
+        .signup-title {
+            font-size: 26px;
+        }
+
+        .signup-subtitle {
+            font-size: 14px;
+            margin-bottom: 19px;
+        }
+
+        .signup-google-wrap,
+        .signup-google-button,
+        .signup-divider,
+        .signup-form,
+        .signup-input,
+        .signup-primary-button {
+            width: 100%;
+            max-width: 100%;
+        }
+    }
+
+    @@media (max-width: 360px) {
+        .signup-background {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        .signup-card {
+            padding: 26px 16px 24px;
+            border-radius: 22px;
+        }
+
+        .signup-title {
+            font-size: 24px;
+        }
+
+        .signup-subtitle {
+            font-size: 13px;
+        }
+
+        .signup-login-row {
+            flex-wrap: wrap;
+        }
+    }
+</style>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<script>
+    window.signupGoogle = window.signupGoogle || (function () {
+        "use strict";
+
+        let dotNetHelper = null;
+        let clientId = "";
+        let renderRetryTimer = null;
+        let resizeTimer = null;
+        let lastRenderedWidth = 0;
+        let initialized = false;
+
+        function getHost() {
+            return document.getElementById("signupGoogleButton");
+        }
+
+        function getSafeButtonWidth() {
+            const host = getHost();
+
+            if (!host) {
+                return 320;
+            }
+
+            const rect = host.getBoundingClientRect();
+            const availableWidth = Math.floor(rect.width || 320);
+
+            /*
+                Leave a small gutter for borders, sub-pixel rounding,
+                mobile zoom, and device-pixel-ratio differences.
+            */
+            const safeWidth = Math.floor(availableWidth - 6);
+
+            return Math.max(120, Math.min(400, safeWidth));
+        }
+
+        function render(forceRender) {
+            const host = getHost();
+
+            if (!host || !clientId) {
+                return;
+            }
+
+            if (!window.google || !google.accounts || !google.accounts.id) {
+                if (renderRetryTimer) {
+                    clearTimeout(renderRetryTimer);
+                }
+
+                renderRetryTimer = setTimeout(function () {
+                    render(forceRender);
+                }, 250);
+
+                return;
+            }
+
+            const width = getSafeButtonWidth();
+
+            if (
+                initialized &&
+                !forceRender &&
+                Math.abs(width - lastRenderedWidth) < 2
+            ) {
+                return;
+            }
+
+            try {
+                google.accounts.id.initialize({
+                    client_id: clientId,
+                    callback: handleCredentialResponse,
+                    ux_mode: "popup",
+                    auto_select: false,
+                    cancel_on_tap_outside: false
+                });
+
+                host.innerHTML = "";
+
+                google.accounts.id.renderButton(
+                    host,
+                    {
+                        type: "standard",
+                        theme: "outline",
+                        size: "large",
+                        text: "continue_with",
+                        shape: "pill",
+                        logo_alignment: "left",
+                        width: width
+                    }
+                );
+
+                initialized = true;
+                lastRenderedWidth = width;
+            }
+            catch (error) {
+                console.error("Unable to initialize Google Identity Services:", error);
+            }
+        }
+
+        async function handleCredentialResponse(response) {
+            const idToken = response && response.credential;
+
+            if (!idToken || !dotNetHelper) {
+                return;
+            }
+
+            try {
+                await dotNetHelper.invokeMethodAsync(
+                    "CompleteGoogleSignup",
+                    idToken
+                );
+            }
+            catch (error) {
+                console.error("Google signup failed:", error);
+            }
+        }
+
+        function scheduleResize() {
+            if (resizeTimer) {
+                clearTimeout(resizeTimer);
+            }
+
+            resizeTimer = setTimeout(function () {
+                resizeTimer = null;
+                render(true);
+            }, 120);
+        }
+
+        window.addEventListener("resize", scheduleResize);
+        window.addEventListener("orientationchange", scheduleResize);
+
+        return {
+            initialize: function (helper, configuredClientId) {
+                dotNetHelper = helper;
+                clientId = (configuredClientId || "").trim();
+
+                requestAnimationFrame(function () {
+                    render(true);
+                });
+            },
+
+            setDisabled: function (disabled) {
+                const wrap = document.querySelector(".signup-google-wrap");
+
+                if (wrap) {
+                    wrap.classList.toggle("is-disabled", !!disabled);
+                }
+            },
+
+            rerender: function () {
+                requestAnimationFrame(function () {
+                    render(true);
+                });
+            }
+        };
+    })();
+</script>
+
+@code {
+    private const string GoogleClientId =
+        "920601965266-dio1oduk6jek0jnlti1t8nbgsnb5a7g9.apps.googleusercontent.com";
+
+    private string email = string.Empty;
+    private string phoneNumber = string.Empty;
+    private string password = string.Empty;
+    private string confirmPassword = string.Empty;
+
+    private string? successMessage;
+    private string? errorMessage;
+
+    private bool isProcessing = false;
+    private bool isGoogleProcessing = false;
+    private DotNetObjectReference<object>? _googleDotNetHelper;
+    private bool _googleInitialized = false;
+
+    private InviteClientData InviteData { get; set; } = new InviteClientData();
+
+    protected override async Task OnInitializedAsync()
+    {
+        isProcessing = false;
+        isGoogleProcessing = false;
+        errorMessage = null;
+        successMessage = null;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            var authenticatedEmail =
+                authState.User.FindFirst("email")?.Value
+                ?? authState.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? authState.User.Identity?.Name
+                ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(authenticatedEmail))
+            {
+                await RedirectLoggedInUser(authenticatedEmail);
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_googleInitialized)
+        {
+            _googleInitialized = true;
+
+            /*
+                Store the reference as object so the Razor-generated component
+                type does not need to be named explicitly.
+            */
+            _googleDotNetHelper = DotNetObjectReference.Create<object>(this);
+
+            try
+            {
+                await JS.InvokeVoidAsync(
+                    "signupGoogle.initialize",
+                    _googleDotNetHelper,
+                    GoogleClientId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Google button initialization error: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task RedirectLoggedInUser(string userEmail)
+    {
+        await RedirectAfterAuthentication(userEmail, replace: true);
+    }
+
+    private Task RedirectAfterAuthentication(string userEmail, bool replace = true) =>
+        PostAuthNavigation.NavigateAsync(replace);
+
+    private bool IsValidEmail(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(value);
+            return addr.Address == value;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool IsValidPhoneNumber(string phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+            return true;
+
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        return digits.Length >= 10;
+    }
+
+    private async Task HandleSignup()
+    {
+        if (isProcessing)
+            return;
+
+        isProcessing = true;
+        isGoogleProcessing = false;
+        errorMessage = null;
+        successMessage = null;
+        StateHasChanged();
+
+        await SetGoogleDisabled(true);
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(email) ||
+                string.IsNullOrWhiteSpace(password))
+            {
+                errorMessage = "Email and password are required.";
+                await StopProcessing();
+                return;
+            }
+
+            email = email.Trim();
+
+            if (!IsValidEmail(email))
+            {
+                errorMessage = "Please enter a valid email address.";
+                await StopProcessing();
+                return;
+            }
+
+            if (password != confirmPassword)
+            {
+                errorMessage = "Passwords do not match.";
+                await StopProcessing();
+                return;
+            }
+
+            if (!IsPasswordStrong(password))
+            {
+                errorMessage =
+                    "Password must be at least 8 characters and contain uppercase, lowercase, number, and special character.";
+                await StopProcessing();
+                return;
+            }
+
+            if (!IsValidPhoneNumber(phoneNumber))
+            {
+                errorMessage = "Invalid phone number.";
+                await StopProcessing();
+                return;
+            }
+
+            var result = await Auth.Signup(
+                email,
+                password,
+                phoneNumber,
+                ApiConfig.ApiBaseUrl);
+
+            if (!result.Success)
+            {
+                errorMessage = result.ErrorMessage;
+                await StopProcessing();
+                return;
+            }
+
+            var loginSuccess = await Auth.Login(
+                email,
+                password,
+                ApiConfig.ApiBaseUrl);
+
+            if (!loginSuccess)
+            {
+                errorMessage = "Signup succeeded, but login failed.";
+                await StopProcessing();
+                return;
+            }
+
+            successMessage = "Account created. Redirecting...";
+            StateHasChanged();
+
+            await SavePending.SavePendingIdeasAfterLogin(ApiConfig.ApiBaseUrl);
+            await SavePending.SavePendingCompanyInfoAfterLogin(ApiConfig.ApiBaseUrl);
+
+            await RedirectAfterAuthentication(email, replace: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Signup error: {ex.Message}";
+            await StopProcessing();
+        }
+    }
+
+    [JSInvokable]
+    public async Task CompleteGoogleSignup(string idToken)
+    {
+        if (isProcessing)
+            return;
+
+        isProcessing = true;
+        isGoogleProcessing = true;
+        errorMessage = null;
+        successMessage = null;
+
+        await InvokeAsync(StateHasChanged);
+        await SetGoogleDisabled(true);
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(idToken))
+            {
+                errorMessage = "Google did not return a valid sign-in token.";
+                await StopProcessing();
+                return;
+            }
+
+            /*
+                This is the same Google authentication path used by the
+                workspace account modal. The backend can create or authenticate
+                the Google-backed account, then the page continues through the
+                same post-login save + redirect pipeline as email signup.
+            */
+            var success = await Auth.LoginWithGoogle(
+                idToken,
+                ApiConfig.ApiBaseUrl);
+
+            if (!success)
+            {
+                errorMessage = "Google signup failed. Please try again.";
+                await StopProcessing();
+                return;
+            }
+
+            await SavePending.SavePendingIdeasAfterLogin(ApiConfig.ApiBaseUrl);
+            await SavePending.SavePendingCompanyInfoAfterLogin(ApiConfig.ApiBaseUrl);
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+
+            if (authState.User.Identity?.IsAuthenticated != true)
+            {
+                errorMessage =
+                    "Google signup succeeded, but the authenticated session is not ready.";
+                await StopProcessing();
+                return;
+            }
+
+            var authenticatedEmail =
+                authState.User.FindFirst("email")?.Value
+                ?? authState.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? authState.User.Identity?.Name
+                ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(authenticatedEmail))
+            {
+                errorMessage =
+                    "Google signup succeeded, but we could not determine your account email.";
+                await StopProcessing();
+                return;
+            }
+
+            successMessage = "Google signup successful. Redirecting...";
+            await InvokeAsync(StateHasChanged);
+
+            await RedirectAfterAuthentication(
+                authenticatedEmail.Trim(),
+                replace: true);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Google signup error: {ex.Message}";
+            await StopProcessing();
+        }
+    }
+
+    private async Task StopProcessing()
+    {
+        isProcessing = false;
+        isGoogleProcessing = false;
+
+        await InvokeAsync(StateHasChanged);
+        await SetGoogleDisabled(false);
+
+        try
+        {
+            await JS.InvokeVoidAsync("signupGoogle.rerender");
+        }
+        catch
+        {
+            // Ignore a re-render failure; the standard signup form still works.
+        }
+    }
+
+    private async Task SetGoogleDisabled(bool disabled)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("signupGoogle.setDisabled", disabled);
+        }
+        catch
+        {
+            // Google may still be loading. No action is needed.
+        }
+    }
+
+    private string EncryptEmail(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return "";
+
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(value);
+            return Convert.ToBase64String(bytes);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private async Task<string?> CheckUserOnboarded(string username, string url)
+    {
+        try
+        {
+            using HttpClient client = new HttpClient();
+
+            string functionUrl =
+                $"{url}api/CheckUserOnboarded?username={Uri.EscapeDataString(username)}&code=REDACTED_FOR_GROOMING";
+
+            var response = await client.GetAsync(functionUrl);
+
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            var result =
+                await response.Content.ReadFromJsonAsync<CheckUserOnboardedResponse>();
+
+            return result?.Onboarded;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public class CheckUserOnboardedResponse
+    {
+        public bool Success { get; set; }
+        public string? Username { get; set; }
+        public string? UserId { get; set; }
+        public string? Onboarded { get; set; }
+    }
+
+    private async Task<CheckSubscriptionResponse> CheckUserSubscription(
+        string userEmail,
+        string url)
+    {
+        try
+        {
+            using HttpClient client = new HttpClient();
+
+            string functionUrl =
+                $"{url}api/CheckUserSubscription?email={Uri.EscapeDataString(userEmail)}&code=REDACTED_FOR_GROOMING";
+
+            var response = await client.GetAsync(functionUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+
+                var result =
+                    System.Text.Json.JsonSerializer.Deserialize<CheckSubscriptionResponse>(
+                        json,
+                        new System.Text.Json.JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true
+                            });
+
+                return result ?? new CheckSubscriptionResponse
+                    {
+                        Success = false,
+                        HasSubscription = false
+                    };
+            }
+        }
+        catch
+        {
+            // Fall through to the default result.
+        }
+
+        return new CheckSubscriptionResponse
+            {
+                Success = false,
+                HasSubscription = false
+            };
+    }
+
+    public class CheckSubscriptionResponse
+    {
+        public bool Success { get; set; }
+        public string? Email { get; set; }
+        public string? UserId { get; set; }
+        public bool HasSubscription { get; set; }
+        public int SubscriptionCount { get; set; }
+        public List<SubscriptionDto>? Subscriptions { get; set; }
+    }
+
+    public class SubscriptionDto
+    {
+        public string? Id { get; set; }
+        public string? UserId { get; set; }
+        public string? SubscriptionId { get; set; }
+        public string? Status { get; set; }
+        public string? PriceId { get; set; }
+        public string? Name { get; set; }
+    }
+
+    public class InviteClientData
+    {
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public string? Industry { get; set; }
+        public string? Prompt { get; set; }
+        public string? Email { get; set; }
+        public string? ImagePath { get; set; }
+        public string? ImageId { get; set; }
+        public bool UseSameImageSeedForAll { get; set; }
+        public string? TimeStamp { get; set; }
+    }
+
+    private async Task<InviteClientData?> GetInviteClientByEmail(string userEmail)
+    {
+        try
+        {
+            using var client = new HttpClient();
+
+            var requestBody = new
+            {
+                email = userEmail
+            };
+
+            var json =
+                System.Text.Json.JsonSerializer.Serialize(requestBody);
+
+            var content =
+                new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(
+                $"{ApiConfig.ApiBaseUrl}api/GetInviteClientByEmail?code=REDACTED_FOR_GROOMING",
+                content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent =
+                    await response.Content.ReadAsStringAsync();
+
+                using var document =
+                    System.Text.Json.JsonDocument.Parse(responseContent);
+
+                var root = document.RootElement;
+
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    var firstItem = root;
+
+                    string? GetStringValue(
+                        System.Text.Json.JsonElement element,
+                        string propertyName)
+                    {
+                        if (element.TryGetProperty(propertyName, out var property))
+                        {
+                            return ExtractValue(property);
+                        }
+
+                        foreach (var prop in element.EnumerateObject())
+                        {
+                            if (prop.Name.Equals(
+                                propertyName,
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                return ExtractValue(prop.Value);
+                            }
+                        }
+
+                        return null;
+                    }
+
+                    string? ExtractValue(
+                        System.Text.Json.JsonElement property)
+                    {
+                        if (property.ValueKind ==
+                            System.Text.Json.JsonValueKind.Object)
+                        {
+                            if (property.TryGetProperty(
+                                "s",
+                                out var stringValue))
+                            {
+                                return stringValue.GetString();
+                            }
+
+                            if (property.TryGetProperty(
+                                "S",
+                                out var stringValueUpper))
+                            {
+                                return stringValueUpper.GetString();
+                            }
+
+                            if (property.TryGetProperty(
+                                "BOOL",
+                                out var boolValue))
+                            {
+                                return boolValue.GetBoolean().ToString();
+                            }
+
+                            if (property.TryGetProperty(
+                                "bool",
+                                out var boolValueLower))
+                            {
+                                return boolValueLower.GetBoolean().ToString();
+                            }
+
+                            if (property.TryGetProperty(
+                                "N",
+                                out var numberValue))
+                            {
+                                return numberValue.GetString();
+                            }
+
+                            if (property.TryGetProperty(
+                                "n",
+                                out var numberValueLower))
+                            {
+                                return numberValueLower.GetString();
+                            }
+                        }
+                        else if (
+                            property.ValueKind ==
+                            System.Text.Json.JsonValueKind.String)
+                        {
+                            return property.GetString();
+                        }
+                        else if (
+                            property.ValueKind ==
+                                System.Text.Json.JsonValueKind.True ||
+                            property.ValueKind ==
+                                System.Text.Json.JsonValueKind.False)
+                        {
+                            return property.GetBoolean().ToString();
+                        }
+                        else if (
+                            property.ValueKind ==
+                            System.Text.Json.JsonValueKind.Number)
+                        {
+                            return property.ToString();
+                        }
+
+                        return null;
+                    }
+
+                    return new InviteClientData
+                        {
+                            Id = GetStringValue(firstItem, "Id"),
+                            Name = GetStringValue(firstItem, "Name"),
+                            Industry = GetStringValue(firstItem, "Industry"),
+                            Prompt = GetStringValue(firstItem, "Prompt"),
+                            Email = GetStringValue(firstItem, "Email"),
+                            ImagePath =
+                                GetStringValue(firstItem, "ImagePath")
+                                ?? GetStringValue(firstItem, "Imagepath"),
+                            UseSameImageSeedForAll =
+                                GetBoolValue(
+                                    firstItem,
+                                    "UseSameImageSeedForAll"),
+                            ImageId = GetStringValue(firstItem, "ImageId"),
+                            TimeStamp =
+                                GetStringValue(firstItem, "Timestamp")
+                                ?? GetStringValue(firstItem, "TimeStamp")
+                        };
+                }
+            }
+
+            if (response.StatusCode ==
+                System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"Exception getting invite client: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private bool GetBoolValue(
+        System.Text.Json.JsonElement element,
+        string propertyName)
+    {
+        if (element.TryGetProperty(propertyName, out var property))
+        {
+            return ExtractBoolValue(property);
+        }
+
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (prop.Name.Equals(
+                propertyName,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return ExtractBoolValue(prop.Value);
+            }
+        }
+
+        return false;
+    }
+
+    private bool ExtractBoolValue(
+        System.Text.Json.JsonElement property)
+    {
+        if (property.ValueKind ==
+            System.Text.Json.JsonValueKind.Object)
+        {
+            if (property.TryGetProperty("BOOL", out var boolValue))
+            {
+                return boolValue.GetBoolean();
+            }
+
+            if (property.TryGetProperty(
+                "bool",
+                out var boolValueLower))
+            {
+                return boolValueLower.GetBoolean();
+            }
+        }
+
+        if (
+            property.ValueKind ==
+                System.Text.Json.JsonValueKind.True ||
+            property.ValueKind ==
+                System.Text.Json.JsonValueKind.False)
+        {
+            return property.GetBoolean();
+        }
+
+        if (property.ValueKind ==
+            System.Text.Json.JsonValueKind.String)
+        {
+            if (bool.TryParse(
+                property.GetString(),
+                out bool result))
+            {
+                return result;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task GoToHome()
+    {
+        if (!isProcessing)
+        {
+            Nav.NavigateTo("/", true);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private string GetCurrentPath()
+    {
+        return Nav.Uri;
+    }
+
+    private bool IsPasswordStrong(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return false;
+
+        if (value.Length < 8)
+            return false;
+
+        if (!value.Any(char.IsUpper))
+            return false;
+
+        if (!value.Any(char.IsLower))
+            return false;
+
+        if (!value.Any(char.IsDigit))
+            return false;
+
+        if (!value.Any(ch => !char.IsLetterOrDigit(ch)))
+            return false;
+
+        return true;
+    }
+}

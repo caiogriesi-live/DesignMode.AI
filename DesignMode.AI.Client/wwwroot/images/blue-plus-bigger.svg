@@ -1,0 +1,17 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 250" width="250" height="250">
+	<title>blue-plus-bigger</title>
+	<defs>
+		<radialGradient id="g1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(299.898,0,0,299.898,44.52,48.748)">
+			<stop offset=".115" stop-color="#394ace"/>
+			<stop offset=".553" stop-color="#394ace"/>
+			<stop offset=".762" stop-color="#4e64d8"/>
+			<stop offset=".9" stop-color="#5b75de"/>
+		</radialGradient>
+		<image  width="125" height="120" id="img1" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAH0AAAB4CAMAAADokw2kAAAAAXNSR0IB2cksfwAAANJQTFRFAAAA////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////hovIawAAAEZ0Uk5TABVupcC+l0kZg8Tk4bRXHJTc//zKYgQUITmh4P3RdiASaqqz2/P+7stdHZDm6fT7+vDflX6g94wMPmN1vZ9gQDaBwd2xVig5OmYAAADYSURBVHic7dtFDgJREEXR3zTu7tC4a+Pu+98SG/gMKqFDSO5dwDvjGpRSwgyX6dbm8fqkW/J+q/sDwZC2cCTqvB6LJ5LaUukMOjo6Ojo6Ojo6Ojo6Ojo6Ojo6Ojo6uqRsLi+qUCzp9XKlKluyjJoy6g1RzVZbr3e6PdmS6eqrwXAkajyZ6vXkbC5bshdLZa0+jDne2tygo6Ojo6Ojo6N/Td/u9qIOx7F+rGyfZEvny/XH1wQ6Ojo6Ojo6Ojo6Ojo6Ojo6Ojo6Ovp/6f7bvaTt8Xw5r3/1J/QNv2C3sEqm8g4AAAAASUVORK5CYII="/>
+	</defs>
+	<style>
+		.s0 { fill: url(#g1) } 
+	</style>
+	<path id="&lt;Path&gt;" class="s0" d="m246.9 124.9c0 67-54.3 121.4-121.4 121.4-67 0-121.4-54.4-121.4-121.4 0-67.1 54.4-121.4 121.4-121.4 67.1 0 121.4 54.3 121.4 121.4z"/>
+	<use id="+" href="#img1" x="63" y="65"/>
+</svg>

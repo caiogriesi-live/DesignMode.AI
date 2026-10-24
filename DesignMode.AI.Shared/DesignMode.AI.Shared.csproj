@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Blazored.LocalStorage" Version="4.5.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.4" />
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.7.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="DesignMode.AI.Common">
+      <HintPath>..\..\DesignMode.AI.Common\DesignMode.AI.Common\bin\Release\net8.0\DesignMode.AI.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="DesignMode.AI.Services.OpenAI">
+      <HintPath>..\..\DesignMode.AI.Services\DesignMode.AI.Services.OpenAI\bin\Release\net8.0\DesignMode.AI.Services.OpenAI.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

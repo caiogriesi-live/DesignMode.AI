@@ -1,0 +1,1456 @@
+@inherits DesignMode.AI.Client.Components.GenerationAwareComponent
+@using System.Collections.Generic
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using Newtonsoft.Json
+@using System.Text
+@using System.Text.RegularExpressions
+@using Microsoft.JSInterop
+@using System.IO
+@using System.Net.Http.Headers
+
+@if (IsBusy && !IsGeneratingKit && !isGeneratingEventImages)
+{
+    <div class="modal-busy-overlay"><div class="loader"></div></div>
+}
+
+@if (Show)
+{
+    <div class="modal-overlay generation-workspace-overlay" @onclick="CloseModal">
+        <div class="vertical-modal-wrapper generation-workspace" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+
+            <div class="modal-tabs">
+                <button class="tab-button @(ActiveTab == TabType.GenerateNew ? "active" : "")"
+                        @onclick="() => SetActiveTab(TabType.GenerateNew)">
+                    <span class="tab-icon">✨</span> Generate New
+                </button>
+                <button class="tab-button @(ActiveTab == TabType.GeneratedKit ? "active" : "")"
+                        aria-label="Generated Event and Activation Kits"
+                        @onclick="() => SetActiveTab(TabType.GeneratedKit)"
+                        disabled="@(!IsGeneratingKit && !HasExistingEventActivations && !GeneratedAssets.Any())">
+                    <span class="tab-icon">🎪</span> Results
+                    @if (IsGeneratingKit)
+                    {
+                        <span class="tab-badge generating">Generating...</span>
+                    }
+                    else if (HasExistingEventActivations || GeneratedAssets.Any())
+                    {
+                        <span class="tab-badge">@GetGeneratedVersionCount()</span>
+                    }
+                </button>
+            </div>
+
+            <div class="modal-scroll-content">
+                @if (ActiveTab == TabType.GenerateNew)
+                {
+                    <div class="tab-content generate-new-tab">
+                        <div class="modal-header"><h2>Generate Event & Activation Kit</h2></div>
+                        <div class="modal-intro">
+                            Select <strong>one image</strong>. It becomes the visual reference for a coordinated event system: posters, flyers, social media assets, event badges, merchandise, wayfinding, booth/table graphics, and digital displays.
+                        </div>
+
+                        <div class="event-material-status">
+                            <span class="event-material-count">
+                                <span class="event-material-icon">🎪</span>
+                                @if (HasEventImages())
+                                {
+                                    <span>Event / activation reference images ready</span>
+                                    @if (SelectedImageIds.Any())
+                                    {
+                                        <span class="selection-count">1 selected</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span style="font-weight:bold;">No event images available</span>
+                                    <span style="font-weight:normal;"> – generate an event-ready image first</span>
+                                }
+                            </span>
+                        </div>
+
+                        <div data-testid="events-image-loading" hidden="@(!isGeneratingEventImages)">
+                            <AIRecommendationGenerationLoader IsVisible="@isGeneratingEventImages" Message="Generating event reference image..." />
+                        </div>
+                        @if (isGeneratingEventImages)
+                        {
+                            <button class="generate-images-button" data-testid="events-generate-image" disabled>Generating...</button>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(ImageGenerationError))
+                        {
+                            <p role="alert">@ImageGenerationError</p>
+                        }
+                        @if (IsBusy && !isGeneratingEventImages)
+                        {
+                            <div class="loading-container text-center">
+                                <div class="spinner-border text-primary mb-2"></div>
+                                <p>Loading images...</p>
+                            </div>
+                        }
+                        else if (!isGeneratingEventImages)
+                        {
+                            <div class="image-grid">
+                                @if (GetUniqueEventImages().Any())
+                                {
+                                    var groupedImages = GetUniqueEventImages()
+                                    .GroupBy(img => img.SubCategory?.ToLower() == "generic" ? img.DeliverableType : img.SubCategory);
+
+                                    @foreach (var group in groupedImages)
+                                    {
+                                        var firstImage = group.First();
+                                        var sectionTitle = firstImage.SubCategory?.ToLower() == "generic" ? firstImage.DeliverableType : group.Key;
+                                        var validImages = group.Where(i => !string.IsNullOrWhiteSpace(i.ImageUrl)).OrderBy(i => i.CountId).ToList();
+                                        if (validImages.Any())
+                                        {
+                                            <div class="deliverable-section">
+                                                <h3 class="section-title">@sectionTitle</h3>
+                                                <div class="image-col">
+                                                    @foreach (var image in validImages)
+                                                    {
+                                                        @ImageCard(image)
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                }
+                                else if (!isGeneratingEventImages)
+                                {
+                                    <div class="empty-state">
+                                        <div class="empty-icon">🎪</div>
+                                        <h3>No Event / Activation Images Yet</h3>
+                                        <p>Create one event-ready visual first, then use it as the reference for the complete kit.</p>
+                                        <button class="generate-images-button" data-testid="events-generate-image" @onclick="GoToGenerateImages" disabled="@(isGeneratingEventImages || string.IsNullOrWhiteSpace(MainPromptText))">Generate Event Reference Image</button>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <div class="event-config-section">
+                            <h3>Event Configuration</h3>
+                            <div class="config-options two-col">
+                                <div class="config-option">
+                                    <label>Event Type</label>
+                                    <select @bind="SelectedEventType" class="config-select">
+                                        <option value="Conference">Conference</option>
+                                        <option value="TradeShow">Trade Show</option>
+                                        <option value="ProductLaunch">Product Launch</option>
+                                        <option value="PopUpActivation">Pop-Up Activation</option>
+                                        <option value="Festival">Festival</option>
+                                        <option value="CorporateEvent">Corporate Event</option>
+                                        <option value="Workshop">Workshop</option>
+                                        <option value="Networking">Networking Event</option>
+                                        <option value="ExperientialActivation">Experiential Activation</option>
+                                    </select>
+                                </div>
+                                <div class="config-option">
+                                    <label>Primary Format</label>
+                                    <select @bind="SelectedMaterialType" class="config-select">
+                                        <option value="Mixed">Mixed Media</option>
+                                        <option value="Print">Print</option>
+                                        <option value="Digital">Digital</option>
+                                        <option value="Environmental">Environmental / Spatial</option>
+                                        <option value="FullKit">Full Event Kit</option>
+                                    </select>
+                                </div>
+                                <div class="config-option">
+                                    <label>Event Date</label>
+                                    <input type="date" @bind="EventDate" class="config-input" />
+                                </div>
+                                <div class="config-option">
+                                    <label>Location</label>
+                                    <input type="text" @bind="EventLocation" class="config-input" placeholder="Venue, city, convention center, etc." />
+                                </div>
+                            </div>
+
+                            <div class="config-option full-width">
+                                <label>Event Description / Tagline</label>
+                                <textarea @bind="EventDescription" class="config-textarea" placeholder="Event purpose, audience, message, CTA, tagline, or other direction..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Events &amp; Activations instructions</label>
+                                @if (string.IsNullOrWhiteSpace(MainPromptText))
+                                {
+                                    <p role="alert">This project has no Events &amp; Activations prompt. Generation is unavailable until that deliverable prompt exists.</p>
+                                }
+                                else
+                                {
+                                    <textarea class="form-control" rows="5" readonly>@MainPromptText</textarea>
+                                }
+                            </div>
+
+                            <div class="asset-selection-section">
+                                <h4>Assets to Generate</h4>
+                                <p>Every saved version generates the complete coordinated 8-asset kit.</p>
+                                <div class="asset-check-grid">
+                                    @foreach (var option in AssetOptions)
+                                    {
+                                        <div class="asset-check-card active">
+                                            <span class="asset-check-icon">@option.Icon</span>
+                                            <span>@option.DisplayName</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="tab-content generated-kit-tab">
+                        <div class="modal-header"><h2>Generated Event & Activation Kit</h2></div>
+
+                        @if (IsGeneratingKit)
+                        {
+                            <div class="generation-loading-container">
+                                <div class="generation-header"><h3>Creating Your Event System</h3><div class="generation-status">@GenerationStatus</div></div>
+                                <div class="progress-bar-container"><div class="progress-bar" style="width: @(GenerationProgress)%;"></div></div>
+                                <div class="current-step-details">@CurrentStepDetails</div>
+                                <div class="generation-steps-log">
+                                    <h4>Generation Steps</h4>
+                                    @foreach (var step in GenerationSteps)
+                                    {
+                                        <div class="step-item"><span class="step-check">✓</span><span>@step</span></div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(GenerationError))
+                        {
+                            <div class="generation-error">
+                                <h3>Event / activation generation failed</h3>
+                                <p>@GenerationError</p>
+                                <button class="save-button" @onclick="() => SetActiveTab(TabType.GenerateNew)">Back to Generate New</button>
+                            </div>
+                        }
+                        else if (GeneratedAssets.Any() || HasExistingEventActivations)
+                        {
+                            @if (ActiveGeneratedVersion != null)
+                            {
+                                <div class="generated-version-header">
+                                    <div>
+                                        <span class="current-label-pill">Current</span>
+                                        <strong>@ActiveGeneratedVersion.Version</strong>
+                                        <span class="preview-meta">@ActiveGeneratedVersion.CreatedAt.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")</span>
+                                    </div>
+                                    <span class="generated-count">@ActiveGeneratedVersion.Assets.Count asset@(ActiveGeneratedVersion.Assets.Count == 1 ? "" : "s")</span>
+                                </div>
+
+                                <div class="generated-assets-grid">
+                                    @foreach (var asset in ActiveGeneratedVersion.Assets)
+                                    {
+                                        <div class="generated-asset-card">
+                                            <div class="generated-asset-title">
+                                                <span>@GetAssetIcon(asset.AssetType)</span>
+                                                <strong>@GetAssetDisplayName(asset.AssetType)</strong>
+                                            </div>
+                                            <div class="generated-asset-image-wrap">
+                                                <img src="@asset.PreviewUrl" alt="@GetAssetDisplayName(asset.AssetType)" class="generated-asset-image" />
+                                            </div>
+                                            <div class="preview-actions">
+                                                <button class="toolbar-button" @onclick="() => OpenUrl(asset.PreviewUrl)">↗ Open</button>
+                                                <button class="toolbar-button primary" @onclick="() => DownloadUrl(asset.DownloadUrl, GetAssetFileName(asset.AssetType))">📥 Download</button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (GeneratedVersions.Any())
+                            {
+                                <div class="generated-history">
+                                    <div class="generated-history-header">
+                                        <div><h4>Saved Versions</h4><p>Click a version to load its complete event kit.</p></div>
+                                        <span class="generated-count">@GeneratedVersions.Count</span>
+                                    </div>
+                                    <div class="version-grid">
+                                        @foreach (var version in GeneratedVersions.OrderByDescending(x => x.CreatedAt))
+                                        {
+                                            var isActive = ActiveGeneratedVersion != null && version.Version == ActiveGeneratedVersion.Version;
+                                            <button type="button" class="version-card @(isActive ? "active" : "")" @onclick="() => ViewGeneratedVersion(version)">
+                                                <strong>@version.Version</strong>
+                                                <span>@version.Assets.Count assets</span>
+                                                <small>@version.CreatedAt.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")</small>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="empty-state generated-empty-state">
+                                <div class="empty-icon">🎪</div>
+                                <h3>No Event Kit Generated Yet</h3>
+                                <p>Go to Generate New, select one image, and create your event / activation assets.</p>
+                                <button class="save-button" @onclick="() => SetActiveTab(TabType.GenerateNew)">Start Generating</button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (ActiveTab == TabType.GenerateNew)
+            {
+                <div class="footer-actions sticky-footer">
+                    <button class="discard-button" @onclick="CloseModal">Cancel</button>
+                    <button class="save-button" @onclick="GenerateEventActivationKit"
+                            disabled="@(!SelectedImageIds.Any() || IsGeneratingKit || isGeneratingEventImages || string.IsNullOrWhiteSpace(MainPromptText))">
+                        @GetGenerateButtonText()
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="footer-actions sticky-footer">
+                    <button class="discard-button" disabled="@IsGeneratingKit" @onclick="() => SetActiveTab(TabType.GenerateNew)">← Back to Generate New</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Inject] private ApiConfigService ApiConfig { get; set; } = default!;
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject] private HttpClient Http { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private AttributionContextService AttributionContext { get; set; } = default!;
+    [Inject] private Blazored.LocalStorage.ILocalStorageService LocalStorage { get; set; } = default!;
+    [Inject] private AIUsageRefreshService UsageRefresh { get; set; } = default!;
+
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public DesignMode.AI.Client.Pages.Init.MakeVideoModal.ImageIdeaCountResult? AllIdeas { get; set; }
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel>? SelectedImages { get; set; }
+    [Parameter] public EventCallback<List<string>> OnImagesSelected { get; set; }
+    [Parameter] public EventCallback<bool> OnEventMaterialsGenerated { get; set; }
+    [Parameter] public Func<string, int, int, int, Task<string>>? CallRunwareImageFunction { get; set; }
+    [Parameter] public Func<string, string, string, string, string, string, string, Task<string>>? CallSaveImageIdeaFunction { get; set; }
+    [Parameter] public string CompanyIdeaId { get; set; } = "";
+    [Parameter] public string CompanyDescription { get; set; } = "";
+    [Parameter] public string PromptIdFromCID { get; set; } = "";
+    [Parameter] public string MainPromptText { get; set; } = "";
+    [Parameter] public EventCallback OnModalClosed { get; set; }
+
+    private enum TabType { GenerateNew, GeneratedKit }
+    private TabType ActiveTab { get; set; } = TabType.GenerateNew;
+    private bool IsBusy;
+    private bool IsGeneratingKit;
+    private bool isGeneratingEventImages;
+    private string ImageGenerationError = "";
+    private bool wasImageGenerated;
+    private string GenerationStatus = "";
+    private string CurrentStepDetails = "";
+    private string GenerationError = "";
+    private int GenerationProgress;
+    private List<string> GenerationSteps = new();
+    private HashSet<string> SelectedImageIds = new();
+    private HashSet<string> SelectedImageUrls = new();
+    private List<Gen.ImageIdeaModel> newlyGeneratedImages = new();
+    private List<EventActivationRecord> sortedEventActivations = new();
+    private List<GeneratedEventVersion> GeneratedVersions = new();
+    private GeneratedEventVersion? ActiveGeneratedVersion;
+    private string SelectedCompanyName = "";
+    private bool hasLoadedVersions;
+    private string currentVersion = "1";
+
+    private string SelectedEventType = "Conference";
+    private string SelectedMaterialType = "FullKit";
+    private DateTime EventDate = DateTime.Today.AddDays(30);
+    private string EventLocation = "";
+    private string EventDescription = "";
+    public string promptText { get; set; } = "";
+
+    private bool HasExistingEventActivations => sortedEventActivations.Any();
+    private IEnumerable<GeneratedAsset> GeneratedAssets => ActiveGeneratedVersion?.Assets ?? Enumerable.Empty<GeneratedAsset>();
+
+    private List<AssetOption> AssetOptions = new()
+    {
+        new("poster", "Event Poster", "🖼️", true),
+        new("flyer", "Flyer", "📄", true),
+        new("social-media", "Social Media Assets", "📱", true),
+        new("event-badge", "Event Badge", "🎟️", true),
+        new("merchandise", "Merchandise", "👕", true),
+        new("wayfinding", "Wayfinding", "➡️", true),
+        new("booth-table", "Booth & Table Graphics", "🏕️", true),
+        new("digital-display", "Digital Displays", "🖥️", true)
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Show) return;
+        ResolveCompanyFromCid();
+        if (!hasLoadedVersions && !string.IsNullOrWhiteSpace(SelectedCompanyName))
+        {
+            await LoadExistingEventActivationVersionsAsync(SelectedCompanyName);
+            hasLoadedVersions = true;
+        }
+    }
+
+    private void ResolveCompanyFromCid()
+    {
+        var queryString = new Uri(NavigationManager.Uri).Query;
+        var cid = GetQueryParameter(queryString, "cid", "");
+        if (string.IsNullOrWhiteSpace(cid)) return;
+        var parts = cid.Split(new[] { "|~~|@@|^^|" }, StringSplitOptions.None);
+        if (parts.Length < 1) return;
+        try { SelectedCompanyName = Encoding.UTF8.GetString(Convert.FromBase64String(parts[0])); }
+        catch { }
+    }
+
+    private void SetActiveTab(TabType tab)
+    {
+        if (IsGeneratingKit) return;
+        ActiveTab = tab;
+    }
+
+    private bool HasEventImages() => GetUniqueEventImages().Any();
+
+    private List<Gen.ImageIdeaModel> GetUniqueEventImages()
+    {
+        var allImages = new List<Gen.ImageIdeaModel>();
+        if (SelectedImages != null) allImages.AddRange(SelectedImages);
+        allImages.AddRange(newlyGeneratedImages);
+        return allImages
+            .Where(img => !string.IsNullOrWhiteSpace(img.ImageUrl) && IsEventRelated($"{img.DeliverableType} {img.SubCategory}"))
+            .GroupBy(img => img.ImageUrl)
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    private RenderFragment ImageCard(Gen.ImageIdeaModel image) => __builder =>
+    {
+        var isSelected = SelectedImageIds.Contains(image.Id);
+        <div class="image-card @(isSelected ? "event-selected" : "")" @onclick="() => ToggleSelection(image.ImageUrl, image.Id)">
+            <img src="@image.ImageUrl" alt="Event reference" class="image-thumb" data-testid="events-generated-image" />
+            <div class="image-controls">
+                <div class="event-selection-indicator @(isSelected ? "selected" : "")" @onclick="() => ToggleSelection(image.ImageUrl, image.Id)" @onclick:stopPropagation>
+                    <span class="indicator-icon">@(isSelected ? "✓" : "+")</span>
+                </div>
+            </div>
+            @if (isSelected)
+            {
+                <div class="event-selection-badge">🎪 Reference</div>
+            }
+        </div>
+    };
+
+    private void ToggleSelection(string url, string id)
+    {
+        if (SelectedImageIds.Contains(id))
+        {
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+        }
+        else
+        {
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+            SelectedImageIds.Add(id);
+            if (!string.IsNullOrWhiteSpace(url)) SelectedImageUrls.Add(url);
+        }
+    }
+
+    private async Task GoToGenerateImages()
+    {
+        if (string.IsNullOrWhiteSpace(MainPromptText) || isGeneratingEventImages || CallRunwareImageFunction == null || CallSaveImageIdeaFunction == null) return;
+        isGeneratingEventImages = true;
+        IsBusy = true;
+        ImageGenerationError = "";
+        try
+        {
+            await using var generationOperation = await BeginGenerationAsync();
+            var eventContent = $"{SelectedEventType}; {SelectedMaterialType}; {EventDate:yyyy-MM-dd}; {EventLocation}; {EventDescription}";
+            promptText = DesignMode.AI.Shared.Services.EventActivationPromptResolver.BuildReferencePrompt(MainPromptText, eventContent);
+
+            var imageUrl = await CallRunwareImageFunction(promptText, 1344, 768, 1);
+            if (string.IsNullOrWhiteSpace(imageUrl)) return;
+
+            var allImages = new List<Gen.ImageIdeaModel>();
+            if (SelectedImages != null) allImages.AddRange(SelectedImages);
+            allImages.AddRange(newlyGeneratedImages);
+            var newCountId = allImages.Select(x => int.TryParse(x.CountId, out var n) ? n : 0).DefaultIfEmpty(0).Max() + 1;
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+            var imageId = await CallSaveImageIdeaFunction("Secondary", "Events & Activations", promptText, imageUrl, PromptIdFromCID, timestamp, newCountId.ToString());
+            if (string.IsNullOrWhiteSpace(imageId))
+            {
+                ImageGenerationError = "Unable to save the event reference image. Please try again.";
+                return;
+            }
+
+            var newImage = new Gen.ImageIdeaModel
+                {
+                    Id = imageId,
+                    ImageUrl = imageUrl,
+                    ImagePrompt = promptText,
+                    DeliverableType = "Secondary",
+                    SubCategory = "Events & Activations",
+                    PromptId = PromptIdFromCID,
+                    CountId = newCountId.ToString()
+                };
+            newlyGeneratedImages.Clear();
+            newlyGeneratedImages.Add(newImage);
+            SelectedImages ??= new List<Gen.ImageIdeaModel>();
+            if (!SelectedImages.Any(x => x.ImageUrl == imageUrl)) SelectedImages.Add(newImage);
+            ToggleSelection(newImage.ImageUrl, newImage.Id);
+            wasImageGenerated = true;
+            // Reuse the parent's canonical image refresh before ending the loading state.
+            try
+            {
+                await OnModalClosed.InvokeAsync();
+            }
+            catch
+            {
+                ImageGenerationError = "Your event reference image was saved, but the project images could not be refreshed. Reopen the modal to refresh them.";
+            }
+        }
+        catch
+        {
+            ImageGenerationError = "Unable to generate the event reference image. Please try again.";
+        }
+        finally
+        {
+            IsBusy = false;
+            isGeneratingEventImages = false;
+        }
+    }
+
+    private async Task GenerateEventActivationKit()
+    {
+        if (string.IsNullOrWhiteSpace(MainPromptText) || IsGeneratingKit || !SelectedImageIds.Any()) return;
+        await using var generationOperation = await BeginGenerationAsync();
+        IsGeneratingKit = true;
+        ActiveTab = TabType.GeneratedKit;
+        GenerationError = "";
+        GenerationSteps.Clear();
+        UpdateGenerationStatus("Starting event kit generation...", "Preparing the selected visual reference and event brief", 5);
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated != true) throw new InvalidOperationException("You must be signed in to generate event assets.");
+
+            var allImages = new List<Gen.ImageIdeaModel>();
+            if (SelectedImages != null) allImages.AddRange(SelectedImages);
+            allImages.AddRange(newlyGeneratedImages);
+            var selectedImage = allImages.FirstOrDefault(x => SelectedImageIds.Contains(x.Id) && !string.IsNullOrWhiteSpace(x.ImageUrl));
+            if (selectedImage == null) throw new InvalidOperationException("The selected reference image could not be found.");
+
+            ResolveCompanyFromCid();
+            var companyName = SelectedCompanyName;
+            string industry = "";
+            var cid = GetQueryParameter(new Uri(NavigationManager.Uri).Query, "cid", "");
+            var parts = cid.Split(new[] { "|~~|@@|^^|" }, StringSplitOptions.None);
+            if (parts.Length >= 2)
+            {
+                try { industry = Encoding.UTF8.GetString(Convert.FromBase64String(parts[1])); } catch { }
+            }
+            if (string.IsNullOrWhiteSpace(companyName)) throw new InvalidOperationException("Company name could not be determined.");
+
+            var attribution = await AttributionContext.AuthorizeGenerationAsync(CompanyIdeaId);
+
+            if (!hasLoadedVersions)
+            {
+                await LoadExistingEventActivationVersionsAsync(companyName);
+                hasLoadedVersions = true;
+            }
+
+            var nextVersion = GetNextEventActivationVersion();
+            var versionText = $"v{nextVersion}";
+            var logicalEventActivationsId = GetLogicalEventActivationsId();
+            var selectedAssets = AssetOptions.Select(x => x.Key).ToList();
+
+            UpdateGenerationStatus("Generating event assets...", $"Creating {selectedAssets.Count} coordinated event / activation deliverables", 30);
+            var request = new
+            {
+                ImageUrl = selectedImage.ImageUrl,
+                SelectedImageId = selectedImage.Id,
+                Name = companyName,
+                Industry = industry,
+                CompanyDescription,
+                Prompt = MainPromptText,
+                EventType = SelectedEventType,
+                MaterialType = SelectedMaterialType,
+                EventDate = EventDate.ToString("yyyy-MM-dd"),
+                EventLocation,
+                EventDescription,
+                AssetTypes = selectedAssets,
+                UserId = user.Identity?.Name,
+                Timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ"),
+                GenerationJobId = Guid.NewGuid().ToString(),
+                ProjectId = attribution?.ProjectId,
+                FunnelId = attribution?.FunnelId
+            };
+
+            using var generationRequest = new HttpRequestMessage(HttpMethod.Post,
+                $"{ApiConfig.ApiBaseUrl}api/GenerateEventActivation?code=REDACTED_FOR_GROOMING")
+            {
+                Content = JsonContent.Create(request)
+            };
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+                generationRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await Http.SendAsync(generationRequest);
+            if (await UsageRefresh.HandleResponseAsync(response)) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException($"GenerateEventActivation returned {(int)response.StatusCode}: {error}");
+            }
+            await UsageRefresh.RequestRefreshAsync();
+
+            var result = await response.Content.ReadFromJsonAsync<EventActivationGenerationResult>();
+            if (result == null || !result.Success || result.Assets == null || !result.Assets.Any())
+                throw new InvalidOperationException(result?.Error ?? "No event assets were returned.");
+
+            UpdateGenerationStatus("Saving generated files...", $"Saving {versionText} under SavedImages", 75);
+            var savedAssets = new List<GeneratedAsset>();
+            foreach (var asset in result.Assets)
+            {
+                var savedUrl = await SaveGeneratedEventAssetAsync(asset.PreviewUrl, companyName, nextVersion.ToString(), asset.AssetType);
+                savedAssets.Add(new GeneratedAsset
+                    {
+                        AssetType = asset.AssetType,
+                        PreviewUrl = savedUrl,
+                        DownloadUrl = savedUrl
+                    });
+            }
+
+            UpdateGenerationStatus("Saving version history...", $"Adding {versionText} to EventActivations", 92);
+            await SaveEventActivationAsync(logicalEventActivationsId, companyName, versionText, DateTime.UtcNow.ToString("o"));
+            await LoadExistingEventActivationVersionsAsync(companyName);
+
+            var generatedVersion = GeneratedVersions.FirstOrDefault(x => x.Version.Equals(versionText, StringComparison.OrdinalIgnoreCase));
+            if (generatedVersion == null)
+            {
+                generatedVersion = new GeneratedEventVersion { EventActivationsId = logicalEventActivationsId, Version = versionText, CreatedAt = DateTime.UtcNow };
+                GeneratedVersions.Insert(0, generatedVersion);
+            }
+            generatedVersion.Assets = savedAssets;
+            generatedVersion.CreatedAt = DateTime.UtcNow;
+            ViewGeneratedVersion(generatedVersion);
+            currentVersion = nextVersion.ToString();
+
+            UpdateGenerationStatus("Complete!", $"{versionText} is generated, saved, and available in the gallery", 100);
+            if (OnEventMaterialsGenerated.HasDelegate) await OnEventMaterialsGenerated.InvokeAsync(true);
+        }
+        catch (Exception ex)
+        {
+            GenerationError = ex.Message;
+            Console.WriteLine($"❌ Event activation generation error: {ex}");
+        }
+        finally
+        {
+            IsGeneratingKit = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string> SaveGeneratedEventAssetAsync(string imageUrl, string companyName, string version, string assetType)
+    {
+        var response = await Http.PostAsJsonAsync(
+            $"{ApiConfig.ApiBaseUrl}api/SaveEventActivationImage?code=REDACTED_FOR_GROOMING",
+            new { ImageUrl = imageUrl, CompanyName = companyName, Version = version, AssetType = assetType });
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"SaveEventActivationImage returned {(int)response.StatusCode}: {error}");
+        }
+        var result = await response.Content.ReadFromJsonAsync<SaveEventActivationImageResponse>();
+        return result?.ImageUrl ?? result?.SavedUrl ?? GetEventAssetPreviewUrl(companyName, version, assetType);
+    }
+
+    private async Task SaveEventActivationAsync(string eventActivationsId, string companyName, string version, string timeStamp)
+    {
+        var response = await Http.PostAsJsonAsync(
+            $"{ApiConfig.ApiBaseUrl}api/SaveEventActivation?code=REDACTED_FOR_GROOMING",
+            new { EventActivationsId = eventActivationsId, CompanyName = companyName, Version = version, TimeStamp = timeStamp });
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"SaveEventActivation returned {(int)response.StatusCode}: {error}");
+        }
+    }
+
+    private async Task LoadExistingEventActivationVersionsAsync(string companyName)
+    {
+        var response = await GetEventActivationsByCompanyAsync(companyName);
+        sortedEventActivations = response?.Data?
+            .OrderByDescending(x => DateTime.TryParse(x.TimeStamp, out var dt) ? dt : DateTime.MinValue)
+            .ToList() ?? new List<EventActivationRecord>();
+
+        GeneratedVersions.Clear();
+        foreach (var record in sortedEventActivations)
+        {
+            var version = record.Version?.Trim().TrimStart('v', 'V') ?? "1";
+            var generated = new GeneratedEventVersion
+                {
+                    EventActivationsId = record.EventActivationsId,
+                    Version = string.IsNullOrWhiteSpace(record.Version) ? $"v{version}" : record.Version,
+                    CreatedAt = DateTime.TryParse(record.TimeStamp, out var createdAt) ? createdAt : DateTime.MinValue
+                };
+            generated.Assets = AssetOptions.Select(x => new GeneratedAsset
+                {
+                    AssetType = x.Key,
+                    PreviewUrl = GetEventAssetPreviewUrl(companyName, version, x.Key),
+                    DownloadUrl = GetEventAssetPreviewUrl(companyName, version, x.Key)
+                }).ToList();
+            GeneratedVersions.Add(generated);
+        }
+
+        GeneratedVersions = GeneratedVersions.OrderByDescending(x => x.CreatedAt).ToList();
+        if (GeneratedVersions.Any()) ViewGeneratedVersion(GeneratedVersions.First());
+    }
+
+    private async Task<GetEventActivationsResponse?> GetEventActivationsByCompanyAsync(string companyName)
+    {
+        var response = await Http.PostAsJsonAsync(
+            $"{ApiConfig.ApiBaseUrl}api/GetEventActivationsByCompany?code=REDACTED_FOR_GROOMING",
+            new { CompanyName = companyName });
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<GetEventActivationsResponse>();
+    }
+
+    private int GetNextEventActivationVersion()
+    {
+        return sortedEventActivations
+            .Select(x => int.TryParse(x.Version?.Trim().TrimStart('v', 'V'), out var n) ? n : 0)
+            .DefaultIfEmpty(0).Max() + 1;
+    }
+
+    private string GetLogicalEventActivationsId()
+    {
+        return sortedEventActivations
+            .Where(x => !string.IsNullOrWhiteSpace(x.EventActivationsId))
+            .OrderByDescending(x => DateTime.TryParse(x.TimeStamp, out var dt) ? dt : DateTime.MinValue)
+            .Select(x => x.EventActivationsId)
+            .FirstOrDefault() ?? Guid.NewGuid().ToString();
+    }
+
+    private string GetEventActivationFolderName(string companyName, string version)
+    {
+        var safeCompany = SanitizeCompanyName(companyName);
+        var safeVersion = (version ?? "1").Replace("v", "", StringComparison.OrdinalIgnoreCase).Trim();
+        return $"{safeCompany}-event-activation-v{safeVersion}";
+    }
+
+    private string GetEventAssetPreviewUrl(string companyName, string version, string assetType)
+    {
+        var baseUrl = (ApiConfig.StorageBaseUrl ?? "").TrimEnd('/');
+        //var savedImagesBase = baseUrl.EndsWith("/SavedImages", StringComparison.OrdinalIgnoreCase)
+            //? baseUrl
+            //: $"{baseUrl}/SavedImages";
+        return $"{baseUrl}/{GetEventActivationFolderName(companyName, version)}/{GetAssetFileName(assetType)}";
+    }
+
+    private string GetAssetFileName(string assetType) => $"{SanitizeAssetType(assetType)}.png";
+    private int GetGeneratedVersionCount() => sortedEventActivations.Count;
+    private void ViewGeneratedVersion(GeneratedEventVersion version) => ActiveGeneratedVersion = version;
+
+    private void UpdateGenerationStatus(string status, string details, int progress)
+    {
+        if (!string.IsNullOrWhiteSpace(GenerationStatus) && GenerationStatus != status && GenerationProgress > 0)
+            GenerationSteps.Add(GenerationStatus);
+        GenerationStatus = status;
+        CurrentStepDetails = details;
+        GenerationProgress = Math.Clamp(progress, 0, 100);
+    }
+
+    private string GetGenerateButtonText()
+    {
+        var count = AssetOptions.Count;
+        return SelectedImageIds.Any() ? $"Generate Event Kit ({count} assets)" : "Select an Image to Generate Event Kit";
+    }
+
+    private string SanitizeCompanyName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "Brand";
+        return string.Concat(value.Where(c => !Path.GetInvalidFileNameChars().Contains(c))).Replace(" ", "-").Replace("&", "");
+    }
+
+    private static string SanitizeAssetType(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "event-asset";
+        return Regex.Replace(value.ToLowerInvariant(), "[^a-z0-9-]+", "-").Trim('-');
+    }
+
+    private string GetAssetDisplayName(string key) => AssetOptions.FirstOrDefault(x => x.Key == key)?.DisplayName ?? key;
+    private string GetAssetIcon(string key) => AssetOptions.FirstOrDefault(x => x.Key == key)?.Icon ?? "🎪";
+
+    private async Task OpenUrl(string url)
+    {
+        if (!string.IsNullOrWhiteSpace(url)) await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private async Task DownloadUrl(string url, string fileName)
+    {
+        if (!string.IsNullOrWhiteSpace(url)) await JS.InvokeVoidAsync("eval", $"const a=document.createElement('a');a.href='{url}';a.download='{fileName}';a.target='_blank';document.body.appendChild(a);a.click();a.remove();");
+    }
+
+    private async Task CloseModal()
+    {
+        if (GenerationGuard is null && (IsGeneratingKit || isGeneratingEventImages)) return;
+        if (!await ConfirmGenerationCloseAsync()) return;
+
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+        if (OnModalClosed.HasDelegate && wasImageGenerated) await OnModalClosed.InvokeAsync();
+        newlyGeneratedImages.Clear();
+        SelectedImageIds.Clear();
+        SelectedImageUrls.Clear();
+        wasImageGenerated = false;
+        hasLoadedVersions = false;
+    }
+
+    private string GetQueryParameter(string queryString, string key, string defaultValue)
+    {
+        var parameters = System.Web.HttpUtility.ParseQueryString(queryString);
+        return parameters[key] ?? defaultValue;
+    }
+
+    private async Task<string> FetchDeliverableDetail(string deliverable)
+    {
+        var response = await Http.PostAsync(
+            $"{ApiConfig.ApiBaseUrl}api/GetDeliverableDetail?code=REDACTED_FOR_GROOMING",
+            new StringContent($"\"{deliverable}\"", Encoding.UTF8, "application/json"));
+        if (!response.IsSuccessStatusCode) return "Event and activation visual system";
+        var detail = await response.Content.ReadAsStringAsync();
+        return Regex.Replace(detail, @"\s*\r?\n\s*", " ").Trim();
+    }
+
+    private bool IsEventRelated(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        string[] keywords = { "event", "activation", "conference", "trade show", "tradeshow", "expo", "festival", "launch", "booth", "signage", "banner", "poster", "flyer", "merch", "wayfinding", "badge", "display" };
+        return keywords.Any(k => text.Contains(k, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public class AssetOption
+    {
+        public AssetOption(string key, string displayName, string icon, bool enabled) { Key = key; DisplayName = displayName; Icon = icon; Enabled = enabled; }
+        public string Key { get; set; }
+        public string DisplayName { get; set; }
+        public string Icon { get; set; }
+        public bool Enabled { get; set; }
+    }
+
+    public class EventActivationGenerationResult
+    {
+        public bool Success { get; set; }
+        public string Error { get; set; } = "";
+        public string EventActivationId { get; set; } = "";
+        public List<GeneratedAsset> Assets { get; set; } = new();
+    }
+
+    public class GeneratedAsset
+    {
+        public string AssetType { get; set; } = "";
+        public string PreviewUrl { get; set; } = "";
+        public string DownloadUrl { get; set; } = "";
+    }
+
+    public class GeneratedEventVersion
+    {
+        public string EventActivationsId { get; set; } = "";
+        public string Version { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public List<GeneratedAsset> Assets { get; set; } = new();
+    }
+
+    public class EventActivationRecord
+    {
+        public string Id { get; set; } = "";
+        public string EventActivationsId { get; set; } = "";
+        public string CompanyName { get; set; } = "";
+        public string Version { get; set; } = "";
+        public string TimeStamp { get; set; } = "";
+    }
+
+    public class GetEventActivationsResponse
+    {
+        public string Message { get; set; } = "";
+        public int Count { get; set; }
+        public List<EventActivationRecord> Data { get; set; } = new();
+    }
+
+    public class SaveEventActivationImageResponse
+    {
+        public string ImageUrl { get; set; } = "";
+        public string SavedUrl { get; set; } = "";
+    }
+}
+
+<style>
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        background: rgba(0,0,0,.58);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .vertical-modal-wrapper {
+        width: min(1180px, 96vw);
+        max-height: 94vh;
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 24px 80px rgba(0,0,0,.28);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .modal-close {
+        position: absolute;
+        right: 18px;
+        top: 14px;
+        z-index: 5;
+        border: 0;
+        background: transparent;
+        font-size: 32px;
+        line-height: 1;
+        color: #555;
+        cursor: pointer;
+    }
+
+    .modal-tabs {
+        display: flex;
+        gap: 8px;
+        padding: 18px 60px 0 24px;
+        border-bottom: 1px solid #ececec;
+        background: #fff;
+    }
+
+    .tab-button {
+        border: 0;
+        background: transparent;
+        padding: 12px 18px;
+        font-weight: 700;
+        color: #777;
+        border-bottom: 3px solid transparent;
+        cursor: pointer;
+    }
+
+        .tab-button.active {
+            color: #8B4513;
+            border-bottom-color: #8B4513;
+        }
+
+        .tab-button:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+        }
+
+    .tab-badge {
+        margin-left: 8px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #F5E6D3;
+        color: #8B4513;
+        font-size: 11px;
+    }
+
+        .tab-badge.generating {
+            background: #fff3cd;
+            color: #7a5a00;
+        }
+
+    .modal-scroll-content {
+        overflow-y: auto;
+        padding: 26px;
+    }
+
+    .modal-header h2 {
+        margin: 0 0 10px;
+        color: #2c2c2c;
+    }
+
+    .modal-intro {
+        color: #666;
+        line-height: 1.55;
+        margin-bottom: 22px;
+    }
+
+    .event-material-status {
+        background: #FFF8F1;
+        border: 1px solid #E8D0B3;
+        border-radius: 10px;
+        padding: 12px 15px;
+        margin-bottom: 20px;
+    }
+
+    .event-material-count {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: #6d3b18;
+    }
+
+    .event-material-icon {
+        font-size: 22px;
+    }
+
+    .selection-count {
+        padding: 2px 8px;
+        background: #8B4513;
+        color: #fff;
+        border-radius: 999px;
+        font-size: 12px;
+    }
+
+    .deliverable-section {
+        margin-bottom: 20px;
+    }
+
+    .section-title {
+        font-size: 16px;
+        color: #444;
+        margin: 0 0 10px;
+    }
+
+    .image-col {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+        gap: 14px;
+    }
+
+    .image-card {
+        border: 2px solid transparent;
+        border-radius: 12px;
+        overflow: hidden;
+        position: relative;
+        cursor: pointer;
+        background: #f6f6f6;
+        transition: .2s ease;
+    }
+
+        .image-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,.12);
+        }
+
+        .image-card.event-selected {
+            border-color: #8B4513;
+            box-shadow: 0 0 0 3px rgba(139,69,19,.10);
+        }
+
+    .image-thumb {
+        width: 100%;
+        aspect-ratio: 16 / 10;
+        object-fit: cover;
+        display: block;
+    }
+
+    .image-controls {
+        position: absolute;
+        top: 9px;
+        right: 9px;
+    }
+
+    .event-selection-indicator {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: rgba(255,255,255,.92);
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        color: #8B4513;
+        box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+
+        .event-selection-indicator.selected {
+            background: #8B4513;
+            color: #fff;
+        }
+
+    .event-selection-badge {
+        position: absolute;
+        left: 9px;
+        bottom: 9px;
+        background: #8B4513;
+        color: #fff;
+        padding: 5px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 38px 20px;
+        border: 1px dashed #d8d8d8;
+        border-radius: 12px;
+        background: #fafafa;
+    }
+
+    .empty-icon {
+        font-size: 48px;
+        margin-bottom: 10px;
+    }
+
+    .generate-images-button, .save-button {
+        background: #8B4513;
+        color: #fff;
+        border: 0;
+        border-radius: 8px;
+        padding: 11px 18px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .event-config-section {
+        margin-top: 28px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 12px;
+        border: 1px solid #ececec;
+    }
+
+        .event-config-section h3, .asset-selection-section h4 {
+            color: #6d3b18;
+        }
+
+    .config-options.two-col {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
+    }
+
+    .config-option label {
+        display: block;
+        margin-bottom: 7px;
+        font-weight: 700;
+        color: #3f3f3f;
+    }
+
+    .config-input, .config-select, .config-textarea {
+        width: 100%;
+        border: 1px solid #d9d9d9;
+        border-radius: 8px;
+        padding: 10px 11px;
+        background: #fff;
+    }
+
+    .config-textarea {
+        min-height: 90px;
+        resize: vertical;
+    }
+
+    .full-width {
+        margin-top: 16px;
+    }
+
+    .asset-selection-section {
+        margin-top: 22px;
+    }
+
+        .asset-selection-section p {
+            color: #777;
+            margin-top: -4px;
+        }
+
+    .asset-check-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+    }
+
+    .asset-check-card {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid #ddd;
+        background: #fff;
+        border-radius: 9px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+        .asset-check-card.active {
+            border-color: #8B4513;
+            background: #FFF8F1;
+        }
+
+    .asset-check-icon {
+        font-size: 20px;
+    }
+
+    .sticky-footer {
+        border-top: 1px solid #ececec;
+        background: #fff;
+        padding: 15px 24px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    .discard-button {
+        border: 1px solid #bbb;
+        background: #fff;
+        color: #555;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+        .save-button:disabled, .discard-button:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+    .generation-loading-container {
+        padding: 20px;
+        border-radius: 12px;
+        background: #faf7f4;
+        border: 1px solid #ead9cb;
+    }
+
+    .generation-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: center;
+    }
+
+    .generation-status {
+        font-weight: 700;
+        color: #8B4513;
+    }
+
+    .progress-bar-container {
+        height: 10px;
+        background: #e9e9e9;
+        border-radius: 999px;
+        overflow: hidden;
+        margin: 18px 0 8px;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: #8B4513;
+        transition: width .25s ease;
+    }
+
+    .current-step-details {
+        color: #666;
+    }
+
+    .generation-steps-log {
+        margin-top: 18px;
+    }
+
+    .step-item {
+        display: flex;
+        gap: 8px;
+        padding: 4px 0;
+        color: #666;
+    }
+
+    .step-check {
+        color: #2e7d32;
+        font-weight: 900;
+    }
+
+    .generation-error {
+        padding: 22px;
+        border-radius: 12px;
+        background: #fff3f3;
+        border: 1px solid #efbaba;
+    }
+
+    .generated-version-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 18px;
+        padding: 12px 14px;
+        background: #faf7f4;
+        border-radius: 10px;
+    }
+
+    .current-label-pill {
+        display: inline-block;
+        margin-right: 8px;
+        background: #8B4513;
+        color: #fff;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: 11px;
+    }
+
+    .preview-meta {
+        display: block;
+        color: #777;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .generated-count {
+        background: #F5E6D3;
+        color: #6d3b18;
+        padding: 4px 9px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 12px;
+    }
+
+    .generated-assets-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0,1fr));
+        gap: 18px;
+    }
+
+    .generated-asset-card {
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .generated-asset-title {
+        padding: 11px 13px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .generated-asset-image-wrap {
+        background: #f4f4f4;
+        min-height: 220px;
+        display: grid;
+        place-items: center;
+    }
+
+    .generated-asset-image {
+        width: 100%;
+        max-height: 520px;
+        object-fit: contain;
+        display: block;
+    }
+
+    .preview-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .toolbar-button {
+        border: 1px solid #cfcfcf;
+        background: #fff;
+        border-radius: 7px;
+        padding: 7px 10px;
+        cursor: pointer;
+    }
+
+        .toolbar-button.primary {
+            border-color: #8B4513;
+            color: #8B4513;
+            font-weight: 700;
+        }
+
+    .generated-history {
+        margin-top: 26px;
+    }
+
+    .generated-history-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .version-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px,1fr));
+        gap: 10px;
+    }
+
+    .version-card {
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        border: 1px solid #ddd;
+        border-radius: 9px;
+        background: #fff;
+        padding: 12px;
+        cursor: pointer;
+    }
+
+        .version-card.active {
+            border-color: #8B4513;
+            background: #FFF8F1;
+        }
+
+    .modal-busy-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        background: rgba(255,255,255,.68);
+        display: grid;
+        place-items: center;
+    }
+
+    .loader {
+        width: 42px;
+        height: 42px;
+        border: 4px solid #ddd;
+        border-top-color: #8B4513;
+        border-radius: 50%;
+        animation: spin .8s linear infinite;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @@media (max-width: 900px) {
+        .asset-check-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .generated-assets-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media (max-width: 680px) {
+        .modal-overlay {
+            padding: 0;
+        }
+
+        .vertical-modal-wrapper {
+            width: 100vw;
+            max-height: 100vh;
+            height: 100vh;
+            border-radius: 0;
+        }
+
+        .config-options.two-col, .asset-check-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .modal-scroll-content {
+            padding: 18px;
+        }
+
+        .modal-tabs {
+            padding-left: 10px;
+        }
+    }
+</style>

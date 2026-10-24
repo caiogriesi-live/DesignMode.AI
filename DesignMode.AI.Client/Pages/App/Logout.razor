@@ -1,0 +1,27 @@
+﻿@page "/app/logout"
+@using DesignMode.AI.Shared.Security;
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+
+@* <h3>Logging out...</h3> *@
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // Clear the stored token
+        await LocalStorage.RemoveItemAsync("authToken");
+
+        // Notify auth state provider
+        if (AuthProvider is JwtAuthenticationStateProvider jwtProvider)
+        {
+            jwtProvider.NotifyUserLogout();
+        }
+
+        // Redirect to login or home
+        Nav.NavigateTo("login", forceLoad: true);
+    }
+}
+

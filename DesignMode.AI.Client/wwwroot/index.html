@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="google" content="notranslate">
+    <title>designMode.ai</title>
+    <base href="/" />
+
+    <link rel="icon" type="image/png" href="favicon.png" />
+
+    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="sass/main.css" />
+    <link rel="stylesheet" href="DesignMode.AI.Client.styles.css" />
+
+    <link id="theme" href="https://blazor.cdn.telerik.com/blazor/7.1.0/kendo-theme-bootstrap/all.css" rel="stylesheet" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+
+    <link href="assets/css/nucleo-icons.css" rel="stylesheet" />
+    <link href="assets/css/nucleo-svg.css" rel="stylesheet" />
+    <link href="assets/css/brief-landing.css" rel="stylesheet" />
+
+    <link href="https://demos.creative-tim.com/argon-design-system/assets/css/argon-design-system.min.css?v=1.2.2" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://blazor.cdn.telerik.com/blazor/7.1.0/telerik-blazor.min.js"></script>
+
+    <script>
+        window.currentAudio = null;
+
+        window.playAudioFromUrl = async (audioUrl, dotNetHelper) => {
+            console.log('Attempting to play audio:', audioUrl);
+
+            try {
+                if (window.currentAudio) {
+                    window.currentAudio.pause();
+                    window.currentAudio.currentTime = 0;
+                    window.currentAudio = null;
+                }
+
+                const audio = new Audio(audioUrl);
+                window.currentAudio = audio;
+
+                audio.onended = async () => {
+                    if (dotNetHelper) {
+                        await dotNetHelper.invokeMethodAsync('OnAudioEnded', 0);
+                    }
+                    window.currentAudio = null;
+                };
+
+                audio.onerror = (error) => {
+                    console.error('Audio playback error:', error);
+                    window.currentAudio = null;
+
+                    if (dotNetHelper) {
+                        dotNetHelper.invokeMethodAsync('OnAudioEnded', 0);
+                    }
+                };
+
+                await audio.play();
+                return true;
+            } catch (error) {
+                console.error('Audio playback failed:', error);
+                console.error('Audio URL:', audioUrl);
+                throw error;
+            }
+        };
+
+        window.stopAllAudio = () => {
+            if (window.currentAudio) {
+                window.currentAudio.pause();
+                window.currentAudio.currentTime = 0;
+                window.currentAudio = null;
+                return true;
+            }
+
+            return false;
+        };
+
+        window.isMobileScreen = function () {
+            return window.innerWidth <= 768;
+        };
+    </script>
+
+    <style>
+        @font-face {
+            font-family: "SF Pro Display";
+            font-style: normal;
+            font-weight: 500;
+            src: url("https://raw.githubusercontent.com/blaisck/sfwin/master/SFPro/TrueType/SFProDisplay-Medium.ttf");
+        }
+
+        @font-face {
+            font-family: "SF Pro Display";
+            font-style: normal;
+            font-weight: 600;
+            src: url("https://raw.githubusercontent.com/blaisck/sfwin/master/SFPro/TrueType/SFProDisplay-SemiBold.ttf");
+        }
+    </style>
+</head>
+
+<body class="g-sidenav-show" style="background-color: #f2f3f8;">
+    <div id="app">
+        <div id="loading" style="position: absolute; top: 20vh; width: 100%; text-align: center; background-color: #f2f3f8;">
+            <div style="justify-content: center; align-items: center; background-color: #f2f3f8; margin: auto; width: 200px; height: 200px;">
+                <script src="https://unpkg.com/@dotlottie/player-component@latest/dist/dotlottie-player.mjs" type="module"></script>
+                <dotlottie-player src="https://lottie.host/fef2cd20-1bdf-4bd1-b1e3-5b8479431618/HUaIdfX7EN.lottie"
+                                  background="#F2F3F8"
+                                  speed="1"
+                                  style="width: 200px; height: 200px"
+                                  direction="1"
+                                  playMode="normal"
+                                  loop
+                                  autoplay>
+                </dotlottie-player>
+            </div>
+        </div>
+
+        <div id="blazor-error-ui">
+            An unhandled error has occurred.
+            <a href="" class="reload">Reload</a>
+            <a class="dismiss">🗙</a>
+        </div>
+
+        <script src="googleLogin.js" defer></script>
+        <script src="js/designmode-attribution.js"></script>
+        <script src="js/designmode-analytics.js"></script>
+        <script src="js/generation-unload-guard.js"></script>
+        <script>
+            (() => {
+                const normalizeDateEventTarget = event => {
+                    const input = event.target;
+                    if (!(input instanceof HTMLInputElement) || input.getAttribute("type") !== "date" || input.type !== "text") return;
+
+                    Object.defineProperty(input, "type", { configurable: true, get: () => "date" });
+                    window.setTimeout(() => { delete input.type; }, 0);
+                };
+
+                document.addEventListener("input", normalizeDateEventTarget, true);
+                document.addEventListener("change", normalizeDateEventTarget, true);
+            })();
+        </script>
+        <script src="_framework/blazor.webassembly.js"></script>
+    </div>
+
+    <script src="argon/assets/js/argon-dashboard.js"></script>
+
+    <script>
+        window.playBrandVideo = function () {
+            const vid = document.querySelector('.brand-video');
+
+            if (!vid) return;
+
+            vid.muted = true;
+            vid.setAttribute("muted", "");
+            vid.setAttribute("playsinline", "");
+            vid.setAttribute("webkit-playsinline", "");
+
+            const playPromise = vid.play();
+
+            if (playPromise !== undefined) {
+                playPromise.catch(err => {
+                    console.log("iOS autoplay blocked:", err);
+                });
+            }
+        };
+    </script>
+</body>
+<!-- DEPLOY TEST 2026-10-14-858 -->
+</html>

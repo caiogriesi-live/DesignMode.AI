@@ -1,0 +1,1296 @@
+@page "/login"
+@using DesignMode.AI.Shared.Security
+@using DesignMode.AI.Client.Services
+@using DesignMode.AI.Shared.Util
+@using System.Text
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject PostAuthNavigationService PostAuthNavigation
+@inject SavePending SavePending
+@inject ApiConfigService ApiConfig
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+
+<link href="assets/css/brief-landing.css" rel="stylesheet" />
+
+<!--
+    Google Identity Services.
+    Keep this Client ID in sync with the working Google auth used elsewhere
+    in the app. This must be an OAuth 2.0 "Web application" Client ID, and
+    every deployed origin must be listed in Authorized JavaScript origins.
+-->
+<meta name="google-signin-client_id"
+      content="920601965266-dio1oduk6jek0jnlti1t8nbgsnb5a7g9.apps.googleusercontent.com" />
+
+<div class="login-page">
+    <div class="login-background">
+
+        <!-- Logo above the card -->
+        <button type="button"
+                class="login-logo-button"
+                disabled="@isLoggingIn"
+                @onclick="GoToHome"
+                aria-label="Go to home">
+            <img src="assets/img/logo-left.png"
+                 class="login-logo-left"
+                 alt="DesignMode logo" />
+
+            <span class="login-logo-wordmark">
+                design<span class="login-logo-accent">
+                    <img src="images/logo-m3.svg"
+                         class="login-logo-m3"
+                         alt="" />
+                </span>ode.ai
+            </span>
+        </button>
+
+        <!-- Login card -->
+        <div class="login-card">
+
+            <h1 class="login-title" tabindex="-1">
+                Log in
+            </h1>
+
+            <p class="login-subtitle">
+                Transform plain-language ideas into designs and connect with creators.
+            </p>
+
+            <!-- Google login first -->
+            <div class="login-google-wrap @(isLoggingIn ? "is-disabled" : "")">
+                <div id="loginGoogleButton"
+                     class="login-google-button"
+                     aria-label="Continue with Google">
+                </div>
+            </div>
+
+            <div class="login-divider" aria-hidden="true">
+                <hr />
+                <span>OR</span>
+                <hr />
+            </div>
+
+            <!-- Standard login -->
+            <div class="login-form">
+
+                <input @bind="username"
+                       type="email"
+                       name="email"
+                       autocomplete="username"
+                       placeholder="Email Address"
+                       disabled="@isLoggingIn"
+                       class="login-input" />
+
+                <input @bind="password"
+                       type="password"
+                       name="password"
+                       autocomplete="current-password"
+                       placeholder="Password"
+                       disabled="@isLoggingIn"
+                       class="login-input" />
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="login-error">
+                        @errorMessage
+                    </div>
+                }
+
+                <button @onclick="HandleLogin"
+                        disabled="@isLoggingIn"
+                        class="login-primary-button">
+                    @if (isLoggingIn && !isGoogleLoggingIn)
+                    {
+                        <span>Logging in...</span>
+                    }
+                    else
+                    {
+                        <span>Continue</span>
+                    }
+                </button>
+
+                <!-- Forgot password & Sign up links -->
+                <div class="login-links-row">
+                    <button type="button"
+                            class="login-text-link"
+                            disabled="@isLoggingIn"
+                            @onclick="GoToForgot">
+                        Forgot password?
+                    </button>
+
+                    <button type="button"
+                            class="login-text-link"
+                            disabled="@isLoggingIn"
+                            @onclick="GoToSignup">
+                        Sign up
+                    </button>
+                </div>
+
+                <!-- Legal copy -->
+                <div class="login-legal">
+                    By continuing with Google or logging in, you agree to our
+                    <a href="/terms.html"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="login-link">
+                        Terms
+                    </a>
+                    and
+                    <a href="/privacy.html"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="login-link">
+                        Privacy Policy
+                    </a>.
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    html,
+    body,
+    #app {
+        margin: 0;
+        min-height: 100%;
+    }
+
+    .login-page {
+        width: 100%;
+        min-height: 100vh;
+        overflow-x: hidden;
+        overflow-y: auto;
+        background: #f2f3f8;
+    }
+
+    .login-background {
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        padding: 25px 18px 48px;
+        background: url('images/header-bg.png') center calc(100% + 350px) / cover no-repeat, linear-gradient(180deg, #ffffff 2%, #CDE8EE 60%);
+        animation: loginFadeIn 0.8s ease forwards;
+    }
+
+    @@keyframes loginFadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    .login-logo-button {
+        border: 0;
+        padding: 0;
+        margin: 0 0 20px;
+        background: transparent;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+        .login-logo-button:disabled {
+            cursor: default;
+            opacity: 0.65;
+        }
+
+    .login-logo-left {
+        width: 20px;
+        height: 20px;
+        object-fit: contain;
+        margin-top: -9px;
+    }
+
+    .login-logo-wordmark {
+        font-family: 'SF Pro Display', 'Arial', sans-serif;
+        font-weight: 650;
+        font-size: 24px;
+        color: #1f2951;
+        text-transform: none;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .login-logo-accent {
+        color: #ffa900;
+        font-weight: 650;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .login-logo-m3 {
+        width: 30px;
+        margin-left: 3px;
+        margin-right: 3px;
+        margin-bottom: 3px;
+        display: block;
+    }
+
+    .login-card {
+        width: min(100%, 430px);
+        background: rgba(255, 255, 255, 0.97);
+        padding: 40px;
+        border-radius: 24px;
+        box-shadow: 0 22px 50px rgba(0, 0, 0, 0.12), 0 4px 20px rgba(0, 0, 0, 0.08);
+        text-align: center;
+        overflow: hidden;
+    }
+
+    .login-title {
+        margin: 0 0 10px;
+        color: #1f2951;
+        font-size: 28px;
+        line-height: 1.15;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+    }
+
+    .login-subtitle {
+        max-width: 340px;
+        margin: 0 auto 22px;
+        color: #5d5d5d;
+        font-size: 16px;
+        line-height: 1.5;
+        font-weight: 400;
+    }
+
+    .login-google-wrap {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        transition: opacity 0.2s ease;
+    }
+
+        .login-google-wrap.is-disabled {
+            opacity: 0.55;
+            pointer-events: none;
+        }
+
+    .login-google-button {
+        width: 100%;
+        max-width: 400px;
+        min-width: 0;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+        /*
+                Google Identity Services renders an iframe at the exact pixel width
+                passed to renderButton(). Do not stretch the iframe after rendering;
+                doing so can clip the right side on narrow mobile screens.
+            */
+        .login-google-button > div {
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin: 0 auto !important;
+        }
+
+        .login-google-button iframe {
+            display: block !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+        }
+
+    .login-divider {
+        width: 100%;
+        margin: 14px 0;
+        display: flex;
+        align-items: center;
+        text-align: center;
+    }
+
+        .login-divider hr {
+            flex: 1;
+            border: 0;
+            border-top: 1px solid #ddd;
+            margin: 0;
+        }
+
+        .login-divider span {
+            margin: 0 11px;
+            color: #999;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+    .login-form {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .login-input {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 11px 16px 12px 22px;
+        border: 1px solid #ccc;
+        border-radius: 25px;
+        outline: none;
+        background: #fff;
+        color: #1c1c1e;
+        font-family: inherit;
+        font-size: 16px;
+        line-height: 1.25;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+
+        .login-input:focus {
+            border-color: #244d88;
+            box-shadow: 0 0 0 4px rgba(36, 77, 136, 0.12);
+        }
+
+        .login-input::placeholder {
+            color: #9aa3b0;
+        }
+
+        .login-input:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+
+    .login-error {
+        margin: 0;
+        padding: 10px 14px;
+        border-radius: 20px;
+        background: #ffe5e5;
+        color: #b00020;
+        font-size: 13px;
+        line-height: 1.4;
+        text-align: center;
+    }
+
+    .login-primary-button {
+        width: 100%;
+        border: 0;
+        border-radius: 25px;
+        margin-top: 3px;
+        padding: 12px 16px;
+        background: #244d88;
+        color: #fff;
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 7px 18px rgba(36, 77, 136, 0.23);
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+    }
+
+        .login-primary-button:hover:not(:disabled) {
+            background: #1d3f70;
+            transform: translateY(-1px);
+            box-shadow: 0 10px 22px rgba(36, 77, 136, 0.27);
+        }
+
+        .login-primary-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+    .login-links-row {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 0 8px;
+        margin-top: 2px;
+        font-size: 13px;
+    }
+
+    .login-text-link {
+        border: 0;
+        padding: 2px 0;
+        margin: 0;
+        background: transparent;
+        color: #244d88;
+        text-decoration: none;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+        .login-text-link:hover:not(:disabled) {
+            text-decoration: underline;
+        }
+
+        .login-text-link:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+    .login-link {
+        color: #244d88;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+        .login-link:hover {
+            text-decoration: underline;
+        }
+
+    .login-legal {
+        margin-top: 2px;
+        color: #777;
+        font-size: 11px;
+        line-height: 1.5;
+    }
+
+    @@media (max-width: 500px) {
+        .login-background {
+            padding: 20px 14px 34px;
+        }
+
+        .login-logo-button {
+            margin-bottom: 16px;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 100%;
+            padding: 30px 22px 27px;
+            border-radius: 26px;
+        }
+
+        .login-title {
+            font-size: 26px;
+        }
+
+        .login-subtitle {
+            font-size: 14px;
+            margin-bottom: 19px;
+        }
+
+        .login-google-wrap,
+        .login-google-button,
+        .login-divider,
+        .login-form,
+        .login-input,
+        .login-primary-button {
+            width: 100%;
+            max-width: 100%;
+        }
+    }
+
+    @@media (max-width: 360px) {
+        .login-background {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        .login-card {
+            padding: 26px 16px 24px;
+            border-radius: 22px;
+        }
+
+        .login-title {
+            font-size: 24px;
+        }
+
+        .login-subtitle {
+            font-size: 13px;
+        }
+
+        .login-links-row {
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+    }
+</style>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<script>
+    window.loginGoogle = window.loginGoogle || (function () {
+        "use strict";
+
+        let dotNetHelper = null;
+        let clientId = "";
+        let renderRetryTimer = null;
+        let resizeTimer = null;
+        let lastRenderedWidth = 0;
+        let initialized = false;
+
+        function getHost() {
+            return document.getElementById("loginGoogleButton");
+        }
+
+        function getSafeButtonWidth() {
+            const host = getHost();
+
+            if (!host) {
+                return 320;
+            }
+
+            const rect = host.getBoundingClientRect();
+            const availableWidth = Math.floor(rect.width || 320);
+
+            /*
+                Leave a small gutter for borders, sub-pixel rounding,
+                mobile zoom, and device-pixel-ratio differences.
+            */
+            const safeWidth = Math.floor(availableWidth - 6);
+
+            return Math.max(120, Math.min(400, safeWidth));
+        }
+
+        function render(forceRender) {
+            const host = getHost();
+
+            if (!host || !clientId) {
+                return;
+            }
+
+            if (!window.google || !google.accounts || !google.accounts.id) {
+                if (renderRetryTimer) {
+                    clearTimeout(renderRetryTimer);
+                }
+
+                renderRetryTimer = setTimeout(function () {
+                    render(forceRender);
+                }, 250);
+
+                return;
+            }
+
+            const width = getSafeButtonWidth();
+
+            if (
+                initialized &&
+                !forceRender &&
+                Math.abs(width - lastRenderedWidth) < 2
+            ) {
+                return;
+            }
+
+            try {
+                google.accounts.id.initialize({
+                    client_id: clientId,
+                    callback: handleCredentialResponse,
+                    ux_mode: "popup",
+                    auto_select: false,
+                    cancel_on_tap_outside: false
+                });
+
+                host.innerHTML = "";
+
+                google.accounts.id.renderButton(
+                    host,
+                    {
+                        type: "standard",
+                        theme: "outline",
+                        size: "large",
+                        text: "continue_with",
+                        shape: "pill",
+                        logo_alignment: "left",
+                        width: width
+                    }
+                );
+
+                initialized = true;
+                lastRenderedWidth = width;
+            }
+            catch (error) {
+                console.error("Unable to initialize Google Identity Services:", error);
+            }
+        }
+
+        async function handleCredentialResponse(response) {
+            const idToken = response && response.credential;
+
+            if (!idToken || !dotNetHelper) {
+                return;
+            }
+
+            try {
+                await dotNetHelper.invokeMethodAsync(
+                    "CompleteGoogleLogin",
+                    idToken
+                );
+            }
+            catch (error) {
+                console.error("Google login failed:", error);
+            }
+        }
+
+        function scheduleResize() {
+            if (resizeTimer) {
+                clearTimeout(resizeTimer);
+            }
+
+            resizeTimer = setTimeout(function () {
+                resizeTimer = null;
+                render(true);
+            }, 120);
+        }
+
+        window.addEventListener("resize", scheduleResize);
+        window.addEventListener("orientationchange", scheduleResize);
+
+        return {
+            initialize: function (helper, configuredClientId) {
+                dotNetHelper = helper;
+                clientId = (configuredClientId || "").trim();
+
+                requestAnimationFrame(function () {
+                    render(true);
+                });
+            },
+
+            setDisabled: function (disabled) {
+                const wrap = document.querySelector(".login-google-wrap");
+
+                if (wrap) {
+                    wrap.classList.toggle("is-disabled", !!disabled);
+                }
+            },
+
+            rerender: function () {
+                requestAnimationFrame(function () {
+                    render(true);
+                });
+            }
+        };
+    })();
+</script>
+
+@code {
+    private const string GoogleClientId =
+        "920601965266-dio1oduk6jek0jnlti1t8nbgsnb5a7g9.apps.googleusercontent.com";
+
+    private string username = string.Empty;
+    private string password = string.Empty;
+    private string errorMessage = string.Empty;
+    private string curPath = string.Empty;
+
+    private bool isLoggingIn = false;
+    private bool isGoogleLoggingIn = false;
+
+    private DotNetObjectReference<object>? _googleDotNetHelper;
+    private bool _googleInitialized = false;
+
+    private InviteClientData InviteData { get; set; } = new InviteClientData();
+
+    // Get FULL URL (includes query string)
+    private string GetCurrentPath()
+    {
+        return Nav.Uri;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoggingIn = false;
+        isGoogleLoggingIn = false;
+        errorMessage = string.Empty;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            var authenticatedEmail =
+                authState.User.FindFirst("email")?.Value
+                ?? authState.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? authState.User.Identity?.Name
+                ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(authenticatedEmail))
+            {
+                await RedirectLoggedInUser(authenticatedEmail);
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_googleInitialized)
+        {
+            _googleInitialized = true;
+            _googleDotNetHelper = DotNetObjectReference.Create<object>(this);
+
+            try
+            {
+                await JS.InvokeVoidAsync(
+                    "loginGoogle.initialize",
+                    _googleDotNetHelper,
+                    GoogleClientId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Google button initialization error: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task HandleLogin()
+    {
+        if (isLoggingIn)
+            return;
+
+        isLoggingIn = true;
+        isGoogleLoggingIn = false;
+        errorMessage = string.Empty;
+        curPath = GetCurrentPath();
+
+        StateHasChanged();
+        await SetGoogleDisabled(true);
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(username) ||
+                string.IsNullOrWhiteSpace(password))
+            {
+                errorMessage = "Email and password are required.";
+                await StopLoggingIn();
+                return;
+            }
+
+            username = username.Trim();
+
+            var success = await Auth.Login(
+                username,
+                password,
+                ApiConfig.ApiBaseUrl);
+
+            if (!success)
+            {
+                errorMessage = "Invalid credentials.";
+                await StopLoggingIn();
+                return;
+            }
+
+            await SavePending.SavePendingIdeasAfterLogin(ApiConfig.ApiBaseUrl);
+            await SavePending.SavePendingCompanyInfoAfterLogin(ApiConfig.ApiBaseUrl);
+
+            await RedirectLoggedInUser(username);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Login error: {ex.Message}";
+            await StopLoggingIn();
+        }
+    }
+
+    [JSInvokable]
+    public async Task CompleteGoogleLogin(string idToken)
+    {
+        if (isLoggingIn)
+            return;
+
+        isLoggingIn = true;
+        isGoogleLoggingIn = true;
+        errorMessage = string.Empty;
+
+        await InvokeAsync(StateHasChanged);
+        await SetGoogleDisabled(true);
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(idToken))
+            {
+                errorMessage = "Google did not return a valid sign-in token.";
+                await StopLoggingIn();
+                return;
+            }
+
+            var success = await Auth.LoginWithGoogle(
+                idToken,
+                ApiConfig.ApiBaseUrl);
+
+            if (!success)
+            {
+                errorMessage = "Google login failed. Please try again.";
+                await StopLoggingIn();
+                return;
+            }
+
+            await SavePending.SavePendingIdeasAfterLogin(ApiConfig.ApiBaseUrl);
+            await SavePending.SavePendingCompanyInfoAfterLogin(ApiConfig.ApiBaseUrl);
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+
+            if (authState.User.Identity?.IsAuthenticated != true)
+            {
+                errorMessage =
+                    "Google login succeeded, but the authenticated session is not ready.";
+                await StopLoggingIn();
+                return;
+            }
+
+            var authenticatedEmail =
+                authState.User.FindFirst("email")?.Value
+                ?? authState.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? authState.User.Identity?.Name
+                ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(authenticatedEmail))
+            {
+                errorMessage =
+                    "Google login succeeded, but we could not determine your account email.";
+                await StopLoggingIn();
+                return;
+            }
+
+            await RedirectLoggedInUser(authenticatedEmail.Trim());
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Google login error: {ex.Message}";
+            await StopLoggingIn();
+        }
+    }
+
+    private async Task StopLoggingIn()
+    {
+        isLoggingIn = false;
+        isGoogleLoggingIn = false;
+
+        await InvokeAsync(StateHasChanged);
+        await SetGoogleDisabled(false);
+
+        try
+        {
+            await JS.InvokeVoidAsync("loginGoogle.rerender");
+        }
+        catch
+        {
+            // Ignore a Google button re-render failure; email login still works.
+        }
+    }
+
+    private async Task SetGoogleDisabled(bool disabled)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("loginGoogle.setDisabled", disabled);
+        }
+        catch
+        {
+            // Google may still be loading.
+        }
+    }
+
+    private Task RedirectLoggedInUser(string email) => PostAuthNavigation.NavigateAsync();
+
+    private async Task<string?> CheckUserOnboarded(string usernameValue, string url)
+    {
+        try
+        {
+            using HttpClient client = new HttpClient();
+
+            string functionUrl =
+                $"{url}api/CheckUserOnboarded?username={Uri.EscapeDataString(usernameValue)}&code=REDACTED_FOR_GROOMING";
+
+            var response = await client.GetAsync(functionUrl);
+
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            var result =
+                await response.Content.ReadFromJsonAsync<CheckUserOnboardedResponse>();
+
+            return result?.Onboarded;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public class CheckUserOnboardedResponse
+    {
+        public bool Success { get; set; }
+        public string? Username { get; set; }
+        public string? UserId { get; set; }
+        public string? Onboarded { get; set; }
+    }
+
+    private string EncryptEmail(string email)
+    {
+        if (string.IsNullOrEmpty(email))
+            return "";
+
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(email);
+            return Convert.ToBase64String(bytes);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private async Task<InviteClientData?> GetInviteClientByEmail(string email)
+    {
+        try
+        {
+            using var client = new HttpClient();
+
+            var requestBody = new
+            {
+                email = email
+            };
+
+            var json =
+                System.Text.Json.JsonSerializer.Serialize(requestBody);
+
+            var content =
+                new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(
+                $"{ApiConfig.ApiBaseUrl}api/GetInviteClientByEmail?code=REDACTED_FOR_GROOMING",
+                content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent =
+                    await response.Content.ReadAsStringAsync();
+
+                using var document =
+                    System.Text.Json.JsonDocument.Parse(responseContent);
+
+                var root = document.RootElement;
+
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    var firstItem = root;
+
+                    string? GetStringValue(
+                        System.Text.Json.JsonElement element,
+                        string propertyName)
+                    {
+                        if (element.TryGetProperty(propertyName, out var property))
+                        {
+                            return ExtractValue(property);
+                        }
+
+                        foreach (var prop in element.EnumerateObject())
+                        {
+                            if (prop.Name.Equals(
+                                propertyName,
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                return ExtractValue(prop.Value);
+                            }
+                        }
+
+                        return null;
+                    }
+
+                    string? ExtractValue(
+                        System.Text.Json.JsonElement property)
+                    {
+                        if (property.ValueKind ==
+                            System.Text.Json.JsonValueKind.Object)
+                        {
+                            if (property.TryGetProperty(
+                                "s",
+                                out var stringValue))
+                            {
+                                return stringValue.GetString();
+                            }
+
+                            if (property.TryGetProperty(
+                                "S",
+                                out var stringValueUpper))
+                            {
+                                return stringValueUpper.GetString();
+                            }
+
+                            if (property.TryGetProperty(
+                                "BOOL",
+                                out var boolValue))
+                            {
+                                return boolValue.GetBoolean().ToString();
+                            }
+
+                            if (property.TryGetProperty(
+                                "bool",
+                                out var boolValueLower))
+                            {
+                                return boolValueLower.GetBoolean().ToString();
+                            }
+
+                            if (property.TryGetProperty(
+                                "N",
+                                out var numberValue))
+                            {
+                                return numberValue.GetString();
+                            }
+
+                            if (property.TryGetProperty(
+                                "n",
+                                out var numberValueLower))
+                            {
+                                return numberValueLower.GetString();
+                            }
+                        }
+                        else if (
+                            property.ValueKind ==
+                            System.Text.Json.JsonValueKind.String)
+                        {
+                            return property.GetString();
+                        }
+                        else if (
+                            property.ValueKind ==
+                                System.Text.Json.JsonValueKind.True ||
+                            property.ValueKind ==
+                                System.Text.Json.JsonValueKind.False)
+                        {
+                            return property.GetBoolean().ToString();
+                        }
+                        else if (
+                            property.ValueKind ==
+                            System.Text.Json.JsonValueKind.Number)
+                        {
+                            return property.ToString();
+                        }
+
+                        return null;
+                    }
+
+                    return new InviteClientData
+                        {
+                            Id = GetStringValue(firstItem, "Id"),
+                            Name = GetStringValue(firstItem, "Name"),
+                            Industry = GetStringValue(firstItem, "Industry"),
+                            Prompt = GetStringValue(firstItem, "Prompt"),
+                            Email = GetStringValue(firstItem, "Email"),
+                            ImagePath =
+                                GetStringValue(firstItem, "ImagePath")
+                                ?? GetStringValue(firstItem, "Imagepath"),
+                            UseSameImageSeedForAll =
+                                GetBoolValue(
+                                    firstItem,
+                                    "UseSameImageSeedForAll"),
+                            ImageId = GetStringValue(firstItem, "ImageId"),
+                            TimeStamp =
+                                GetStringValue(firstItem, "Timestamp")
+                                ?? GetStringValue(firstItem, "TimeStamp")
+                        };
+                }
+            }
+
+            if (response.StatusCode ==
+                System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"Exception getting invite client: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private bool GetBoolValue(
+        System.Text.Json.JsonElement element,
+        string propertyName)
+    {
+        if (element.TryGetProperty(propertyName, out var property))
+        {
+            return ExtractBoolValue(property);
+        }
+
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (prop.Name.Equals(
+                propertyName,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return ExtractBoolValue(prop.Value);
+            }
+        }
+
+        return false;
+    }
+
+    private bool ExtractBoolValue(
+        System.Text.Json.JsonElement property)
+    {
+        if (property.ValueKind ==
+            System.Text.Json.JsonValueKind.Object)
+        {
+            if (property.TryGetProperty("BOOL", out var boolValue))
+            {
+                return boolValue.GetBoolean();
+            }
+
+            if (property.TryGetProperty(
+                "bool",
+                out var boolValueLower))
+            {
+                return boolValueLower.GetBoolean();
+            }
+        }
+
+        if (
+            property.ValueKind ==
+                System.Text.Json.JsonValueKind.True ||
+            property.ValueKind ==
+                System.Text.Json.JsonValueKind.False)
+        {
+            return property.GetBoolean();
+        }
+
+        if (property.ValueKind ==
+            System.Text.Json.JsonValueKind.String)
+        {
+            if (bool.TryParse(
+                property.GetString(),
+                out bool result))
+            {
+                return result;
+            }
+        }
+
+        return false;
+    }
+
+    public class InviteClientData
+    {
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public string? Industry { get; set; }
+        public string? Prompt { get; set; }
+        public string? Email { get; set; }
+        public string? ImagePath { get; set; }
+        public string? ImageId { get; set; }
+        public bool UseSameImageSeedForAll { get; set; }
+        public string? TimeStamp { get; set; }
+    }
+
+    private async Task<CheckSubscriptionResponse> CheckUserSubscription(
+        string email,
+        string url)
+    {
+        try
+        {
+            using HttpClient client = new HttpClient();
+
+            string functionUrl =
+                $"{url}api/CheckUserSubscription?email={Uri.EscapeDataString(email)}&code=REDACTED_FOR_GROOMING";
+
+            var response = await client.GetAsync(functionUrl);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+
+                var result =
+                    System.Text.Json.JsonSerializer.Deserialize<CheckSubscriptionResponse>(
+                        json,
+                        new System.Text.Json.JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true
+                            });
+
+                return result ?? new CheckSubscriptionResponse
+                    {
+                        Success = false,
+                        HasSubscription = false
+                    };
+            }
+        }
+        catch
+        {
+            // Fall through to default result.
+        }
+
+        return new CheckSubscriptionResponse
+            {
+                Success = false,
+                HasSubscription = false
+            };
+    }
+
+    public class CheckSubscriptionResponse
+    {
+        public bool Success { get; set; }
+        public string? Email { get; set; }
+        public string? UserId { get; set; }
+        public bool HasSubscription { get; set; }
+        public int SubscriptionCount { get; set; }
+        public List<SubscriptionDto>? Subscriptions { get; set; }
+    }
+
+    public class SubscriptionDto
+    {
+        public string? Id { get; set; }
+        public string? UserId { get; set; }
+        public string? SubscriptionId { get; set; }
+        public string? Status { get; set; }
+        public string? PriceId { get; set; }
+        public string? Name { get; set; }
+    }
+
+    private async Task GoToSignup()
+    {
+        if (!isLoggingIn)
+        {
+            Nav.NavigateTo(PostAuthNavigation.AuthenticationLink("/signup"), true);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private async Task GoToHome()
+    {
+        if (!isLoggingIn)
+        {
+            Nav.NavigateTo("/", true);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private async Task GoToForgot()
+    {
+        if (!isLoggingIn)
+        {
+            Nav.NavigateTo("/forgot", true);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    public class TokenResponse
+    {
+        public string? Token { get; set; }
+        public string? Email { get; set; }
+        public string? Name { get; set; }
+    }
+}

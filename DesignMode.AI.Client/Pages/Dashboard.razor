@@ -1,0 +1,39 @@
+@page "/init/dashboard"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Headers
+@using System.Net.Http.Json
+@using DesignMode.AI.Shared.Models
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject DesignMode.AI.Client.Services.ApiConfigService ApiConfig
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
+@inject Blazored.LocalStorage.ILocalStorageService Storage
+<PageTitle>Projects | DesignMode.AI</PageTitle>
+<main class="projects-page">
+ <DesignMode.AI.Client.Pages.Init.ClientLeftNav />
+ <div class="projects-content">
+  <DesignMode.AI.Client.Components.WorkspaceBrandHeader />
+  <section class="projects-heading"><div><p class="eyebrow">YOUR WORKSPACE</p><h1>Projects</h1><p>Create, open, and manage your generated work.</p></div><button class="new-project-button" @onclick="ShowCreate">+ New Project</button></section>
+  @if (!string.IsNullOrWhiteSpace(error)) { <div class="project-error" role="alert">@error</div> }
+  else if (loading) { <div class="project-loading">Loading your projects…</div> }
+  else if (projects.Count == 0) { <section class="empty-projects"><div class="placeholder-mark">DM</div><h2>Create your first project</h2><p>Your generated images, websites, social assets, and videos will live here.</p><button class="new-project-button" @onclick="ShowCreate">New Project</button></section> }
+  else { <section class="project-grid" aria-label="Your projects"><button class="create-card" @onclick="ShowCreate"><span>+</span><strong>New Project</strong><small>Start a fresh creative workspace</small></button>@foreach (var project in projects) { <a class="project-card" href="@project.Link"><div class="project-preview">@if (!string.IsNullOrWhiteSpace(project.ThumbnailUrl)) { <img src="@project.ThumbnailUrl" alt="" loading="lazy" @onerror="() => project.ThumbnailUrl = null" /> } else { <div class="placeholder-mark">DM</div> }</div><div class="project-card-body"><h2>@project.Name</h2><p>@(string.IsNullOrWhiteSpace(project.Industry) ? "Creative project" : project.Industry)</p><span class="project-open-label">Open project</span></div></a> }</section> }
+ </div>
+</main>
+@code {
+ private readonly List<DashboardProject> projects = [];
+ private bool loading = true; private string? error;
+ protected override async Task OnInitializedAsync()
+ {
+     var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+     if (auth.User.Identity?.IsAuthenticated != true)
+     {
+         Navigation.NavigateTo("/login", forceLoad: true);
+         return;
+     }
+     await LoadProjects();
+ }
+ private void ShowCreate() => Navigation.NavigateTo("/init/init");
+ private async Task LoadProjects() { try { projects.Clear(); projects.AddRange(await SendAsync<List<DashboardProject>>(HttpMethod.Get, "api/dashboard/projects") ?? []); } catch { error = "We couldn't load your projects. Please sign in again or retry."; } finally { loading = false; } }
+ private async Task<T?> SendAsync<T>(HttpMethod method, string path, object? body = null) { var token = await Storage.GetItemAsync<string>("authToken"); using var request = new HttpRequestMessage(method, $"{ApiConfig.ApiBaseUrl.TrimEnd('/')}/{path}"); request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token); if (body is not null) request.Content = JsonContent.Create(body); using var response = await Http.SendAsync(request); response.EnsureSuccessStatusCode(); return await response.Content.ReadFromJsonAsync<T>(); }
+}

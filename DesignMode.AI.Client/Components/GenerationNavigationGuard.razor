@@ -1,0 +1,156 @@
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components.Routing
+@implements IAsyncDisposable
+@inject NavigationManager Navigation
+
+@inject IJSRuntime JS
+
+@* .NET 8 supports oncancel but not its preventDefault modifier. Let the native
+   dialog dismiss on Escape; Stay resolves the pending navigation as false. *@
+<dialog @ref="_dialog" id="generation-exit-confirmation" class="generation-confirmation" aria-labelledby="generation-guard-title"
+        aria-describedby="generation-guard-message" @oncancel="Stay">
+    <div class="generation-confirmation-card">
+    <h2 id="generation-guard-title">AI generation is still in progress</h2>
+    <p id="generation-guard-message">If you leave or close this window, the generation may not complete.</p>
+    <div class="generation-guard-actions">
+        <button type="button" class="btn btn-primary generation-wait" autofocus @onclick="Stay">@(Guard.IsNavigation ? "Stay Here" : "Wait for Generation")</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="Leave">Leave Anyway</button>
+    </div>
+    </div>
+</dialog>
+
+<style>
+
+/* Keep the confirmation's layout with its markup, like the Gen workspace modals. */
+#generation-exit-confirmation {
+    position: fixed;
+    inset: 0;
+    margin: 0;
+    width: 100vw;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    padding: 24px;
+    box-sizing: border-box;
+    border: 0;
+    background: transparent;
+    transform: none;
+    overflow: auto;
+}
+#generation-exit-confirmation:not([open]) { display: none; }
+#generation-exit-confirmation[open] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#generation-exit-confirmation::backdrop {
+    background: rgba(20, 27, 59, 0.45);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+#generation-exit-confirmation .generation-confirmation-card {
+    width: 100%;
+    max-width: 520px;
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 36px;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    background: #fff;
+    color: #1f2951;
+    font-family: inherit;
+    text-align: center;
+    overflow-wrap: anywhere;
+    box-shadow: 0 20px 60px #1f295133;
+}
+#generation-exit-confirmation h2 {
+    margin: 0 0 16px;
+    color: inherit;
+    font-size: 1.4rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+#generation-exit-confirmation p {
+    margin: 0;
+    color: #666;
+    font-size: 1rem;
+    line-height: 1.6;
+}
+#generation-exit-confirmation .generation-guard-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 28px;
+}
+#generation-exit-confirmation button {
+    min-height: 44px;
+    margin: 0;
+    padding: 10px 20px;
+    border: 2px solid #ddd;
+    border-radius: 999px;
+    background: transparent;
+    color: #333;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    white-space: normal;
+    box-shadow: none;
+}
+#generation-exit-confirmation button:hover { border-color: #999; color: #000; }
+#generation-exit-confirmation .generation-wait {
+    border: none;
+    background: #4caf50;
+    color: #fff;
+}
+#generation-exit-confirmation .generation-wait:hover {
+    border: none;
+    background: #388e3c;
+    color: #fff;
+}
+#generation-exit-confirmation button:focus-visible {
+    outline: 3px solid #1f2951;
+    outline-offset: 3px;
+}
+@@media (max-width: 480px) {
+    #generation-exit-confirmation { padding: 16px; }
+    #generation-exit-confirmation .generation-confirmation-card { padding: 24px; max-height: calc(100dvh - 32px); }
+    #generation-exit-confirmation .generation-guard-actions { flex-direction: column; }
+    #generation-exit-confirmation button { width: 100%; }
+}
+</style>
+
+@code {
+    [Parameter, EditorRequired] public ActiveGenerationGuard Guard { get; set; } = default!;
+    private IDisposable? _navigation;
+    private ElementReference _dialog;
+    private IJSObjectReference? _dialogModule;
+    protected override void OnInitialized()
+    {
+        Guard.Changed += Refresh;
+        _navigation = Navigation.RegisterLocationChangingHandler(ChangingLocation);
+    }
+    private async ValueTask ChangingLocation(LocationChangingContext context)
+    {
+        if (!Guard.ShouldWarn) return;
+        using var cancellation = context.CancellationToken.Register(() => Guard.Resolve(false));
+        if (!await Guard.ConfirmLeaveAsync(navigation: true)) context.PreventNavigation();
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        _dialogModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/ai-credits-modal.js");
+        await _dialogModule.InvokeVoidAsync("setOpen", _dialog, Guard.IsConfirming);
+    }
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+    private void Stay() => Guard.Resolve(false);
+    private void Leave() => Guard.Resolve(true);
+    public async ValueTask DisposeAsync()
+    {
+        _navigation?.Dispose();
+        Guard.Changed -= Refresh;
+        await Guard.DisposeAsync();
+        if (_dialogModule is not null) await _dialogModule.DisposeAsync();
+    }
+}

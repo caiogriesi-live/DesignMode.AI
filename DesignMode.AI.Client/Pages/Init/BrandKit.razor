@@ -1,0 +1,1542 @@
+@inherits DesignMode.AI.Client.Components.GenerationAwareComponent
+@using System.Collections.Generic
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.AspNetCore.Components.Authorization;
+@using Newtonsoft.Json;
+@using System.Text;
+@using System.Text.RegularExpressions;
+
+@if (IsBusy)
+{
+    <div class="modal-busy-overlay">
+        <div class="loader"></div>
+    </div>
+}
+
+@if (Show)
+{
+    <div class="ai-modal-overlay" @onclick="CloseModal">
+        <div class="ai-mobile-modal" @onclick:stopPropagation>
+
+            <div class="ai-modal-header">
+                <span>Brand Kit</span>
+                <button class="ai-modal-close" @onclick="CloseModal" style="color:black">✕</button>
+            </div>
+
+            <div xxclass="concept-balloon" xxid="conceptPopover" @onclick:stopPropagation>
+                <div class="concept-balloon-header">@(conceptImages.Count == 0 ? "No Assets Selected" : "Selected Images and Videos")</div>
+                <div class="concept-balloon-items">
+                    @if (conceptImages != null && conceptImages.Any())
+                    {
+                        int visibleCount = Math.Min(5, conceptImages.Count);
+
+                        @for (int i = 0; i < visibleCount; i++)
+                        {
+                            var item = conceptImages[i];
+
+                            // Check if this image has a video ID
+                            bool hasVideoId = !string.IsNullOrEmpty(item.VideoId);
+
+                            if (i == 4 && conceptImages.Count > 5)
+                            {
+                                <div class="concept-balloon-item" @onclick="HandleOpenEditConceptClick">
+                                    <div class="concept-balloon-thumb extra-thumb">
+                                        <img src="@item.ImageUrl" class="extra-thumb-img" />
+                                        <div class="extra-thumb-overlay">+@(conceptImages.Count - 4)</div>
+                                        @if (hasVideoId)
+                                        {
+                                            <div class="video-indicator">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));">
+                                                    <path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
+                                                </svg>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="concept-balloon-item" @onclick="() => HandleToggleSelectionClick(item.ImageUrl, item.ImageId, hasVideoId)">
+                                    <div class="concept-balloon-thumb" style="position: relative;">
+                                        <img src="@item.ImageUrl" class="concept-balloon-thumb" />
+                                        @if (hasVideoId)
+                                        {
+                                            <div class="video-indicator">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="white" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));">
+                                                    <path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" />
+                                                </svg>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    }
+                    else
+                    {
+                        <p>No concept images selected</p>
+                    }
+                </div>
+
+                <div class="concept-balloon-actions">
+                    <button class="btn-third" @onclick="HandleOpenEditConceptClick" disabled="@(conceptImages == null || !conceptImages.Any())">
+                        Edit Brand Kit
+                    </button>
+
+                    <button class="btn-fourth"
+                            style="background-color: #f5f7fa;padding-left: 20px;padding-bottom: 11px;"
+                            @onclick="HandleOpenAllAssetsClick">
+                        🗃️ All Generated Assets
+                        <span class="cart-count @(allImagesGenerated.Count > 0 ? "pulse" : "")">
+                            @allImagesGenerated.Count
+                        </span>
+                    </button>
+
+                    <div class="next-action">
+                        <button class="btn-secondary">
+                            Download Assets
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+}
+
+@code {
+    public class ToggleSelectionArgs
+    {
+        public string Url { get; set; }
+        public string Id { get; set; }
+        public bool IsVideo { get; set; }
+    }
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; }
+    [Inject] private HttpClient Http { get; set; }
+    [Inject] private NavigationManager NavigationManager { get; set; }
+
+    private bool IsBusy = false;
+
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public DesignMode.AI.Client.Pages.Init.MakeVideoModal.ImageIdeaCountResult AllIdeas { get; set; }
+
+
+    // Updated parameter to accept the selected images
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> SelectedImages { get; set; }
+
+    [Parameter] public EventCallback<List<string>> OnImagesSelected { get; set; }
+    [Parameter] public EventCallback<bool> OnWebsiteGenerated { get; set; }
+
+    // New parameter for parent's CallRunwareImageFunction
+    [Parameter] public Func<string, int, int, int, Task<string>> CallRunwareImageFunction { get; set; }
+
+    // New parameter for parent's CallSaveImageIdeaFunction
+    [Parameter] public Func<string, string, string, string, string, string, string, Task<string>> CallSaveImageIdeaFunction { get; set; }
+
+    // New parameter for parent's other functions
+    [Parameter] public string CompanyIdeaId { get; set; }
+    [Parameter] public string CompanyDescription { get; set; }
+    [Parameter] public string PromptIdFromCID { get; set; }
+    [Parameter] public string MainPromptText { get; set; }
+
+    [Parameter] public List<Gen.ConceptImageWithIdeaDto> conceptImages { get; set; } = new List<Gen.ConceptImageWithIdeaDto>();
+    [Parameter] public List<Gen.ImageIdeaModel> allImagesGenerated { get; set; } = new List<Gen.ImageIdeaModel>();
+
+    [Parameter] public EventCallback OnModalClosed { get; set; }
+
+    [Parameter] public EventCallback ShowAllVideos { get; set; }
+
+    [Parameter] public EventCallback<string> OpenMakeVideoSelectImagesModal { get; set; }
+
+    [Parameter] public EventCallback OpenVideoModal { get; set; }
+
+    [Parameter] public EventCallback OpenEditConcept { get; set; }
+
+    [Parameter] public EventCallback OpenAllAssets { get; set; }
+
+    [Parameter] public EventCallback<(string url, string id, bool isVideo)> ToggleSelection { get; set; }
+
+    private async Task HandleOpenEditConceptClick()
+    {
+        await CloseModal();
+
+        if (Show) return;
+        if (OpenEditConcept.HasDelegate)
+            await OpenEditConcept.InvokeAsync();
+    }
+
+    private async Task HandleOpenAllAssetsClick()
+    {
+        await CloseModal();
+
+        if (Show) return;
+        if (OpenAllAssets.HasDelegate)
+            await OpenAllAssets.InvokeAsync();
+    }
+
+    private async Task HandleToggleSelectionClick(string url, string id, bool isVideo = false)
+    {
+        await CloseModal();
+
+        if (Show) return;
+
+        if (ToggleSelection.HasDelegate)
+        {
+            await ToggleSelection.InvokeAsync((url, id, isVideo));
+        }
+    }
+
+    private async Task HandleOpenVideoModalClick()
+    {
+        await CloseModal();
+
+        if (Show) return;
+
+        if (OpenVideoModal.HasDelegate)
+            await OpenVideoModal.InvokeAsync();
+    }
+
+    public string promptText { get; set; }
+    private HashSet<string> SelectedImageIds = new();
+    private HashSet<string> SelectedImageUrls = new();
+
+    // Website configuration
+    private string SelectedWebsiteType = "LandingPage";
+    private string SelectedColorScheme = "Light";
+    private bool IncludeContactForm = true;
+    private bool MakeResponsive = true;
+
+    // For generating website images
+    private bool isGeneratingWebsiteImages = false;
+    private List<string> generatedWebsiteImageUrls = new();
+    private List<Gen.ImageIdeaModel> newlyGeneratedImages = new();
+    private List<string> websitePromptsToGenerate = new();
+    private int currentGenerationIndex = 0;
+    private int totalGenerations = 0;
+
+    // NEW: Track if an image was generated during this modal session
+    private bool wasImageGenerated = false;
+
+    // Helper method to check if we have website images
+    private bool HasWebsiteImages()
+    {
+        if (SelectedImages == null && newlyGeneratedImages == null)
+            return false;
+
+        // Check if we have any website-related images
+        var allImages = new List<Gen.ImageIdeaModel>();
+        if (SelectedImages != null) allImages.AddRange(SelectedImages);
+        if (newlyGeneratedImages != null) allImages.AddRange(newlyGeneratedImages);
+
+        return allImages.Any(img =>
+            !string.IsNullOrWhiteSpace(img.ImageUrl) &&
+            (img.DeliverableType?.ToLower().Contains("web") == true ||
+             img.SubCategory?.ToLower().Contains("web") == true ||
+             img.DeliverableType?.ToLower().Contains("digital") == true ||
+             img.SubCategory?.ToLower().Contains("digital") == true ||
+             img.DeliverableType?.ToLower().Contains("website") == true ||
+             img.SubCategory?.ToLower().Contains("website") == true));
+    }
+
+    // Helper method to get unique website images (avoid duplicates)
+    private List<Gen.ImageIdeaModel> GetUniqueWebsiteImages()
+    {
+        var allImages = new List<Gen.ImageIdeaModel>();
+
+        // Add selected images
+        if (SelectedImages != null)
+        {
+            allImages.AddRange(SelectedImages);
+        }
+
+        // Add newly generated images
+        if (newlyGeneratedImages != null)
+        {
+            allImages.AddRange(newlyGeneratedImages);
+        }
+
+        // Filter for website images and remove duplicates by ImageUrl
+        var websiteImages = allImages
+            .Where(img => !string.IsNullOrWhiteSpace(img.ImageUrl) &&
+                         (img.DeliverableType?.ToLower().Contains("web") == true ||
+                          img.SubCategory?.ToLower().Contains("web") == true ||
+                          img.DeliverableType?.ToLower().Contains("digital") == true ||
+                          img.SubCategory?.ToLower().Contains("digital") == true ||
+                          img.DeliverableType?.ToLower().Contains("website") == true ||
+                          img.SubCategory?.ToLower().Contains("website") == true))
+            .GroupBy(img => img.ImageUrl) // Group by ImageUrl to remove duplicates
+            .Select(group => group.First()) // Take the first occurrence of each unique ImageUrl
+            .ToList();
+
+        return websiteImages;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (SelectedImages != null && SelectedImages.Any())
+        {
+            // Clear previous selections
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+
+            // Get unique website images to avoid duplicates
+            var websiteImages = GetUniqueWebsiteImages();
+
+            foreach (var image in websiteImages)
+            {
+                if (!string.IsNullOrEmpty(image.Id))
+                {
+                    SelectedImageIds.Add(image.Id);
+                    if (!string.IsNullOrEmpty(image.ImageUrl))
+                    {
+                        SelectedImageUrls.Add(image.ImageUrl);
+                    }
+                }
+            }
+
+            StateHasChanged();
+        }
+    }
+    public class IdeaDto
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+
+    public class IdeasResponse
+    {
+        public List<IdeaDto> Ideas { get; set; } = new();
+        public int Count { get; set; }
+    }
+    private async Task<IdeasResponse> CallGetIdeasByCompanyIdeaId(string companyIdeaId)
+    {
+        try
+        {
+            var url = $"{ApiConfig.ApiBaseUrl}api/GetIdeasByCompanyIdeaId?code=REDACTED_FOR_GROOMING&companyIdeaId={companyIdeaId}";
+            var response = await Http.GetAsync(url);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<IdeasResponse>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error calling GetIdeasByCompanyIdeaId: {ex.Message}");
+        }
+
+        return new IdeasResponse { Ideas = new List<IdeaDto>(), Count = 0 };
+    }
+    // Helper method to extract query parameter values
+    private string GetQueryParameter(string queryString, string key, string defaultValue)
+    {
+        var parameters = System.Web.HttpUtility.ParseQueryString(queryString);
+        return parameters[key] ?? defaultValue;
+    }
+    [Parameter] public List<Gen.VideoItem> videosList { get; set; }
+
+    [Parameter] public bool IsGeneratingVideo { get; set; }
+
+    private async Task GoToGenerateImages()
+    {
+        if (isGeneratingWebsiteImages) return;
+        await using var generationOperation = await BeginGenerationAsync();
+
+        IsBusy = true;
+        isGeneratingWebsiteImages = true;
+        var uri = NavigationManager.Uri;
+        var queryString = new Uri(uri).Query;
+        string cid = GetQueryParameter(queryString, "cid", null);
+
+        var imageIdeas = SelectedImages;
+
+        var sortedIdeas = imageIdeas
+            .OrderBy(idea => Int32.Parse(idea.CountId))
+            .ToList();
+
+        // Get main deliverable (Generic)
+        var mainIdea = sortedIdeas.FirstOrDefault(idea =>
+            string.Equals(idea.SubCategory, "Generic", StringComparison.OrdinalIgnoreCase));
+        var MainDeliverable = "";
+        var q = "";
+        string promptTextCall = "";
+        string promptIdCall = "";
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var username = user.Identity?.Name;
+        // ✅ Apply your business rules
+        string deliverableType = "";
+        string subCategory = "";
+        if (!string.IsNullOrWhiteSpace(username))
+        {
+            promptIdCall = PromptIdFromCID;
+        }
+        var pText = AllIdeas;
+        var mainPrompt = "";
+        if (mainIdea != null)
+        {
+            MainDeliverable = mainIdea.DeliverableType;
+
+            bool isWebRelated = IsWebRelated(MainDeliverable);
+            //IMPORTANT: pass the data to prevent multiple database calls
+            if (isWebRelated)
+            {
+                q = MainPromptText;
+                // ✅ Apply your business rules
+                deliverableType = "Web & UX/UI Website";
+                subCategory = "Generic";
+            }
+            else
+            {
+                if (pText == null || pText.Ideas == null || !pText.Ideas.Any())
+                {
+                    pText = await GetImageIdeaCountsAsync(cid);
+                }
+                // MODIFIED: Search pText.Ideas for web-related title
+                if (pText != null && pText.Ideas != null && pText.Ideas.Any())
+                {
+                    // Find the first idea in pText.Ideas with a web-related title
+                    var webRelatedIdea = pText.Ideas
+                        .FirstOrDefault(idea => IsWebRelated(idea.Title));
+
+                    deliverableType = "Secondary";
+                    subCategory = webRelatedIdea.Title;
+
+                    if (webRelatedIdea != null)
+                    {
+                        // Use title + description from the web-related idea in pText
+                        q = $"{webRelatedIdea.Title} {webRelatedIdea.Description.TrimStart('-')}";
+                        Console.WriteLine($"✅ Using web-related idea from pText: {webRelatedIdea.Title}");
+                    }
+                    else
+                    {
+                        // If no web-related idea found, use the first idea from pText
+                        var firstIdea = pText.Ideas.First();
+                        q = $"{firstIdea.Title} {firstIdea.Description.TrimStart('-')}";
+                        Console.WriteLine($"⚠️ No web-related ideas in pText, using first: {firstIdea.Title}");
+                    }
+                }
+                else
+                {
+                    // Fallback if pText has no ideas
+                    q = "Professional website design - Modern responsive website with clean layout";
+                    Console.WriteLine($"⚠️ pText has no ideas, using default");
+                }
+            }
+        }
+        mainPrompt = MainPromptText;
+        var test = q;
+        string[] parts = cid.Split(new string[] { "|~~|@@|^^|" }, StringSplitOptions.None);
+
+        string name = string.Empty;
+        string industry = string.Empty;
+
+        if (parts.Length >= 2)
+        {
+            // Decode Base64 for company name and industry
+            try
+            {
+                name = Encoding.UTF8.GetString(Convert.FromBase64String(parts[0]));
+                industry = Encoding.UTF8.GetString(Convert.FromBase64String(parts[1]));
+            }
+            catch (FormatException ex)
+            {
+                Console.WriteLine($"Error decoding Base64 values: {ex.Message}");
+            }
+        }
+        string mainDeliverableDetail = await FetchDeliverableDetail("Web & UX/UI Website");
+
+        var match = Regex.Match(mainDeliverableDetail, @"Display:\s*(.*?)\s*(?=\w+:|$)", RegexOptions.IgnoreCase);
+        var DisplayLocation = match.Success ? match.Groups[1].Value.Trim() : "Not found";
+        var companyDescription = CompanyDescription;
+        string packageModular = "";
+        promptText = $"{DisplayLocation}|{q}|{name}|{industry}|{mainDeliverableDetail}|Web & UX/UI Website|{companyDescription}|{packageModular}";
+
+        StateHasChanged();
+
+        try
+        {
+            // Generate only the first (and only) prompt
+            currentGenerationIndex = 1;
+
+            try
+            {
+                var imageUrl = await CallRunwareImageFunction(promptText, 1344, 768, 1);
+
+                if (!string.IsNullOrEmpty(imageUrl))
+                {
+                    string timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+
+                    int newCountId = 1;
+                    var allImages = new List<Gen.ImageIdeaModel>();
+                    if (SelectedImages != null) allImages.AddRange(SelectedImages);
+                    if (newlyGeneratedImages != null) allImages.AddRange(newlyGeneratedImages);
+
+                    if (allImages.Any())
+                    {
+                        var maxCount = allImages
+                            .Select(img => int.TryParse(img.CountId, out var val) ? val : 0)
+                            .Max();
+                        newCountId = maxCount + 1;
+                    }
+
+                    string imageId = await CallSaveImageIdeaFunction(
+                        deliverableType,
+                        subCategory,
+                        promptText,
+                        imageUrl,
+                        PromptIdFromCID,
+                        timestamp,
+                        newCountId.ToString()
+                    );
+
+                    if (string.IsNullOrEmpty(imageId))
+                    {
+                        imageId = Guid.NewGuid().ToString();
+                        Console.WriteLine("⚠️ Image saved but no ID returned, using fallback GUID");
+                    }
+
+                    var newImage = new Gen.ImageIdeaModel
+                        {
+                            Id = imageId,
+                            ImageUrl = imageUrl,
+                            ImagePrompt = promptText,
+                            DeliverableType = deliverableType,
+                            SubCategory = subCategory,
+                            CountId = newCountId.ToString(),
+                        };
+
+                    // Clear previous newly generated images and add only this one
+                    newlyGeneratedImages.Clear();
+                    newlyGeneratedImages.Add(newImage);
+
+                    // Add to SelectedImages if not already there
+                    if (SelectedImages != null && !SelectedImages.Any(img => img.ImageUrl == imageUrl))
+                    {
+                        SelectedImages.Add(newImage);
+                    }
+
+                    SelectedImageIds.Add(newImage.Id);
+                    SelectedImageUrls.Add(newImage.ImageUrl);
+
+                    // MARK: Image was generated - set flag to true
+                    wasImageGenerated = true;
+
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error generating image for prompt '{promptText}': {ex.Message}");
+            }
+
+            if (newlyGeneratedImages.Any())
+            {
+                Console.WriteLine(
+                    $"✅ Generated {newlyGeneratedImages.Count} image as {deliverableType} - {subCategory}"
+                );
+
+                websitePromptsToGenerate.Clear();
+                StateHasChanged();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error in GoToGenerateImages: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+            isGeneratingWebsiteImages = false;
+            currentGenerationIndex = 0;
+            totalGenerations = 0;
+            StateHasChanged();
+        }
+    }
+    private async Task<string> CheckPackageLabelRelevance(string name, string industry, string prompt, string companyDescription = "")
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/CheckPackageLabelRelevance?code=REDACTED_FOR_GROOMING";
+
+        var payload = new
+        {
+            Name = name,
+            Industry = industry,
+            Prompt = prompt,
+            CompanyDescription = companyDescription
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Just return the full response string
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        return "Error: Unable to check package label relevance.";
+    }
+
+    private async Task<string> GetPackageModularFormula(string name, string industry, string prompt, string companyDescription = "")
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetPackageModularFormula?code=REDACTED_FOR_GROOMING";
+
+        var payload = new
+        {
+            Name = name,
+            Industry = industry,
+            Prompt = prompt,
+            CompanyDescription = companyDescription
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadAsStringAsync();
+
+            // Optional cleanup: remove leading/trailing quotes or whitespace
+            string cleanedResult = result.Trim().Trim('"').Trim();
+
+            return cleanedResult;
+        }
+
+        return "Error: Unable to retrieve modular packaging formula.";
+    }
+
+    private async Task<string> FetchCompanyDescription(string name, string industry, string prompt)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetCompanyDescription?code=REDACTED_FOR_GROOMING";
+
+        var payload = new
+        {
+            Name = name,
+            Industry = industry,
+            Prompt = prompt
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadAsStringAsync();
+
+            // Normalize newlines and collapse to one line
+            string singleLine = Regex.Replace(result, @"\s*\r?\n\s*", " ").Trim();
+            return singleLine;
+        }
+
+        return "Error: Unable to fetch company description.";
+    }
+
+    private async Task<string> FetchDeliverableDetail(string deliverable)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetDeliverableDetail?code=REDACTED_FOR_GROOMING";
+
+        var content = new StringContent($"\"{deliverable}\"", System.Text.Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var detail = await response.Content.ReadAsStringAsync();
+
+            // Normalize newlines and collapse to one line
+            string singleLine = Regex.Replace(detail, @"\s*\r?\n\s*", " ").Trim();
+            return singleLine;
+        }
+
+        return "Error: Unable to fetch deliverable detail.";
+    }
+
+    private async Task<string> FetchPromptId(string userId, string companyIdeaId)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetPromptIdForCompanyIdea?code=REDACTED_FOR_GROOMING&userId={Uri.EscapeDataString(userId)}&companyIdeaId={Uri.EscapeDataString(companyIdeaId)}";
+
+        var response = await client.GetAsync(functionUrl);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var promptId = await response.Content.ReadAsStringAsync();
+            return promptId.Trim('"'); // Remove extra quotes if returned as a string
+        }
+
+        return "Error: Unable to fetch prompt ID.";
+    }
+    private async Task<string> FetchPromptText(string promptId)
+    {
+        using HttpClient client = new HttpClient();
+
+        // Construct the function URL
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetPromptById?code=REDACTED_FOR_GROOMING&promptId={Uri.EscapeDataString(promptId)}";
+
+        var response = await client.GetAsync(functionUrl);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var promptText = await response.Content.ReadAsStringAsync();
+            return promptText.Trim('"'); // Remove extra quotes if returned as JSON string
+        }
+
+        return "Error: Unable to fetch prompt text.";
+    }
+    private bool IsWebRelated(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        string[] webKeywords =
+        {
+        "web",
+        "website",
+        "ux",
+        "ui",
+        "ux/ui",
+        "user experience",
+        "user interface",
+        "frontend",
+        "front-end",
+        "web design",
+        "web app",
+        "landing page"
+    };
+
+        return webKeywords.Any(keyword =>
+            text.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Method to get only 1 website prompt
+    private List<string> GetSingleWebsitePrompt()
+    {
+        var websitePrompts = new List<string>();
+
+        if (SelectedImages == null || !SelectedImages.Any())
+            return websitePrompts;
+
+        // Look for images that are already website-related
+        var existingWebsiteImages = SelectedImages
+            .Where(img => !string.IsNullOrWhiteSpace(img.ImagePrompt) &&
+                         (img.DeliverableType?.ToLower().Contains("web") == true ||
+                          img.SubCategory?.ToLower().Contains("web") == true ||
+                          img.DeliverableType?.ToLower().Contains("digital") == true ||
+                          img.SubCategory?.ToLower().Contains("digital") == true ||
+                          img.DeliverableType?.ToLower().Contains("website") == true ||
+                          img.SubCategory?.ToLower().Contains("website") == true))
+            .Select(img => img.ImagePrompt)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .ToList();
+
+        if (existingWebsiteImages.Any())
+        {
+            // Use the first existing website prompt
+            websitePrompts.Add(existingWebsiteImages.First());
+        }
+        else if (SelectedImages.Any(img => !string.IsNullOrWhiteSpace(img.ImagePrompt)))
+        {
+            // Transform the first non-website prompt for website use
+            var firstImageWithPrompt = SelectedImages.First(img => !string.IsNullOrWhiteSpace(img.ImagePrompt));
+            var websitePrompt = TransformPromptForWebsite(firstImageWithPrompt.ImagePrompt);
+            websitePrompts.Add(websitePrompt);
+        }
+        else
+        {
+            // Default prompt
+            websitePrompts.Add("modern website hero banner with clean design, professional layout, web interface");
+        }
+
+        return websitePrompts.Take(1).ToList(); // Only take 1 prompt
+    }
+
+    private List<string> GetWebsitePromptsFromSelectedImages()
+    {
+        // Now returns only 1 prompt
+        return GetSingleWebsitePrompt();
+    }
+
+    private string TransformPromptForWebsite(string originalPrompt)
+    {
+        // Transform the prompt to be more website-focused
+        var transformed = originalPrompt;
+
+        // Remove any existing deliverable references
+        transformed = transformed.Replace("logo", "")
+                                .Replace("social media", "")
+                                .Replace("print", "")
+                                .Replace("brochure", "")
+                                .Replace("flyer", "")
+                                .Replace("label", "")
+                                .Replace("package", "")
+                                .Replace("event", "")
+                                .Replace("activation", "");
+
+        // Add website-specific terms
+        if (!transformed.Contains("website") && !transformed.Contains("web"))
+        {
+            transformed = "website design for " + transformed;
+        }
+
+        // Add layout/UI terms
+        if (!transformed.Contains("layout") && !transformed.Contains("interface") && !transformed.Contains("design"))
+        {
+            transformed += ", modern web layout, responsive design";
+        }
+
+        // Ensure it's for web dimensions
+        if (!transformed.Contains("16:9") && !transformed.Contains("aspect ratio"))
+        {
+            transformed += ", 16:9 aspect ratio";
+        }
+
+        return transformed.Trim();
+    }
+
+
+    private string GetGenerateButtonText()
+    {
+        if (!SelectedImageIds.Any())
+        {
+            return "Select Images to Generate Website";
+        }
+
+        return $"Generate Website ({SelectedImageIds.Count} images selected)";
+    }
+
+    private async Task GenerateWebsite()
+    {
+        if (IsBusy || !SelectedImageIds.Any()) return;
+        await using var generationOperation = await BeginGenerationAsync();
+
+        IsBusy = true;
+        StateHasChanged();
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                // Get the selected image data
+                var selectedImagesData = SelectedImages?
+                    .Where(img => SelectedImageIds.Contains(img.Id))
+                    .ToList() ?? new List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel>();
+
+                // Prepare website generation request
+                var websiteRequest = new
+                {
+                    SelectedImages = selectedImagesData,
+                    SelectedImageIds = SelectedImageIds.ToList(),
+                    WebsiteType = SelectedWebsiteType,
+                    ColorScheme = SelectedColorScheme,
+                    IncludeContactForm = IncludeContactForm,
+                    MakeResponsive = MakeResponsive,
+                    UserId = user.Identity.Name,
+                    Timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ")
+                };
+
+                // Call API to generate website
+                var response = await Http.PostAsJsonAsync(
+                    $"{ApiConfig.ApiBaseUrl}api/GenerateWebsite?code=REDACTED_FOR_GROOMING",
+                    websiteRequest);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<WebsiteGenerationResult>();
+
+                    if (result != null && result.Success)
+                    {
+                        Console.WriteLine("✅ Website generated successfully!");
+                        Console.WriteLine($"🌐 Preview URL: {result.PreviewUrl}");
+                        Console.WriteLine($"📁 Download URL: {result.DownloadUrl}");
+
+                        // Notify parent
+                        if (OnWebsiteGenerated.HasDelegate)
+                        {
+                            await OnWebsiteGenerated.InvokeAsync(true);
+                        }
+
+                        // Close modal
+                        if (generationOperation is not null) await generationOperation.DisposeAsync();
+                        await CloseModal();
+                        if (Show) return;
+                    }
+                    else
+                    {
+                        Console.WriteLine("❌ Website generation failed");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to generate website: {response.StatusCode}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("⚠️ User not authenticated.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception generating website: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        if (GenerationGuard is null && (IsBusy)) return;
+        if (!await ConfirmGenerationCloseAsync()) return;
+
+        Show = false;
+
+        await ShowChanged.InvokeAsync(false);
+
+        if (OnModalClosed.HasDelegate)
+        {
+            await OnModalClosed.InvokeAsync();
+        }
+    }
+    public class VideoItem
+    {
+        public string VideoId { get; set; }
+        public string ThumbnailUrl { get; set; }
+        public string Id { get; set; }
+        public string Title { get; set; }
+        public string Duration { get; set; }
+    }
+    public class WebsiteGenerationResult
+    {
+        public bool Success { get; set; }
+        public string PreviewUrl { get; set; }
+        public string DownloadUrl { get; set; }
+        public string WebsiteId { get; set; }
+    }
+    private async Task<MakeVideoModal.ImageIdeaCountResult?> GetImageIdeaCountsAsync(string companyIdeaId)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url =
+                    $"{ApiConfig.ApiBaseUrl}api/GetImageIdeaCountsByCompanyId?companyIdeaId={companyIdeaId}" +
+                    "&code=REDACTED_FOR_GROOMING";
+
+                var response = await client.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<MakeVideoModal.ImageIdeaCountResult>();
+                    if (result == null)
+                        return null;
+
+                    Console.WriteLine("✅ Retrieved image idea counts + idea info + deliverable types.");
+                    return result;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to retrieve image idea counts: {response.StatusCode}");
+                    return null;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception retrieving image idea counts: {ex.Message}");
+            return null;
+        }
+    }
+
+}
+
+<style>
+    /* Reuse existing modal styles and add website-specific styles */
+    .website-selected {
+        border: 2px solid #4CAF50 !important;
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3) !important;
+    }
+
+    .website-selection-indicator {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: rgba(255, 255, 255, 0.95);
+        border: 2px solid #ddd;
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+        .website-selection-indicator.selected {
+            background: #4CAF50;
+            border-color: #4CAF50;
+            color: white;
+        }
+
+        .website-selection-indicator:hover {
+            transform: scale(1.1);
+            border-color: #4CAF50;
+        }
+
+    .website-selection-badge {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        background: #4CAF50;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+    }
+
+    .new-image-badge {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: #ff9800;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+    }
+
+    .brand-kit-status {
+        margin-bottom: 20px;
+        padding: 12px 16px;
+        background-color: #e8f5e9;
+        border-radius: 8px;
+        border-left: 4px solid #4CAF50;
+    }
+
+    .brand-kit-count {
+        font-weight: 600;
+        color: #2e7d32;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .brand-kit-icon {
+        font-size: 16px;
+    }
+
+    .website-config-section {
+        border: 1px solid #e0e0e0;
+    }
+
+    .config-select {
+        font-family: inherit;
+        font-size: 14px;
+    }
+
+    .save-button {
+        background-color: #4CAF50 !important;
+        color: white !important;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+        .save-button:disabled {
+            background-color: #eee !important;
+            color: #ababab !important;
+            cursor: not-allowed;
+        }
+
+    /* Loading styles */
+    .website-generating-spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s linear infinite;
+    }
+
+    .image-card-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+
+    .loading-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        color: #666;
+        font-size: 14px;
+        text-align: center;
+    }
+
+    .loading-spinner-small {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #244d88;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .image-generating-section {
+        margin-bottom: 30px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+    }
+
+    @@keyframes loading {
+        0% {
+            background-position: 200% 0;
+        }
+
+        100% {
+            background-position: -200% 0;
+        }
+    }
+
+    /* Rest of your existing CSS remains the same */
+    .vertical-modal-wrapper {
+        padding-top: 14px;
+        padding-left: 36px;
+        padding-bottom: 83px;
+        position: relative;
+        width: 100%;
+        max-width: 800px;
+        height: 90vh;
+        background: white;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-scroll-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px;
+    }
+
+    .modal-header {
+        text-align: left;
+        margin: 33px 0 -4px 0px;
+        padding-right: 24px;
+    }
+
+        .modal-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+            margin-top: 0;
+        }
+
+    .image-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+    }
+
+    .empty-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 40px 0;
+        color: #666;
+    }
+
+    .footer-actions {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: white;
+        border-top: 1px solid #ccc;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 32px;
+        z-index: 1050;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .discard-button {
+        font-size: 1rem;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        background-color: transparent;
+        border: 2px solid #ddd;
+        color: #333;
+        transition: all 0.3s ease;
+    }
+
+        .discard-button:hover {
+            border-color: #999;
+            color: #000;
+        }
+
+    .deliverable-section {
+        padding-bottom: 24px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .image-col {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+
+    .image-card {
+        position: relative;
+        width: 300px !important;
+        height: 200px;
+        border-radius: 16px;
+        overflow: hidden;
+        background-color: #fff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #eee;
+        transition: border-color 0.2s ease;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        cursor: pointer;
+    }
+
+        .image-card:hover {
+            border: 1px solid #4CAF50;
+        }
+
+    .image-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        flex-grow: 1;
+    }
+
+    .image-controls {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #222;
+        margin-bottom: 12px;
+    }
+
+    .modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.4);
+        border: none;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        color: #000;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(6px);
+        z-index: 10;
+    }
+
+        .modal-close:hover {
+            background-color: rgba(255, 255, 255, 0.6);
+            color: #000;
+        }
+
+    @@keyframes zoomFadeIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes blurIn {
+        0% {
+            backdrop-filter: blur(0px);
+            background-color: rgba(0, 0, 0, 0);
+        }
+
+        100% {
+            backdrop-filter: blur(5px);
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+    }
+
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh !important;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        backdrop-filter: blur(5px);
+        background-color: rgba(0, 0, 0, 0.7);
+        animation: blurIn 0.3s ease-out forwards;
+    }
+
+    /* Mobile adjustments */
+    @@media (max-width: 767px) {
+        // .modal-overlay {
+        //     position: fixed;
+        //     top: 0;
+        //     left: 0;
+        //     width: 100vw;
+        //     height: 1113vh !important;
+        //     display: flex;
+        //     justify-content: center;
+        //     align-items: center;
+        //     z-index: 1000;
+        //     backdrop-filter: blur(5px);
+        //     background-color: rgba(0, 0, 0, 0.7);
+        //     animation: blurIn 0.3s ease-out forwards;
+        // }
+    }
+
+    .vertical-modal-wrapper {
+        animation: zoomFadeIn 0.3s ease-out forwards;
+    }
+
+    .modal-busy-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #4CAF50;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+      /* Optional: only “carousel mode” on small screens */
+  @@media (min-width: 768px){
+    .carousel-arrow{ display:none; }
+    .carousel-track{ padding: 6px 0; }
+  }
+  .ai-modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.35);
+    z-index:9999;
+    display:flex;
+    justify-content:center;
+    align-items:flex-end;
+}
+
+    .ai-mobile-modal {
+        width: 100%;
+        max-width: 480px;
+        /* move higher */
+        margin-top: 40px;
+        background: #fff;
+        border: 2px solid #fff;
+        border-radius: 22px 22px 0 0;
+        padding: 18px;
+        max-height: 96vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        animation: slideUp .25s ease;
+    }
+
+@@keyframes slideUp{
+    from{transform:translateY(100%)}
+    to{transform:translateY(0%)}
+}
+
+.ai-modal-header{
+    font-size:22px;
+    font-weight:600;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.ai-modal-close{
+    border:none;
+    background:none;
+    font-size:22px;
+}
+
+.ai-modal-subtitle{
+    color:#666;
+    font-size:14px;
+    margin-bottom:14px;
+}
+
+.ai-modal-item{
+    display:flex;
+    gap:12px;
+    align-items:flex-start;
+    padding:12px;
+    border-radius:12px;
+    cursor:pointer;
+}
+
+.ai-modal-item:hover{
+    background:#f7f7f7;
+}
+
+.ai-title{
+    font-weight:600;
+}
+
+.ai-desc{
+    font-size:13px;
+    color:#777;
+}
+
+.ai-icon{
+    width:22px;
+}
+
+.ai-emoji{
+    font-size:20px;
+}
+
+    .ai-modal-items {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .ai-modal-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: linear-gradient(180deg,#ffffff 0%, #f9f6ef 100%);
+        border: 1px solid #eee3c9;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.7);
+        cursor: pointer;
+        transition: all .2s ease;
+    }
+
+        .ai-modal-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.7);
+        }
+
+    .ai-item-left {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .ai-icon-box {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+        background: linear-gradient(180deg,#fff3cc,#f7e6a6);
+        border: 1px solid #e7d79a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .ai-icon {
+        width: 20px;
+    }
+
+    .ai-title {
+        font-weight: 600;
+        font-size: 15px;
+    }
+
+    .ai-desc {
+        font-size: 13px;
+        color: #6f6f6f;
+    }
+
+    .ai-arrow {
+        font-size: 22px;
+        color: #b0a68a;
+    }
+</style>

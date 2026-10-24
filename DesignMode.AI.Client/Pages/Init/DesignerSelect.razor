@@ -1,0 +1,738 @@
+﻿@page "/init/designer-select"
+@using Telerik.Blazor.Components
+@using Telerik.SvgIcons
+@using Microsoft.AspNetCore.Components.Authorization
+@using DesignMode.AI.Shared.Security
+@using Microsoft.AspNetCore.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<link href="assets/css/brief-landing.css" rel="stylesheet" />
+
+<div class="designer-select-wrapper">
+    <div class="designer-select-container">
+        <!-- Header -->
+        <div class="designer-header">
+            <div class="logo-container">
+                <img src="assets/img/logo-left.png" width="26px" height="26px" alt="main_logo" />
+                <span class="logo-text">
+                    design<span class="logo-highlight">
+                        <img src="images/logo-m3.svg" style="width: 30px; margin-left: 3px; margin-right: 3px; margin-bottom: 3px;">
+                    </span>ode.ai
+                </span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content-designer">
+            <h1 class="page-title">Choose Your Design Partner</h1>
+            <p class="page-subtitle">Select a designer to help bring your vision to life</p>
+
+            <!-- Designer Cards -->
+            <div class="designer-grid">
+                @foreach (var designer in designers)
+                {
+                    <div class="designer-card @(selectedDesigner?.Id == designer.Id ? "selected" : "")"
+                         @onclick="() => SelectDesigner(designer)">
+                        <div class="designer-avatar">
+                            @if (!string.IsNullOrEmpty(designer.AvatarUrl))
+                            {
+                                <img src="@designer.AvatarUrl" alt="@designer.Name" />
+                            }
+                            else
+                            {
+                                <div class="avatar-placeholder" style="background: @designer.AvatarColor">
+                                    @designer.Name[0]
+                                </div>
+                            }
+                            @if (designer.IsAvailable)
+                            {
+                                <span class="availability-badge available"></span>
+                            }
+                        </div>
+                        <div class="designer-info">
+                            <h3 class="designer-name">@designer.Name</h3>
+                            <p class="designer-title">@designer.Title</p>
+                            <div class="designer-specialties">
+                                @foreach (var specialty in designer.Specialties.Take(3))
+                                {
+                                    <span class="specialty-tag">@specialty</span>
+                                }
+                            </div>
+                            <div class="designer-stats">
+                                <span class="stat">
+                                    <TelerikSvgIcon Icon="@SvgIcon.Star" /> @designer.Rating
+                                </span>
+                            </div>
+                        </div>
+                        <div class="designer-check">
+                            @if (selectedDesigner?.Id == designer.Id)
+                            {
+                                <TelerikSvgIcon Icon="@SvgIcon.CheckCircle" class="check-icon" />
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <TelerikButton OnClick="@ContactDesigner"
+                               Class="contact-button"
+                               Enabled="@(selectedDesigner != null)">
+                    <TelerikSvgIcon Icon="@SvgIcon.Envelope" />
+                    Contact @(selectedDesigner?.Name ?? "Designer")
+                </TelerikButton>
+
+                <TelerikButton OnClick="@SkipToInit"
+                               Class="skip-button">
+                    Skip for Now
+                </TelerikButton>
+            </div>
+
+            <!-- Loading Overlay -->
+            @if (IsLoading)
+            {
+                <div class="loading-overlay">
+                    <p>@LoadingMessage</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    .designer-select-wrapper {
+        min-height: 100vh;
+        width: 100%;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        overflow-x: hidden;
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+    }
+
+    .designer-select-container {
+        width: 100%;
+        max-width: 1600px;
+        margin: 0 auto;
+        padding: 2rem;
+        box-sizing: border-box;
+    }
+
+    .designer-header {
+        margin-bottom: 3rem;
+        width: 100%;
+    }
+
+    .logo-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .logo-text {
+        font-family: 'SF Pro Display', 'Arial', sans-serif;
+        font-weight: 650;
+        font-size: 24px;
+        color: #1f2951;
+    }
+
+    .logo-highlight {
+        color: #ffa900;
+    }
+
+    .main-content-designer {
+        text-align: center;
+        width: 100%;
+    }
+
+    .page-title {
+        font-family: 'SF Pro Display', 'Arial', sans-serif;
+        font-size: clamp(28px, 5vw, 48px);
+        font-weight: 700;
+        color: #1f2951;
+        margin-bottom: 1rem;
+    }
+
+    .page-subtitle {
+        font-family: 'SF Pro Display', 'Arial', sans-serif;
+        font-size: clamp(14px, 3vw, 18px);
+        color: #6c757d;
+        margin-bottom: 3rem;
+    }
+
+    .designer-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 3rem;
+        width: 100%;
+    }
+
+    .designer-card {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+        background: white;
+        border-radius: 20px;
+        padding: 1.25rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        position: relative;
+    }
+
+        .designer-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .designer-card.selected {
+            border-color: #ffa900;
+            background: linear-gradient(135deg, #ffffff 0%, #fff9f0 100%);
+            box-shadow: 0 8px 25px rgba(255, 169, 0, 0.2);
+        }
+
+    .designer-avatar {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+        .designer-avatar img,
+        .avatar-placeholder {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+    .avatar-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .availability-badge {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid white;
+    }
+
+        .availability-badge.available {
+            background-color: #28a745;
+        }
+
+    .designer-info {
+        flex: 1;
+        text-align: left;
+    }
+
+    .designer-name {
+        font-family: 'SF Pro Display', 'Arial', sans-serif;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #1f2951;
+        margin: 0 0 4px 0;
+    }
+
+    .designer-title {
+        font-family: 'SF Pro Display', 'Arial', sans-serif;
+        font-size: 0.75rem;
+        color: #ffa900;
+        margin: 0 0 10px 0;
+    }
+
+    .designer-specialties {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+
+    .specialty-tag {
+        background: #f0f0f0;
+        padding: 3px 8px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: #555;
+    }
+
+    .designer-stats {
+        display: flex;
+        gap: 12px;
+        font-size: 0.75rem;
+        color: #6c757d;
+    }
+
+    .stat {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .designer-check {
+        flex-shrink: 0;
+    }
+
+    .check-icon {
+        color: #ffa900;
+        width: 24px;
+        height: 24px;
+    }
+
+    .action-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-top: 2rem;
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .contact-button,
+    .skip-button {
+        padding: 12px 28px;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 50px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-family: 'SF Pro Display', 'Arial', sans-serif;
+    }
+
+    .contact-button {
+        background: linear-gradient(135deg, #ffa900 0%, #ff6b00 100%);
+        color: white;
+        border: none;
+    }
+
+        .contact-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 169, 0, 0.4);
+        }
+
+        .contact-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+    .skip-button {
+        background: white;
+        color: #1f2951;
+        border: 2px solid #1f2951;
+    }
+
+        .skip-button:hover {
+            background: #1f2951;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        z-index: 1000;
+    }
+
+        .loading-overlay p {
+            color: white;
+            font-size: 1.125rem;
+            font-family: 'SF Pro Display', 'Arial', sans-serif;
+     
+        }
+
+        @@media (min-width: 1200px) {
+        .main-content-designer {
+                /* margin-left: 19.125rem !important; */
+                margin-top: 50px !important;
+            }
+        }
+
+    /* Tablet Styles */
+    @@media (min-width: 768px) and (max-width: 1024px) {
+        .designer-select-container {
+            padding: 1.5rem;
+        }
+
+        .designer-grid {
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .designer-card {
+            padding: 1rem;
+            gap: 1rem;
+        }
+
+        .designer-avatar img,
+        .avatar-placeholder {
+            width: 60px;
+            height: 60px;
+        }
+
+        .avatar-placeholder {
+            font-size: 28px;
+        }
+
+        .designer-name {
+            font-size: 1rem;
+        }
+
+        .contact-button,
+        .skip-button {
+            padding: 10px 24px;
+            font-size: 0.875rem;
+        }
+    }
+
+    /* Mobile Landscape */
+    @@media (min-width: 481px) and (max-width: 767px) {
+        .designer-select-container {
+            padding: 1.25rem;
+        }
+
+        .designer-header {
+            margin-bottom: 2rem;
+        }
+
+        .page-title {
+            margin-bottom: 0.75rem;
+        }
+
+        .page-subtitle {
+            margin-bottom: 2rem;
+        }
+
+        .designer-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .designer-card {
+            padding: 1rem;
+            gap: 1rem;
+        }
+
+        .designer-avatar img,
+        .avatar-placeholder {
+            width: 55px;
+            height: 55px;
+        }
+
+        .avatar-placeholder {
+            font-size: 26px;
+        }
+
+        .designer-name {
+            font-size: 1rem;
+        }
+
+        .designer-title {
+            font-size: 0.7rem;
+        }
+
+        .specialty-tag {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+        }
+
+        .contact-button,
+        .skip-button {
+            padding: 10px 20px;
+            font-size: 0.875rem;
+        }
+
+        .action-buttons {
+            gap: 1rem;
+        }
+    }
+
+    /* Mobile Portrait */
+    @@media (max-width: 480px) {
+        .designer-select-container {
+            padding: 1rem;
+        }
+
+        .logo-text {
+            font-size: 20px;
+        }
+
+        .logo-highlight img {
+            width: 24px !important;
+        }
+
+        .designer-header {
+            margin-bottom: 1.5rem;
+        }
+
+        .page-title {
+            font-size: 24px;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-subtitle {
+            font-size: 14px;
+            margin-bottom: 1.5rem;
+        }
+
+        .designer-grid {
+            grid-template-columns: 1fr;
+            gap: 0.875rem;
+            margin-bottom: 2rem;
+        }
+
+        .designer-card {
+            flex-direction: column;
+            text-align: center;
+            padding: 1.25rem;
+            gap: 0.875rem;
+        }
+
+        .designer-info {
+            text-align: center;
+        }
+
+        .designer-specialties {
+            justify-content: center;
+        }
+
+        .designer-stats {
+            justify-content: center;
+        }
+
+        .designer-avatar img,
+        .avatar-placeholder {
+            width: 65px;
+            height: 65px;
+        }
+
+        .avatar-placeholder {
+            font-size: 30px;
+        }
+
+        .designer-name {
+            font-size: 1.125rem;
+        }
+
+        .designer-title {
+            font-size: 0.75rem;
+        }
+
+        .action-buttons {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.875rem;
+        }
+
+        .contact-button,
+        .skip-button {
+            width: 100%;
+            justify-content: center;
+            padding: 12px 20px;
+        }
+
+        .designer-check {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+        }
+
+        .check-icon {
+            width: 20px;
+            height: 20px;
+        }
+    }
+
+    /* Small Mobile Devices */
+    @@media (max-width: 360px) {
+        .designer-select-container {
+            padding: 0.875rem;
+        }
+
+        .page-title {
+            font-size: 22px;
+        }
+
+        .designer-avatar img,
+        .avatar-placeholder {
+            width: 55px;
+            height: 55px;
+        }
+
+        .avatar-placeholder {
+            font-size: 26px;
+        }
+
+        .designer-name {
+            font-size: 1rem;
+        }
+
+        .contact-button,
+        .skip-button {
+            padding: 10px 16px;
+            font-size: 0.8125rem;
+        }
+    }
+</style>
+
+@code {
+    private List<Designer> designers = new();
+    private Designer? selectedDesigner;
+    private bool IsLoading = false;
+    private string LoadingMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDesigners();
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity is not { IsAuthenticated: true })
+        {
+            Navigation.NavigateTo("/login", replace: true);
+            return;
+        }
+    }
+
+    private async Task LoadDesigners()
+    {
+        // Sample designer data - replace with actual API call
+        designers = new List<Designer>
+        {
+            new Designer
+            {
+                Id = 1,
+                Name = "Emma Rodriguez",
+                Title = "Creative Director",
+                Specialties = new List<string> { "Brand Identity", "UI/UX", "Illustration" },
+                Rating = 4.9,
+                ProjectsCompleted = 127,
+                Email = "emma.design@designmode.ai",
+                IsAvailable = true,
+                AvatarColor = "#FF6B6B"
+            },
+            new Designer
+            {
+                Id = 2,
+                Name = "Michael Chen",
+                Title = "Senior Product Designer",
+                Specialties = new List<string> { "Product Design", "Prototyping", "User Research" },
+                Rating = 4.8,
+                ProjectsCompleted = 94,
+                Email = "michael.chen@designmode.ai",
+                IsAvailable = true,
+                AvatarColor = "#4ECDC4"
+            },
+            new Designer
+            {
+                Id = 3,
+                Name = "Sophia Williams",
+                Title = "Visual Designer",
+                Specialties = new List<string> { "Web Design", "Motion Graphics", "Typography" },
+                Rating = 4.7,
+                ProjectsCompleted = 86,
+                Email = "sophia.w@designmode.ai",
+                IsAvailable = false,
+                AvatarColor = "#95E77E"
+            },
+            new Designer
+            {
+                Id = 4,
+                Name = "James Thompson",
+                Title = "UX Specialist",
+                Specialties = new List<string> { "User Flows", "Wireframing", "A/B Testing" },
+                Rating = 4.9,
+                ProjectsCompleted = 112,
+                Email = "james.t@designmode.ai",
+                IsAvailable = true,
+                AvatarColor = "#FFD93D"
+            }
+        };
+    }
+
+    private void SelectDesigner(Designer designer)
+    {
+        selectedDesigner = designer;
+    }
+
+    private async Task ContactDesigner()
+    {
+        if (selectedDesigner == null) return;
+
+        IsLoading = true;
+        LoadingMessage = $"Connecting you with {selectedDesigner.Name}...";
+
+        try
+        {
+            await Task.Delay(1000);
+
+            var subject = $"Design Project Inquiry - {selectedDesigner.Name}";
+            var body = $"Hello {selectedDesigner.Name},%0D%0A%0D%0A" +
+                      $"I'm interested in working with you on a design project.%0D%0A%0D%0A" +
+                      $"Could you please let me know your availability and process?%0D%0A%0D%0A" +
+                      $"Best regards";//,%0D%0A[Your Name]";
+
+            var mailtoLink = $"mailto:{selectedDesigner.Email}?subject={subject}&body={body}";
+            Navigation.NavigateTo(mailtoLink);
+
+            LoadingMessage = "Opening email client...";
+            await Task.Delay(500);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error contacting designer: {ex.Message}");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void SkipToInit()
+    {
+        Navigation.NavigateTo("/init/init");
+    }
+
+    public class Designer
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public List<string> Specialties { get; set; } = new();
+        public double Rating { get; set; }
+        public int ProjectsCompleted { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public bool IsAvailable { get; set; }
+        public string AvatarUrl { get; set; } = string.Empty;
+        public string AvatarColor { get; set; } = "#6C63FF";
+    }
+}

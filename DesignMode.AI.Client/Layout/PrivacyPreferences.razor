@@ -1,0 +1,24 @@
+@inject IJSRuntime JS
+@inject DesignMode.AI.Client.Services.ApiConfigService Api
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider Authentication
+@implements IDisposable
+
+@* Shared UI: internal and Google advertising measurement are always on; analytics remains independently configurable. *@
+
+@code {
+    protected override void OnInitialized() => Authentication.AuthenticationStateChanged += OnAuthenticationChanged;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await RefreshAsync();
+    }
+    private async void OnAuthenticationChanged(Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState> state)
+    {
+        await InvokeAsync(RefreshAsync);
+    }
+    private async Task RefreshAsync()
+    {
+        try { await JS.InvokeVoidAsync("designModePrivacy.initialize", Api.ApiBaseUrl); }
+        catch { /* Preference persistence must not interrupt authentication or product access. */ }
+    }
+    public void Dispose() => Authentication.AuthenticationStateChanged -= OnAuthenticationChanged;
+}

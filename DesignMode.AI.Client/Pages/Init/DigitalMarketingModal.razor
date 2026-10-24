@@ -1,0 +1,1694 @@
+@inherits DesignMode.AI.Client.Components.GenerationAwareComponent
+@using System.Collections.Generic
+@using System.Net.Http.Json
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@using System.Net.Http.Headers
+@using System.Text
+@using System.Text.RegularExpressions
+
+@if (IsBusy && !IsGeneratingAssets)
+{
+    <div class="modal-busy-overlay"><div class="loader"></div></div>
+}
+
+@if (Show)
+{
+    <div class="modal-overlay generation-workspace-overlay" @onclick="CloseModal">
+        <div class="vertical-modal-wrapper generation-workspace" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+
+            <div class="modal-tabs">
+                <button class="tab-button @(ActiveTab == TabType.GenerateNew ? "active" : "")"
+                        @onclick="() => SetActiveTab(TabType.GenerateNew)">
+                    <span class="tab-icon">✨</span> Generate New
+                </button>
+                <button class="tab-button @(ActiveTab == TabType.GeneratedAssets ? "active" : "")"
+                        aria-label="Generated Digital Marketing Assets"
+                        @onclick="() => SetActiveTab(TabType.GeneratedAssets)"
+                        disabled="@(!IsGeneratingAssets && !HasExistingDigitalMarketing && !GeneratedVersions.Any())">
+                    <span class="tab-icon">📣</span> Results
+                    @if (IsGeneratingAssets)
+                    {
+                        <span class="tab-badge generating">Generating...</span>
+                    }
+                    else if (HasExistingDigitalMarketing || GeneratedVersions.Any())
+                    {
+                        <span class="tab-badge">@GetGeneratedVersionCount()</span>
+                    }
+                </button>
+            </div>
+
+            <div class="modal-scroll-content">
+                @if (ActiveTab == TabType.GenerateNew)
+                {
+                    <div class="tab-content generate-new-tab">
+                        <div class="modal-header"><h2>Create Digital Marketing Assets</h2></div>
+                        <div class="modal-intro">
+                            Select <strong>one image</strong>. We will use it as the visual reference to create four coordinated assets:
+                            Instagram Feed Post, Instagram Story / Reel, Facebook / LinkedIn Ad, and X (Twitter) Post.
+                        </div>
+
+                        <div class="campaign-status">
+                            <span class="campaign-count">
+                                <span class="campaign-icon">📣</span>
+                                @if (HasMarketingImages())
+                                {
+                                    <span>Marketing reference images ready</span>
+                                    @if (SelectedImageIds.Any())
+                                    {
+                                        <span class="selection-count">1 selected</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span style="font-weight:bold;">No images available</span>
+                                    <span style="font-weight:normal;"> – Generate images first to unlock digital marketing asset creation</span>
+                                }
+                            </span>
+                        </div>
+
+                        <AIRecommendationGenerationLoader IsVisible="@isGeneratingMarketingImages" Message="Generating marketing reference image..." />
+                        @if (IsBusy && !isGeneratingMarketingImages)
+                        {
+                            <div class="loading-container text-center">
+                                <div class="spinner-border text-primary mb-2"></div>
+                                <p>Loading images...</p>
+                            </div>
+                        }
+                        else if (!isGeneratingMarketingImages)
+                        {
+                            <div class="image-grid">
+                                @if (SelectedImages != null && SelectedImages.Any())
+                                {
+                                    var allMarketingImages = GetUniqueMarketingImages();
+                                    if (allMarketingImages.Any())
+                                    {
+                                        var groupedImages = allMarketingImages.GroupBy(img => GetMarketingCategory(img));
+                                        @foreach (var group in groupedImages)
+                                        {
+                                            var validImages = group.Where(i => !string.IsNullOrWhiteSpace(i.ImageUrl)).OrderBy(i => i.CountId).ToList();
+                                            if (validImages.Any())
+                                            {
+                                                <div class="deliverable-section">
+                                                    <h3 class="section-title">@group.Key</h3>
+                                                    <div class="image-col">
+                                                        @foreach (var image in validImages)
+                                                        {
+                                                            @ImageCard(image)
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+                                    }
+                                    else if (!isGeneratingMarketingImages && !newlyGeneratedImages.Any())
+                                    {
+                                        <div class="empty-state">
+                                            <div class="empty-icon">📣</div>
+                                            <h3>No Marketing Images Yet</h3>
+                                            <p>Create a marketing-ready visual first, then use it as the reference for the four generated assets.</p>
+                                            <button class="generate-images-button" @onclick="GoToGenerateImages" disabled="@isGeneratingMarketingImages">
+                                                Generate Marketing Image
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="empty-state"><p>No images available</p></div>
+                                }
+                            </div>
+                        }
+
+                        <div class="marketing-config-section">
+                            <h3>Campaign Direction</h3>
+                            <div class="config-options two-col">
+                                <div class="config-option">
+                                    <label>Primary Goal</label>
+                                    <select @bind="PrimaryGoal" class="config-select">
+                                        <option value="Awareness">Brand Awareness</option>
+                                        <option value="Traffic">Website Traffic</option>
+                                        <option value="Leads">Lead Generation</option>
+                                        <option value="Sales">Sales / Conversion</option>
+                                        <option value="Engagement">Engagement</option>
+                                    </select>
+                                </div>
+                                <div class="config-option">
+                                    <label>Target Audience</label>
+                                    <input class="config-input" @bind="TargetAudience" placeholder="e.g. Small business owners, ages 25-45" />
+                                </div>
+                                <div class="config-option">
+                                    <label>Call to Action</label>
+                                    <input class="config-input" @bind="CallToAction" placeholder="e.g. Learn More, Shop Now, Book a Demo" />
+                                </div>
+                                <div class="config-option">
+                                    <label>Campaign Tone</label>
+                                    <select @bind="CampaignTone" class="config-select">
+                                        <option value="BrandAligned">Brand-aligned</option>
+                                        <option value="Professional">Professional</option>
+                                        <option value="Bold">Bold</option>
+                                        <option value="Friendly">Friendly</option>
+                                        <option value="Premium">Premium</option>
+                                        <option value="Playful">Playful</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="config-option full-width">
+                                <label>Campaign Message / Offer</label>
+                                <textarea @bind="CampaignMessage" class="config-textarea"
+                                          placeholder="Enter the key message, promotion, product benefit, offer, event, or campaign theme..."></textarea>
+                            </div>
+
+                            <div class="checkbox-row">
+                                <label><input type="checkbox" @bind="IncludeBrandLogo" /> Include brand/logo treatment</label>
+                                <label><input type="checkbox" @bind="IncludeCTA" /> Include call-to-action text</label>
+                                <label><input type="checkbox" @bind="IncludeHashtags" /> Include platform-appropriate hashtags where useful</label>
+                            </div>
+
+                            <div class="asset-output-note">
+                                <strong>Output set:</strong>
+                                <span>Instagram Feed Post (1:1)</span>
+                                <span>Instagram Story / Reel (9:16)</span>
+                                <span>Facebook / LinkedIn Ad (1.91:1)</span>
+                                <span>X / Twitter Post (16:9)</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="tab-content generated-assets-tab">
+                        <div class="modal-header"><h2>Generated Digital Marketing Assets</h2></div>
+
+                        @if (IsGeneratingAssets)
+                        {
+                            <div class="generation-loading-container">
+                                <div class="generation-header">
+                                    <h3>Creating Your Marketing Asset Set</h3>
+                                    <div class="generation-status">@GenerationStatus</div>
+                                </div>
+                                <div class="progress-bar-container"><div class="progress-bar" style="width: @(GenerationProgress)%;"></div></div>
+                                <div class="current-step-details">@CurrentStepDetails</div>
+                                <div class="generation-steps-log">
+                                    <h4>Generation Steps:</h4>
+                                    <div class="steps-list">
+                                        @foreach (var step in GenerationSteps)
+                                        {
+                                            <div class="step-item"><span class="step-check">✓</span><span>@step</span></div>
+                                        }
+                                        @if (GenerationProgress < 100)
+                                        {
+                                            <div class="step-item current"><span class="step-spinner"></span><span>@GenerationStatus</span></div>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="generation-tip">💡 One reference image is being adapted into four platform-specific creative assets.</div>
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(GenerationError))
+                        {
+                            <div class="generation-error">
+                                <h3>Digital marketing generation failed</h3>
+                                <p>@GenerationError</p>
+                                <button class="save-button" @onclick="() => SetActiveTab(TabType.GenerateNew)">Back to Generate New</button>
+                            </div>
+                        }
+                        else if (ActiveGeneratedVersion != null)
+                        {
+                            <div class="version-header">
+                                <div>
+                                    <span class="current-label-pill">Current</span>
+                                    <strong>@ActiveGeneratedVersion.Version</strong>
+                                    <small>@ActiveGeneratedVersion.CreatedAt.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")</small>
+                                </div>
+                            </div>
+
+                            <div class="generated-assets-grid">
+                                @foreach (var asset in ActiveGeneratedVersion.Assets)
+                                {
+                                    <div class="generated-asset-card">
+                                        <div class="generated-asset-card-header">
+                                            <div>
+                                                <strong>@asset.DisplayName</strong>
+                                                <span>@asset.Dimensions</span>
+                                            </div>
+                                            <div class="preview-actions">
+                                                <button class="toolbar-button" @onclick="() => OpenAsset(asset)">↗ Open</button>
+                                                <button class="toolbar-button primary" @onclick="() => DownloadAsset(asset)">📥 Download</button>
+                                            </div>
+                                        </div>
+                                        <div class="asset-preview-stage @asset.CssClass">
+                                            <img src="@asset.ImageUrl" alt="@asset.DisplayName" />
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            @if (GeneratedVersions.Any())
+                            {
+                                <div class="generated-history">
+                                    <div class="generated-history-header">
+                                        <div><h4>Generated Versions</h4><p>Click a saved version to view its four assets.</p></div>
+                                        <span class="generated-count">@GeneratedVersions.Count</span>
+                                    </div>
+                                    <div class="history-grid">
+                                        @foreach (var item in GeneratedVersions.OrderByDescending(x => x.CreatedAt))
+                                        {
+                                            var isActive = ActiveGeneratedVersion != null &&
+                                            string.Equals(item.DigitalMarketingId, ActiveGeneratedVersion.DigitalMarketingId, StringComparison.OrdinalIgnoreCase) &&
+                                            string.Equals(item.Version, ActiveGeneratedVersion.Version, StringComparison.OrdinalIgnoreCase);
+
+                                            <button type="button" class="history-card @(isActive ? "active" : "")" @onclick="() => ViewGeneratedVersion(item)">
+                                                <div class="history-image-wrap">
+                                                    @if (item.Assets.Any())
+                                                    {
+                                                        <img src="@item.Assets.First().ImageUrl" alt="Saved digital marketing @item.Version" class="history-thumb" />
+                                                    }
+                                                </div>
+                                                <div class="history-card-info">
+                                                    <strong>@item.Version</strong>
+                                                    <span>4 platform assets</span>
+                                                    <small>@item.CreatedAt.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")</small>
+                                                </div>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @if (HasExistingDigitalMarketing)
+                            {
+                                <div class="persisted-summary">
+                                    <span>💾</span>
+                                    <div><strong>@sortedDigitalMarketing.Count saved version@(sortedDigitalMarketing.Count == 1 ? "" : "s")</strong><p>Versions are loaded from the DigitalMarketing table and reconstructed from their saved image folders.</p></div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="empty-state generated-empty-state">
+                                <div class="empty-icon">📣</div>
+                                <h3>No Digital Marketing Assets Generated Yet</h3>
+                                <p>Go to Generate New, select one image, and create the four-asset set.</p>
+                                <button class="save-button" @onclick="() => SetActiveTab(TabType.GenerateNew)">Start Generating</button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (ActiveTab == TabType.GenerateNew)
+            {
+                <div class="footer-actions sticky-footer">
+                    <button class="discard-button" @onclick="CloseModal">Cancel</button>
+                    <button class="save-button" @onclick="GenerateDigitalMarketingAssets"
+                            disabled="@(!SelectedImageIds.Any() || IsGeneratingAssets || isGeneratingMarketingImages)"
+                            style="@(!SelectedImageIds.Any() ? "background-color:#eee; color:#ababab;" : null)">
+                        @GetGenerateButtonText()
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="footer-actions sticky-footer">
+                    <button class="discard-button" disabled="@IsGeneratingAssets" @onclick="() => SetActiveTab(TabType.GenerateNew)">← Back to Generate New</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Inject] private ApiConfigService ApiConfig { get; set; } = default!;
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject] private HttpClient Http { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private AttributionContextService AttributionContext { get; set; } = default!;
+    [Inject] private Blazored.LocalStorage.ILocalStorageService LocalStorage { get; set; } = default!;
+    [Inject] private AIUsageRefreshService UsageRefresh { get; set; } = default!;
+
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public DesignMode.AI.Client.Pages.Init.MakeVideoModal.ImageIdeaCountResult AllIdeas { get; set; }
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> SelectedImages { get; set; } = new();
+    [Parameter] public EventCallback<List<string>> OnImagesSelected { get; set; }
+    [Parameter] public EventCallback<bool> OnMarketingCampaignGenerated { get; set; }
+    [Parameter] public Func<string, int, int, int, Task<string>> CallRunwareImageFunction { get; set; }
+    [Parameter] public Func<string, string, string, string, string, string, string, Task<string>> CallSaveImageIdeaFunction { get; set; }
+    [Parameter] public string CompanyIdeaId { get; set; } = "";
+    [Parameter] public string CompanyDescription { get; set; } = "";
+    [Parameter] public string PromptIdFromCID { get; set; } = "";
+    [Parameter] public string MainPromptText { get; set; } = "";
+    [Parameter] public EventCallback OnModalClosed { get; set; }
+    private enum TabType { GenerateNew, GeneratedAssets }
+    private TabType ActiveTab { get; set; } = TabType.GenerateNew;
+
+    private HttpClient CreateLongRunningHttpClient()
+    {
+        return new HttpClient
+            {
+                Timeout = TimeSpan.FromMinutes(10)
+            };
+    }
+
+    private bool IsBusy;
+    private bool IsGeneratingAssets;
+    private bool isGeneratingMarketingImages;
+    private bool wasImageGenerated;
+    private bool hasLoadedVersions;
+    private bool autoGenerationTriggered;
+
+    private string SelectedCompanyName = "";
+    private string GenerationStatus = "";
+    private string CurrentStepDetails = "";
+    private string GenerationError = "";
+    private int GenerationProgress;
+    private List<string> GenerationSteps = new();
+
+    private string PrimaryGoal = "Awareness";
+    private string TargetAudience = "General audience";
+    private string CampaignTone = "BrandAligned";
+    private string CampaignMessage = "";
+    private string CallToAction = "Learn More";
+    private bool IncludeBrandLogo = true;
+    private bool IncludeCTA = true;
+    private bool IncludeHashtags = true;
+
+    private HashSet<string> SelectedImageIds = new();
+    private HashSet<string> SelectedImageUrls = new();
+    private List<Gen.ImageIdeaModel> newlyGeneratedImages = new();
+
+    private List<DigitalMarketingRecord> sortedDigitalMarketing = new();
+    private List<GeneratedMarketingVersion> GeneratedVersions = new();
+    private GeneratedMarketingVersion? ActiveGeneratedVersion;
+    private bool HasExistingDigitalMarketing => sortedDigitalMarketing.Any();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (SelectedImages != null && SelectedImages.Any())
+        {
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+        }
+
+        if (Show)
+        {
+            // Always make sure stale generation state cannot leave the
+            // Generated Assets tab displaying "Generating..." after a page
+            // reload or modal reopen.
+            if (!isGeneratingMarketingImages)
+                IsBusy = false;
+
+            var queryString = new Uri(NavigationManager.Uri).Query;
+            var cid = GetQueryParameter(queryString, "cid", "");
+
+            if (!string.IsNullOrWhiteSpace(cid))
+            {
+                string[] parts = cid.Split(
+                    new string[] { "|~~|@@|^^|" },
+                    StringSplitOptions.None);
+
+                if (parts.Length >= 1)
+                {
+                    try
+                    {
+                        SelectedCompanyName = SanitizeCompanyName(
+                            Encoding.UTF8.GetString(
+                                Convert.FromBase64String(parts[0])));
+                    }
+                    catch (FormatException ex)
+                    {
+                        Console.WriteLine(
+                            $"Unable to decode company name from cid: {ex.Message}");
+                    }
+                }
+            }
+
+            if (!hasLoadedVersions &&
+                !string.IsNullOrWhiteSpace(SelectedCompanyName))
+            {
+                await LoadExistingDigitalMarketingVersionsAsync(
+                    SelectedCompanyName);
+
+                hasLoadedVersions = true;
+            }
+
+            // On a fresh load/reopen, saved versions should immediately
+            // become available in the Generated Assets tab.
+            if (GeneratedVersions.Any() &&
+                ActiveGeneratedVersion == null)
+            {
+                ActiveGeneratedVersion = GeneratedVersions.First();
+            }
+        }
+
+        if (Show &&
+            !autoGenerationTriggered &&
+            !HasMarketingImages() &&
+            !isGeneratingMarketingImages &&
+            SelectedImages != null &&
+            SelectedImages.Any())
+        {
+            autoGenerationTriggered = true;
+            await GoToGenerateImages();
+        }
+    }
+
+    private bool HasMarketingImages() => GetUniqueMarketingImages().Any();
+
+    private List<Gen.ImageIdeaModel> GetUniqueMarketingImages()
+    {
+        var allImages = new List<Gen.ImageIdeaModel>();
+        if (SelectedImages != null) allImages.AddRange(SelectedImages);
+        if (newlyGeneratedImages != null) allImages.AddRange(newlyGeneratedImages);
+
+        return allImages
+            .Where(img => !string.IsNullOrWhiteSpace(img.ImageUrl) && IsMarketingImage(img))
+            .GroupBy(img => img.ImageUrl)
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    private static bool IsMarketingImage(Gen.ImageIdeaModel img)
+    {
+        var text = $"{img.DeliverableType} {img.SubCategory}".ToLowerInvariant();
+        return new[] { "social", "marketing", "ad", "promo", "digital", "campaign", "brand" }.Any(text.Contains);
+    }
+
+    private string GetMarketingCategory(Gen.ImageIdeaModel image)
+    {
+        var text = $"{image.DeliverableType} {image.SubCategory}".ToLowerInvariant();
+        if (text.Contains("social")) return "Social Media";
+        if (text.Contains("ad")) return "Advertising";
+        if (text.Contains("promo")) return "Promotional";
+        return "Marketing Assets";
+    }
+
+    private RenderFragment ImageCard(Gen.ImageIdeaModel image) => __builder =>
+    {
+        var isSelected = SelectedImageIds.Contains(image.Id);
+        <div class="image-card @(isSelected ? "marketing-selected" : "")" @onclick="() => ToggleSelection(image.ImageUrl, image.Id)">
+            <img src="@image.ImageUrl" alt="Marketing reference" class="image-thumb" />
+            <div class="image-controls">
+                <div class="marketing-selection-indicator @(isSelected ? "selected" : "")" @onclick="() => ToggleSelection(image.ImageUrl, image.Id)" @onclick:stopPropagation>
+                    <span class="indicator-icon">@(isSelected ? "✓" : "+")</span>
+                </div>
+            </div>
+            @if (isSelected)
+            {
+                <div class="marketing-selection-badge"><span>📣</span> Reference Image</div>
+            }
+        </div>
+    };
+
+    private void ToggleSelection(string url, string id)
+    {
+        if (SelectedImageIds.Contains(id))
+        {
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+        }
+        else
+        {
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+            SelectedImageIds.Add(id);
+            if (!string.IsNullOrWhiteSpace(url)) SelectedImageUrls.Add(url);
+        }
+        StateHasChanged();
+    }
+
+    private string GetGenerateButtonText() => SelectedImageIds.Any()
+        ? "Generate 4 Digital Marketing Assets"
+        : "Select an Image to Generate Assets";
+
+    private async Task GenerateDigitalMarketingAssets()
+    {
+        if (IsGeneratingAssets || !SelectedImageIds.Any()) return;
+        await using var generationOperation = await BeginGenerationAsync();
+
+        IsGeneratingAssets = true;
+        ActiveTab = TabType.GeneratedAssets;
+        GenerationError = "";
+        GenerationSteps.Clear();
+        UpdateGenerationStatus("Starting digital marketing generation...", "Preparing your selected image and campaign direction", 5);
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user.Identity?.IsAuthenticated != true)
+                throw new InvalidOperationException("You must be signed in to generate digital marketing assets.");
+
+            var allImages = new List<Gen.ImageIdeaModel>();
+            if (SelectedImages != null) allImages.AddRange(SelectedImages);
+            if (newlyGeneratedImages != null) allImages.AddRange(newlyGeneratedImages);
+            var selectedImage = allImages.FirstOrDefault(img => SelectedImageIds.Contains(img.Id) && !string.IsNullOrWhiteSpace(img.ImageUrl));
+            if (selectedImage == null)
+                throw new InvalidOperationException("The selected image could not be found.");
+
+            string companyName = GetCompanyNameFromCid();
+            if (string.IsNullOrWhiteSpace(companyName)) companyName = SelectedCompanyName;
+            if (string.IsNullOrWhiteSpace(companyName)) companyName = "Brand";
+
+            var attribution = await AttributionContext.AuthorizeGenerationAsync(CompanyIdeaId);
+
+            UpdateGenerationStatus("Generating platform assets...", "Creating Instagram, Facebook/LinkedIn, and X creative from the same reference image", 25);
+
+            var request = new GenerateDigitalMarketingRequest
+                {
+                    ImageUrl = selectedImage.ImageUrl,
+                    SelectedImageId = selectedImage.Id,
+                    Name = companyName,
+                    CompanyDescription = CompanyDescription,
+                    Prompt = MainPromptText,
+                    PrimaryGoal = PrimaryGoal,
+                    TargetAudience = TargetAudience,
+                    CampaignTone = CampaignTone,
+                    CampaignMessage = CampaignMessage,
+                    CallToAction = CallToAction,
+                    IncludeBrandLogo = IncludeBrandLogo,
+                    IncludeCTA = IncludeCTA,
+                    IncludeHashtags = IncludeHashtags,
+                    UserId = user.Identity?.Name ?? "",
+                    CompanyIdeaId = CompanyIdeaId,
+                    PromptId = PromptIdFromCID,
+                    Timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ"),
+                    GenerationJobId = Guid.NewGuid().ToString(),
+                    ProjectId = attribution?.ProjectId,
+                    FunnelId = attribution?.FunnelId
+                };
+
+            using var generationHttp = CreateLongRunningHttpClient();
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+                generationHttp.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await generationHttp.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/GenerateDigitalMarketing?code=REDACTED_FOR_GROOMING",
+                request);
+            if (await UsageRefresh.HandleResponseAsync(response)) return;
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException($"GenerateDigitalMarketing returned {(int)response.StatusCode}: {body}");
+            }
+            await UsageRefresh.RequestRefreshAsync();
+
+            DigitalMarketingGenerationResult? result;
+            try
+            {
+                result = await response.Content.ReadFromJsonAsync<DigitalMarketingGenerationResult>();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Failed while reading the generated asset response: {ex.Message}",
+                    ex);
+            }
+
+            if (result == null || !result.Success || result.Assets == null || result.Assets.Count != 4)
+                throw new InvalidOperationException(result?.Error ?? "The function did not return all four digital marketing assets.");
+
+            var safeCompanyName = SanitizeCompanyName(companyName);
+            if (!hasLoadedVersions)
+            {
+                await LoadExistingDigitalMarketingVersionsAsync(safeCompanyName);
+                hasLoadedVersions = true;
+            }
+
+            var nextVersion = GetNextVersion();
+            var versionText = $"v{nextVersion}";
+            var logicalId = GetLogicalDigitalMarketingId(result.DigitalMarketingId);
+            var timestamp = DateTime.UtcNow.ToString("o");
+
+            UpdateGenerationStatus("Saving generated images...", $"Saving {versionText} under SavedImages", 78);
+
+            var savedAssets = new List<GeneratedMarketingAsset>();
+            foreach (var asset in result.Assets)
+            {
+                var savedUrl = await SaveGeneratedAssetAsync(asset.ImageUrl, safeCompanyName, nextVersion.ToString(), asset.AssetType);
+                if (string.IsNullOrWhiteSpace(savedUrl))
+                    throw new InvalidOperationException($"Could not save {asset.DisplayName}.");
+
+                savedAssets.Add(new GeneratedMarketingAsset
+                    {
+                        AssetType = asset.AssetType,
+                        DisplayName = asset.DisplayName,
+                        Dimensions = asset.Dimensions,
+                        ImageUrl = savedUrl,
+                        DownloadUrl = savedUrl,
+                        CssClass = GetAssetCssClass(asset.AssetType)
+                    });
+            }
+
+            UpdateGenerationStatus("Saving version...", $"Adding {versionText} to DigitalMarketing history", 92);
+
+            try
+            {
+                await SaveDigitalMarketingAsync(
+                    logicalId,
+                    safeCompanyName,
+                    versionText,
+                    timestamp);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Failed while saving the DigitalMarketing database version: {ex.Message}",
+                    ex);
+            }
+
+            try
+            {
+                await LoadExistingDigitalMarketingVersionsAsync(safeCompanyName);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Failed while reloading DigitalMarketing version history: {ex.Message}",
+                    ex);
+            }
+
+            var generated = GeneratedVersions.FirstOrDefault(x => string.Equals(x.Version, versionText, StringComparison.OrdinalIgnoreCase));
+            if (generated == null)
+            {
+                generated = new GeneratedMarketingVersion
+                    {
+                        DigitalMarketingId = logicalId,
+                        CompanyName = safeCompanyName,
+                        Version = versionText,
+                        CreatedAt = DateTime.UtcNow,
+                        Assets = savedAssets
+                    };
+                GeneratedVersions.Insert(0, generated);
+            }
+            else
+            {
+                generated.Assets = savedAssets;
+                generated.CreatedAt = DateTime.UtcNow;
+            }
+
+            ViewGeneratedVersion(generated);
+            UpdateGenerationStatus("Complete!", $"{versionText} generated, saved, and added to the gallery", 100);
+
+            if (OnMarketingCampaignGenerated.HasDelegate)
+                await OnMarketingCampaignGenerated.InvokeAsync(true);
+        }
+        catch (TaskCanceledException ex)
+        {
+            GenerationError =
+                "The digital marketing request exceeded the 10-minute client timeout. " +
+                "Check the Azure Function logs to see which server-side operation is still running.";
+
+            GenerationStatus = "Generation timed out";
+            CurrentStepDetails = GenerationError;
+            GenerationProgress = 0;
+            Console.WriteLine($"Digital marketing generation timed out: {ex}");
+        }
+        catch (Exception ex)
+        {
+            GenerationError = ex.Message;
+            GenerationStatus = "Generation failed";
+            CurrentStepDetails = ex.Message;
+            GenerationProgress = 0;
+            Console.WriteLine($"Digital marketing generation failed: {ex}");
+        }
+        finally
+        {
+            IsGeneratingAssets = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<string?> SaveGeneratedAssetAsync(string imageUrl, string companyName, string version, string assetType)
+    {
+        var request = new SaveDigitalMarketingImageRequest
+            {
+                ImageUrl = imageUrl,
+                CompanyName = companyName,
+                Version = version,
+                AssetType = assetType
+            };
+
+        using var saveHttp = CreateLongRunningHttpClient();
+
+        var response = await saveHttp.PostAsJsonAsync(
+            $"{ApiConfig.ApiBaseUrl}api/SaveDigitalMarketingImage?code=REDACTED_FOR_GROOMING",
+            request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"SaveDigitalMarketingImage returned {(int)response.StatusCode}: {body}");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<SaveDigitalMarketingImageResponse>();
+        return !string.IsNullOrWhiteSpace(result?.ImageUrl)
+            ? result.ImageUrl
+            : GetDigitalMarketingAssetUrl(companyName, version, assetType);
+    }
+
+    private async Task SaveDigitalMarketingAsync(string digitalMarketingId, string companyName, string version, string timestamp)
+    {
+        var payload = new DigitalMarketingRecord
+            {
+                DigitalMarketingId = digitalMarketingId,
+                CompanyName = companyName,
+                Version = version,
+                TimeStamp = timestamp
+            };
+
+        using var saveHttp = CreateLongRunningHttpClient();
+
+        var response = await saveHttp.PostAsJsonAsync(
+            $"{ApiConfig.ApiBaseUrl}api/SaveDigitalMarketing?code=REDACTED_FOR_GROOMING",
+            payload);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"SaveDigitalMarketing returned {(int)response.StatusCode}: {body}");
+        }
+    }
+
+    private async Task LoadExistingDigitalMarketingVersionsAsync(string companyName)
+    {
+        if (string.IsNullOrWhiteSpace(companyName)) return;
+
+        try
+        {
+            using var loadHttp = CreateLongRunningHttpClient();
+
+            var response = await loadHttp.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/GetDigitalMarketingByCompany?code=REDACTED_FOR_GROOMING",
+                new { CompanyName = companyName });
+
+            if (!response.IsSuccessStatusCode) return;
+
+            var result = await response.Content.ReadFromJsonAsync<GetDigitalMarketingResponse>();
+            sortedDigitalMarketing = result?.Data ?? new();
+
+            GeneratedVersions = sortedDigitalMarketing.Select(row => new GeneratedMarketingVersion
+                {
+                    DigitalMarketingId = row.DigitalMarketingId,
+                    CompanyName = row.CompanyName,
+                    Version = row.Version,
+                    CreatedAt = DateTime.TryParse(row.TimeStamp, out var dt) ? dt : DateTime.MinValue,
+                    Assets = BuildPersistedAssets(row.CompanyName, row.Version)
+                }).OrderByDescending(x => x.CreatedAt).ToList();
+
+            if (GeneratedVersions.Any())
+                ActiveGeneratedVersion = GeneratedVersions.First();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed loading DigitalMarketing versions: {ex}");
+            throw;
+        }
+    }
+
+    private List<GeneratedMarketingAsset> BuildPersistedAssets(string companyName, string version) => new()
+    {
+        BuildPersistedAsset(companyName, version, "instagram-feed", "Instagram Feed Post", "1080 × 1080"),
+        BuildPersistedAsset(companyName, version, "instagram-story-reel", "Instagram Story / Reel", "1080 × 1920"),
+        BuildPersistedAsset(companyName, version, "facebook-linkedin-ad", "Facebook / LinkedIn Ad", "1200 × 628"),
+        BuildPersistedAsset(companyName, version, "x-twitter-post", "X (Twitter) Post", "1600 × 900")
+    };
+
+    private GeneratedMarketingAsset BuildPersistedAsset(string companyName, string version, string type, string display, string dimensions)
+    {
+        var url = GetDigitalMarketingAssetUrl(companyName, version, type);
+        return new GeneratedMarketingAsset { AssetType = type, DisplayName = display, Dimensions = dimensions, ImageUrl = url, DownloadUrl = url, CssClass = GetAssetCssClass(type) };
+    }
+
+    private int GetNextVersion()
+    {
+        var max = sortedDigitalMarketing.Select(x =>
+        {
+            var v = x.Version?.Trim().TrimStart('v', 'V');
+            return int.TryParse(v, out var parsed) ? parsed : 0;
+        }).DefaultIfEmpty(0).Max();
+        return max + 1;
+    }
+
+    private string GetLogicalDigitalMarketingId(string generatedId)
+    {
+        var existing = sortedDigitalMarketing
+            .Where(x => !string.IsNullOrWhiteSpace(x.DigitalMarketingId))
+            .OrderByDescending(x => DateTime.TryParse(x.TimeStamp, out var dt) ? dt : DateTime.MinValue)
+            .Select(x => x.DigitalMarketingId)
+            .FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(existing)) return existing;
+        if (!string.IsNullOrWhiteSpace(generatedId)) return generatedId;
+        return Guid.NewGuid().ToString();
+    }
+
+    private string GetDigitalMarketingFolderName(string companyName, string version)
+    {
+        var safeVersion = (version ?? "1").Replace("v", "", StringComparison.OrdinalIgnoreCase).Trim();
+        return $"{SanitizeCompanyName(companyName)}-digital-marketing-v{safeVersion}";
+    }
+
+    private string GetDigitalMarketingAssetUrl(string companyName, string version, string assetType)
+        => $"{ApiConfig.StorageBaseUrl}{GetDigitalMarketingFolderName(companyName, version)}/{GetAssetFileName(assetType)}";
+
+    private static string GetAssetFileName(string assetType) => assetType switch
+    {
+        "instagram-feed" => "instagram-feed.png",
+        "instagram-story-reel" => "instagram-story-reel.png",
+        "facebook-linkedin-ad" => "facebook-linkedin-ad.png",
+        "x-twitter-post" => "x-twitter-post.png",
+        _ => $"{SanitizeAssetType(assetType)}.png"
+    };
+
+    private static string GetAssetCssClass(string assetType) => assetType switch
+    {
+        "instagram-story-reel" => "portrait",
+        "instagram-feed" => "square",
+        _ => "landscape"
+    };
+
+    private static string SanitizeAssetType(string value) => Regex.Replace((value ?? "asset").ToLowerInvariant(), "[^a-z0-9-]", "-").Trim('-');
+
+    private static string SanitizeCompanyName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "Brand";
+        var clean = Regex.Replace(value.Trim(), @"[^A-Za-z0-9\-_]", "-");
+        clean = Regex.Replace(clean, "-+", "-").Trim('-');
+        return string.IsNullOrWhiteSpace(clean) ? "Brand" : clean;
+    }
+
+    private string GetCompanyNameFromCid()
+    {
+        var cid = GetQueryParameter(new Uri(NavigationManager.Uri).Query, "cid", "");
+        if (string.IsNullOrWhiteSpace(cid)) return SelectedCompanyName;
+        try
+        {
+            var parts = cid.Split(new string[] { "|~~|@@|^^|" }, StringSplitOptions.None);
+            return parts.Length > 0 ? Encoding.UTF8.GetString(Convert.FromBase64String(parts[0])) : SelectedCompanyName;
+        }
+        catch { return SelectedCompanyName; }
+    }
+
+    private string GetQueryParameter(string queryString, string key, string defaultValue)
+    {
+        var parameters = System.Web.HttpUtility.ParseQueryString(queryString);
+        return parameters[key] ?? defaultValue;
+    }
+
+    private void SetActiveTab(TabType tab) { ActiveTab = tab; StateHasChanged(); }
+    private int GetGeneratedVersionCount() => sortedDigitalMarketing.Count;
+    private void ViewGeneratedVersion(GeneratedMarketingVersion item) { ActiveGeneratedVersion = item; ActiveTab = TabType.GeneratedAssets; StateHasChanged(); }
+
+    private void UpdateGenerationStatus(string status, string details, int progress)
+    {
+        if (!string.IsNullOrWhiteSpace(GenerationStatus) && GenerationStatus != status && GenerationProgress > 0)
+            GenerationSteps.Add(GenerationStatus);
+        GenerationStatus = status;
+        CurrentStepDetails = details;
+        GenerationProgress = Math.Clamp(progress, 0, 100);
+        StateHasChanged();
+    }
+
+    private async Task OpenAsset(GeneratedMarketingAsset asset)
+    {
+        if (!string.IsNullOrWhiteSpace(asset.ImageUrl)) await JS.InvokeVoidAsync("open", asset.ImageUrl, "_blank");
+    }
+
+    private async Task DownloadAsset(GeneratedMarketingAsset asset)
+    {
+        var url = string.IsNullOrWhiteSpace(asset.DownloadUrl) ? asset.ImageUrl : asset.DownloadUrl;
+        if (!string.IsNullOrWhiteSpace(url)) await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private async Task CloseModal()
+    {
+        if (GenerationGuard is null && (IsGeneratingAssets || isGeneratingMarketingImages)) return;
+        if (!await ConfirmGenerationCloseAsync()) return;
+
+        Show = false;
+
+        // Reset only transient generation UI state. Keep GeneratedVersions,
+        // sortedDigitalMarketing, hasLoadedVersions, and ActiveGeneratedVersion
+        // in memory so reopening the modal is immediate.
+        IsBusy = false;
+        GenerationStatus = "";
+        CurrentStepDetails = "";
+        GenerationError = "";
+        GenerationProgress = 0;
+        GenerationSteps.Clear();
+        SelectedImageIds.Clear();
+        SelectedImageUrls.Clear();
+
+        await ShowChanged.InvokeAsync(false);
+
+        if (OnModalClosed.HasDelegate && wasImageGenerated)
+            await OnModalClosed.InvokeAsync();
+
+        newlyGeneratedImages.Clear();
+        wasImageGenerated = false;
+        autoGenerationTriggered = false;
+    }
+
+    // Keep your existing source-image generation pipeline. This method deliberately
+    // uses the parent delegates already used by the current DigitalMarketing modal.
+    private async Task GoToGenerateImages()
+    {
+        if (isGeneratingMarketingImages || CallRunwareImageFunction == null || CallSaveImageIdeaFunction == null) return;
+        await using var generationOperation = await BeginGenerationAsync();
+        isGeneratingMarketingImages = true;
+        IsBusy = true;
+        try
+        {
+            var prompt = string.IsNullOrWhiteSpace(MainPromptText)
+                ? $"Create one polished digital marketing brand visual for {CompanyDescription}. It should work as a visual reference for social media and advertising creative."
+                : $"{MainPromptText}\nCreate one polished digital marketing visual suitable as a reference for social media and advertising assets.";
+
+            var imageUrl = await CallRunwareImageFunction(prompt, 1024, 1024, 1);
+            if (string.IsNullOrWhiteSpace(imageUrl)) return;
+
+            var savedId = await CallSaveImageIdeaFunction(
+                CompanyIdeaId,
+                "Digital Marketing",
+                "Generic",
+                prompt,
+                imageUrl,
+                PromptIdFromCID,
+                "1");
+
+            newlyGeneratedImages.Add(new Gen.ImageIdeaModel
+                {
+                    Id = string.IsNullOrWhiteSpace(savedId) ? Guid.NewGuid().ToString() : savedId,
+                    ImageUrl = imageUrl,
+                    DeliverableType = "Digital Marketing",
+                    SubCategory = "Generic",
+                    CountId = "1"
+                });
+            wasImageGenerated = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Marketing reference image generation failed: {ex.Message}");
+        }
+        finally
+        {
+            isGeneratingMarketingImages = false;
+            IsBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    public class GenerateDigitalMarketingRequest
+    {
+        public string? GenerationJobId { get; set; }
+        public string? ProjectId { get; set; }
+        public string? FunnelId { get; set; }
+        public string ImageUrl { get; set; } = "";
+        public string SelectedImageId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string CompanyDescription { get; set; } = "";
+        public string Prompt { get; set; } = "";
+        public string PrimaryGoal { get; set; } = "";
+        public string TargetAudience { get; set; } = "";
+        public string CampaignTone { get; set; } = "";
+        public string CampaignMessage { get; set; } = "";
+        public string CallToAction { get; set; } = "";
+        public bool IncludeBrandLogo { get; set; }
+        public bool IncludeCTA { get; set; }
+        public bool IncludeHashtags { get; set; }
+        public string UserId { get; set; } = "";
+        public string CompanyIdeaId { get; set; } = "";
+        public string PromptId { get; set; } = "";
+        public string Timestamp { get; set; } = "";
+    }
+
+    public class DigitalMarketingGenerationResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = "";
+        public string Error { get; set; } = "";
+        public string DigitalMarketingId { get; set; } = "";
+        public List<GeneratedMarketingAsset> Assets { get; set; } = new();
+    }
+
+    public class GeneratedMarketingAsset
+    {
+        public string AssetType { get; set; } = "";
+        public string DisplayName { get; set; } = "";
+        public string Dimensions { get; set; } = "";
+        public string ImageUrl { get; set; } = "";
+        public string DownloadUrl { get; set; } = "";
+        public string CssClass { get; set; } = "";
+    }
+
+    public class GeneratedMarketingVersion
+    {
+        public string DigitalMarketingId { get; set; } = "";
+        public string CompanyName { get; set; } = "";
+        public string Version { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+        public List<GeneratedMarketingAsset> Assets { get; set; } = new();
+    }
+
+    public class DigitalMarketingRecord
+    {
+        public string Id { get; set; } = "";
+        public string DigitalMarketingId { get; set; } = "";
+        public string CompanyName { get; set; } = "";
+        public string Version { get; set; } = "";
+        public string TimeStamp { get; set; } = "";
+    }
+
+    public class GetDigitalMarketingResponse
+    {
+        public string Message { get; set; } = "";
+        public int Count { get; set; }
+        public List<DigitalMarketingRecord> Data { get; set; } = new();
+    }
+
+    public class SaveDigitalMarketingImageRequest
+    {
+        public string ImageUrl { get; set; } = "";
+        public string CompanyName { get; set; } = "";
+        public string Version { get; set; } = "";
+        public string AssetType { get; set; } = "";
+    }
+
+    public class SaveDigitalMarketingImageResponse
+    {
+        public bool Success { get; set; }
+        public string ImageUrl { get; set; } = "";
+        public string SavedUrl { get; set; } = "";
+    }
+}
+
+<style>
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15,23,42,.58);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+        padding: 20px;
+    }
+
+    .vertical-modal-wrapper {
+        width: min(1180px, 96vw);
+        max-height: 94vh;
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 24px 70px rgba(0,0,0,.28);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .modal-close {
+        position: absolute;
+        right: 16px;
+        top: 12px;
+        z-index: 5;
+        width: 38px;
+        height: 38px;
+        border: 0;
+        border-radius: 50%;
+        background: #f1f5f9;
+        font-size: 25px;
+        cursor: pointer;
+    }
+
+    .modal-tabs {
+        display: flex;
+        gap: 8px;
+        padding: 16px 64px 12px 22px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #fff;
+    }
+
+    .tab-button {
+        border: 0;
+        background: #f8fafc;
+        padding: 10px 16px;
+        border-radius: 10px;
+        font-weight: 700;
+        cursor: pointer;
+        color: #475569;
+    }
+
+        .tab-button.active {
+            background: #eaf2ff;
+            color: #1d4ed8;
+        }
+
+        .tab-button:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+    .tab-badge {
+        margin-left: 8px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #dbeafe;
+        font-size: 11px;
+    }
+
+        .tab-badge.generating {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+    .modal-scroll-content {
+        overflow-y: auto;
+        padding: 24px;
+    }
+
+    .modal-header h2 {
+        margin: 0 0 8px;
+        color: #0f172a;
+    }
+
+    .modal-intro {
+        color: #475569;
+        margin-bottom: 20px;
+        line-height: 1.55;
+    }
+
+    .campaign-status {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 18px;
+    }
+
+    .campaign-count {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .selection-count {
+        background: #dbeafe;
+        color: #1d4ed8;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-weight: 700;
+        font-size: 12px;
+    }
+
+    .image-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .deliverable-section {
+        border-top: 1px solid #e5e7eb;
+        padding-top: 16px;
+    }
+
+    .section-title {
+        color: #334155;
+        font-size: 1rem;
+        margin-bottom: 12px;
+    }
+
+    .image-col {
+        display: grid;
+        grid-template-columns: repeat(auto-fill,minmax(180px,1fr));
+        gap: 14px;
+    }
+
+    .image-card {
+        position: relative;
+        border: 2px solid transparent;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #f8fafc;
+        cursor: pointer;
+        transition: .2s ease;
+        min-height: 150px;
+    }
+
+        .image-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 22px rgba(15,23,42,.12);
+        }
+
+    .image-thumb {
+        width: 100%;
+        aspect-ratio: 1/1;
+        object-fit: cover;
+        display: block;
+    }
+
+    .marketing-selected {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+    }
+
+    .image-controls {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+    }
+
+    .marketing-selection-indicator {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: #fff;
+        border: 2px solid #cbd5e1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+    }
+
+        .marketing-selection-indicator.selected {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: #fff;
+        }
+
+    .marketing-selection-badge {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        background: #2563eb;
+        color: #fff;
+        padding: 5px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .marketing-config-section {
+        margin-top: 28px;
+        padding: 20px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+    }
+
+        .marketing-config-section h3 {
+            color: #244d88;
+            margin: 0 0 16px;
+        }
+
+    .config-options.two-col {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 16px;
+    }
+
+    .config-option label {
+        display: block;
+        margin-bottom: 7px;
+        font-weight: 700;
+        color: #334155;
+    }
+
+    .config-select, .config-input, .config-textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        padding: 10px 11px;
+        background: #fff;
+        font: inherit;
+    }
+
+    .config-textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    .full-width {
+        margin-top: 16px;
+    }
+
+    .checkbox-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        margin-top: 16px;
+    }
+
+        .checkbox-row label {
+            display: flex;
+            gap: 7px;
+            align-items: center;
+            color: #334155;
+        }
+
+    .asset-output-note {
+        margin-top: 18px;
+        padding: 14px;
+        background: #fff;
+        border: 1px solid #dbeafe;
+        border-radius: 10px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+        .asset-output-note span {
+            background: #eff6ff;
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: 12px;
+            color: #1d4ed8;
+        }
+
+    .footer-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 22px;
+        border-top: 1px solid #e5e7eb;
+        background: #fff;
+    }
+
+    .sticky-footer {
+        position: sticky;
+        bottom: 0;
+    }
+
+    .save-button, .discard-button, .generate-images-button, .toolbar-button {
+        border: 0;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+        .save-button, .generate-images-button, .toolbar-button.primary {
+            background: #2563eb;
+            color: #fff;
+        }
+
+    .discard-button, .toolbar-button {
+        background: #eef2f7;
+        color: #334155;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 34px;
+        color: #64748b;
+    }
+
+    .empty-icon {
+        font-size: 44px;
+    }
+
+    .generation-loading-container, .generation-error {
+        padding: 20px;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #f8fafc;
+    }
+
+    .generation-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: center;
+    }
+
+    .generation-status {
+        font-weight: 800;
+        color: #2563eb;
+    }
+
+    .progress-bar-container {
+        height: 9px;
+        background: #e2e8f0;
+        border-radius: 999px;
+        overflow: hidden;
+        margin: 16px 0 10px;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: #2563eb;
+        transition: width .25s ease;
+    }
+
+    .steps-list {
+        display: grid;
+        gap: 7px;
+        margin-top: 8px;
+    }
+
+    .step-item {
+        display: flex;
+        gap: 8px;
+        color: #475569;
+    }
+
+    .step-check {
+        color: #16a34a;
+        font-weight: 900;
+    }
+
+    .step-spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid #bfdbfe;
+        border-top-color: #2563eb;
+        border-radius: 50%;
+        animation: dm-spin .7s linear infinite;
+    }
+
+    .generation-tip {
+        margin-top: 15px;
+        color: #64748b;
+    }
+
+    .generated-assets-grid {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 18px;
+    }
+
+    .generated-asset-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .generated-asset-card-header {
+        padding: 12px 14px;
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+    }
+
+        .generated-asset-card-header strong, .generated-asset-card-header span {
+            display: block;
+        }
+
+        .generated-asset-card-header span {
+            color: #64748b;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+    .preview-actions {
+        display: flex;
+        gap: 7px;
+    }
+
+    .asset-preview-stage {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 250px;
+        background: #f1f5f9;
+        padding: 14px;
+    }
+
+        .asset-preview-stage img {
+            max-width: 100%;
+            max-height: 520px;
+            object-fit: contain;
+            box-shadow: 0 8px 24px rgba(15,23,42,.14);
+        }
+
+        .asset-preview-stage.square img {
+            aspect-ratio: 1/1;
+        }
+
+        .asset-preview-stage.portrait img {
+            max-height: 560px;
+        }
+
+    .version-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+
+        .version-header small {
+            display: block;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+    .current-label-pill {
+        display: inline-block;
+        margin-right: 8px;
+        background: #dcfce7;
+        color: #166534;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 800;
+    }
+
+    .generated-history {
+        margin-top: 28px;
+    }
+
+    .generated-history-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+        .generated-history-header h4 {
+            margin-bottom: 3px;
+        }
+
+        .generated-history-header p {
+            margin: 0;
+            color: #64748b;
+        }
+
+    .generated-count {
+        background: #e2e8f0;
+        border-radius: 999px;
+        padding: 4px 9px;
+        font-weight: 800;
+    }
+
+    .history-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill,minmax(170px,1fr));
+        gap: 12px;
+        margin-top: 14px;
+    }
+
+    .history-card {
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        border-radius: 12px;
+        padding: 0;
+        overflow: hidden;
+        text-align: left;
+        cursor: pointer;
+    }
+
+        .history-card.active {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 2px rgba(37,99,235,.1);
+        }
+
+    .history-thumb {
+        width: 100%;
+        aspect-ratio: 1/1;
+        object-fit: cover;
+        display: block;
+    }
+
+    .history-card-info {
+        padding: 9px 10px;
+    }
+
+        .history-card-info strong, .history-card-info span, .history-card-info small {
+            display: block;
+        }
+
+        .history-card-info span, .history-card-info small {
+            color: #64748b;
+            font-size: 12px;
+            margin-top: 3px;
+        }
+
+    .persisted-summary {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+        padding: 13px;
+        border: 1px solid #dbeafe;
+        background: #eff6ff;
+        border-radius: 10px;
+    }
+
+        .persisted-summary p {
+            margin: 2px 0 0;
+            color: #475569;
+        }
+
+    .modal-busy-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(255,255,255,.7);
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .loader {
+        width: 42px;
+        height: 42px;
+        border: 4px solid #dbeafe;
+        border-top-color: #2563eb;
+        border-radius: 50%;
+        animation: dm-spin .75s linear infinite;
+    }
+
+    @@keyframes dm-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @@media (max-width: 780px) {
+        .config-options.two-col, .generated-assets-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .modal-overlay {
+            padding: 8px;
+        }
+
+        .vertical-modal-wrapper {
+            width: 100%;
+            max-height: 98vh;
+        }
+
+        .generated-asset-card-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+    }
+</style>

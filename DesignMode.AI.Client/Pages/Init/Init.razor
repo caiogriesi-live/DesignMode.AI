@@ -1,0 +1,1296 @@
+@page "/init/init"
+
+@using Telerik.Blazor.Components
+@using Telerik.Blazor
+@using Telerik.SvgIcons
+@using Microsoft.AspNetCore.Components.Authorization
+@using DesignMode.AI.Shared.Security
+@using Microsoft.AspNetCore.Authorization
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
+@inject AuthService Auth
+
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+<div class="setup-page" @onclick="HandlePageClick">
+
+    <div class="setup-card">
+
+        <!-- LEFT PANEL -->
+        <div class="setup-left">
+
+            <div class="logo-container">
+
+                <img src="assets/img/logo-left.png"
+                     class="logo-icon"
+                     alt="logo" />
+
+                <span class="logo-text" style="font-family: 'SF Pro Display','Arial'; font-weight: 650; font-size: 24px; color: #1f2951; text-transform: none;">
+                    design
+                    <img src="images/logo-m3.svg"
+                         class="logo-m" />
+                    ode.ai
+                </span>
+
+            </div>
+
+            <h1 class="setup-title" style="'SF Pro Display','Arial' !important;">
+                Let's set up<br />
+                your business
+            </h1>
+
+            <p class="setup-description" style="'SF Pro Display','Arial' !important;">
+                Tell us a little about your company
+                so we can personalize your
+                experience.
+            </p>
+
+            <div class="security-note">
+                <span class="shield-icon">🛡️</span>
+                <span style="'SF Pro Display','Arial' !important;">
+                    Your information is secure
+                    and never shared.
+                </span>
+            </div>
+
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="setup-right">
+
+            <div class="form-group">
+
+                <label>
+                    What's your company name?
+                </label>
+
+                <div class="input-wrapper">
+                    <input class="setup-input"
+                           type="text"
+                           placeholder="e.g. Acme Studios"
+                           @bind="organizationText"
+                           @bind:event="oninput" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(organizationError))
+                {
+                    <div class="validation-error">
+                        @organizationError
+                    </div>
+                }
+
+            </div>
+
+            <div class="form-group">
+
+                <label>
+                    What industry are you in?
+                </label>
+
+                <div class="input-wrapper industry-input-wrapper" @onclick:stopPropagation="true">
+                    <input id="industryInput"
+                           class="setup-input industry-input"
+                           type="text"
+                           placeholder="e.g. Marketing Agency, Restaurant, SaaS Company"
+                           @bind="industryText"
+                           @bind:event="oninput"
+                           @onkeyup="OnIndustryKeyUp"
+                           @onfocus="OnIndustryFocus" />
+
+                    @if (isLoadingIndustries)
+                    {
+                        <div class="loading-indicator loading-animation">
+                            <TelerikLoader Size="@(ThemeConstants.Loader.Size.Small)" />
+                            <span>Searching industries...</span>
+                        </div>
+                    }
+
+                    @if (industrySuggestions.Any() &&
+                    !string.IsNullOrEmpty(industryText) &&
+                    !isLoadingIndustries &&
+                    showDropdown)
+                    {
+                        <div class="suggestions-dropdown">
+
+                            <!-- User's custom value -->
+                            <div class="suggestion-item"
+                                 @onclick="() => UseCustomIndustry()">
+                                <span class="suggestion-emoji">🔍</span>
+                                <span class="suggestion-text">
+                                    Use "@industryText"
+                                </span>
+                            </div>
+
+                            @foreach (var suggestion in industrySuggestions)
+                            {
+                                <div class="suggestion-item"
+                                     @onclick="() => SelectIndustry(suggestion)">
+                                    <span class="suggestion-emoji">
+                                        @GetIndustryEmoji(suggestion)
+                                    </span>
+                                    <span class="suggestion-text">
+                                        @suggestion
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (!string.IsNullOrEmpty(industryError))
+                {
+                    <div class="validation-error">
+                        @industryError
+                    </div>
+                }
+
+            </div>
+
+            <div class="settings-note">
+                🔒 You can change this anytime in settings.
+            </div>
+
+            <div class="button-section">
+
+                <TelerikButton OnClick="@HandleContinue"
+                               Class="continue-button">
+                    Continue →
+                </TelerikButton>
+
+@*                 <div class="skip-wrapper">
+
+                    <button class="skip-link"
+                            @onclick="Skip">
+                        Skip for now
+                    </button>
+
+                </div> *@
+
+            </div>
+
+            <div class="loader-container">
+
+                <TelerikLoader Visible="@LoaderVisible"
+                               Size="@(ThemeConstants.Loader.Size.Medium)"
+                               ThemeColor="@ThemeConstants.Loader.ThemeColor.Warning" />
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<style>
+
+    body {
+        background: #f4f5fb;
+    }
+
+    .setup-page {
+        min-height: 100vh;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: #f4f5fb;
+        padding: 20px;
+    }
+
+    .setup-card {
+        width: 100%;
+        max-width: 1350px;
+        min-height: 720px;
+        background: white;
+        border-radius: 24px;
+        display: flex;
+        box-shadow: 0 20px 60px rgba(0,0,0,.08);
+        overflow: hidden;
+    }
+
+    /* ==========================
+               LEFT PANEL
+            ========================== */
+
+    .setup-left {
+        width: 40%;
+        padding: 60px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .logo-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 120px;
+    }
+
+    .logo-icon {
+        width: 22px;
+        height: 22px;
+        margin-right: 10px;
+    }
+
+    .logo-text {
+        display: flex;
+        align-items: center;
+        font-size: 28px;
+        font-weight: 700;
+        color: #1f2951;
+    }
+
+    .logo-m {
+        width: 28px;
+        margin: 0 4px;
+    }
+
+    .step-label {
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        color: #4256ff;
+        margin-bottom: 30px;
+    }
+
+    .setup-title {
+        font-size: 62px;
+        line-height: 1.1;
+        font-weight: 700;
+        color: #1f2951;
+        margin-bottom: 25px;
+    }
+
+    .setup-description {
+        font-size: 24px;
+        line-height: 1.7;
+        color: #70758a;
+        max-width: 420px;
+    }
+
+    .security-note {
+        margin-top: auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #70758a;
+        font-size: 18px;
+    }
+
+    /* ==========================
+               RIGHT PANEL
+            ========================== */
+
+    .setup-right {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 80px;
+        max-width: 700px;
+    }
+
+    .validation-error {
+        margin-top: 8px;
+        color: #dc2626;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .form-group {
+        margin-bottom: 35px;
+        position: relative;
+    }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 16px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #111827;
+        }
+
+    .settings-note {
+color: #8b90a5;
+    font-size: 15px;
+    margin-top: -9px;
+    margin-bottom: 25px;
+    }
+
+@*     .button-section {
+        margin-top: 24px;
+    } *@
+
+    .continue-button {
+        width: 100% !important;
+        height: 70px !important;
+        border: none !important;
+        border-radius: 14px !important;
+        color: white !important;
+        font-size: 20px !important;
+        font-weight: 600 !important;
+        background: linear-gradient( 90deg, #4c5eff 0%, #3348e6 100% ) !important;
+    }
+
+        .continue-button:hover {
+            opacity: .95;
+        }
+
+    .skip-wrapper {
+        text-align: center;
+        margin-top: 22px;
+    }
+
+    .skip-link {
+        background: transparent;
+        border: none;
+        color: #4256ff;
+        font-size: 16px;
+        cursor: pointer;
+    }
+
+    .loader-container {
+        margin-top: 15px;
+        text-align: center;
+    }
+
+    /* ==========================
+               TELERIK OVERRIDES
+            ========================== */
+
+    .modern-input,
+    .modern-input.k-input,
+    .modern-input.k-picker,
+    .modern-input.k-dropdownlist {
+        width: 100%;
+    }
+
+    .k-input,
+    .k-picker,
+    .k-dropdownlist {
+        height: 62px !important;
+        border-radius: 12px !important;
+        border: 1px solid #d7dce5 !important;
+        background: white !important;
+        box-shadow: none !important;
+    }
+
+        .k-input:focus,
+        .k-picker:focus,
+        .k-dropdownlist:focus,
+        .k-focus {
+            border-color: #4c5eff !important;
+            box-shadow: 0 0 0 2px rgba(76,94,255,.15) !important;
+        }
+
+    .k-input-inner {
+        font-size: 17px !important;
+        color: #374151 !important;
+    }
+
+        .k-input-inner::placeholder {
+            color: #9ca3af !important;
+        }
+
+    .k-button-text {
+        width: 100%;
+        text-align: center;
+    }
+
+    /* ==========================
+               RESPONSIVE
+            ========================== */
+
+    @@media (max-width: 1200px) {
+
+        .setup-card {
+            flex-direction: column;
+            width: 100%;
+        }
+
+        .setup-left {
+            width: 100%;
+        }
+
+        .setup-right {
+            width: 100%;
+            padding: 40px;
+        }
+
+        .setup-title {
+            font-size: 42px;
+        }
+
+        .setup-description {
+            font-size: 18px;
+        }
+    }
+
+    @@media (max-width: 1200px) {
+
+        .setup-card {
+            flex-direction: column;
+            max-width: 900px;
+            min-height: auto;
+        }
+
+        .setup-left,
+        .setup-right {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .setup-left {
+            padding: 50px;
+        }
+
+        .setup-right {
+            padding: 50px;
+        }
+
+        .logo-container {
+            margin-bottom: 60px;
+        }
+
+        .setup-title {
+            font-size: 48px;
+            margin-top: -36px;
+        }
+
+        .setup-description {
+            font-size: 18px;
+            max-width: 100%;
+        }
+    }
+
+    @@media (max-width: 768px) {
+
+        .setup-page {
+            padding: 12px;
+        }
+
+        .setup-card {
+            border-radius: 16px;
+        }
+
+        .setup-left {
+            padding: 30px 25px;
+        }
+
+        .setup-right {
+            padding: 25px;
+            margin-top: -31px;
+        }
+
+        .logo-text {
+            font-size: 22px;
+        }
+
+        .setup-title {
+            font-size: 34px;
+        }
+
+        .setup-description {
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        .step-label {
+            font-size: 12px;
+        }
+
+        .form-group label {
+            font-size: 16px;
+        }
+
+        .continue-button {
+            height: 58px !important;
+            font-size: 16px !important;
+        }
+
+        .security-note {
+            font-size: 14px;
+            margin-top: 4px !important;
+        }
+        /* Mobile dropdown fixes */
+        .industry-input-wrapper {
+            position: static;
+        }
+
+        .suggestions-dropdown {
+            position: fixed;
+            top: auto;
+            left: 12px;
+            right: 12px;
+            width: auto;
+            max-height: 50vh;
+            margin-top: 0;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,.15);
+        }
+
+        .suggestion-item {
+            padding: 14px 16px;
+            font-size: 15px;
+        }
+
+        .suggestion-emoji {
+            font-size: 18px;
+            min-width: 28px;
+        }
+
+        .suggestions-container {
+            padding: 8px 0;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .suggestions-dropdown {
+            left: 8px;
+            right: 8px;
+            max-height: 45vh;
+        }
+
+        .suggestion-item {
+            padding: 12px 14px;
+        }
+    }
+
+    .input-wrapper {
+        position: relative;
+        width: 100%;
+    }
+
+    .setup-input {
+        width: 100%;
+        height: 72px;
+        border: 1px solid #d8dde8;
+        border-radius: 14px;
+        background: #fff;
+        font-size: 18px;
+        color: #111827;
+        padding-left: 20px;
+        padding-right: 20px;
+        outline: none;
+        transition: all .2s ease;
+        box-sizing: border-box;
+    }
+
+        .setup-input::placeholder {
+            color: #9ca3af;
+        }
+
+        .setup-input:focus {
+            border-color: #4c5eff;
+            box-shadow: 0 0 0 3px rgba(76,94,255,.12);
+        }
+
+    .industry-input-wrapper {
+        position: relative;
+    }
+
+    .loading-indicator {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: white;
+        padding: 4px 8px;
+        border-radius: 8px;
+        font-size: 14px;
+        color: #4256ff;
+        z-index: 10;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+
+    /* Loading animation */
+    .loading-animation {
+        animation: slideInRight 0.3s ease-out;
+    }
+
+    /* Dropdown animation */
+    .dropdown-animation {
+        animation: slideDown 0.2s ease-out;
+    }
+
+    /* Selection animation */
+    .suggestion-item {
+        animation: fadeInScale 0.2s ease-out;
+        animation-fill-mode: both;
+    }
+
+    @@keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateY(-50%) translateX(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(-50%) translateX(0);
+        }
+    }
+
+    @@keyframes fadeInScale {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes highlightPulse {
+        0% {
+            background-color: #4c5eff;
+            transform: scale(1);
+        }
+
+        50% {
+            background-color: #6b7eff;
+            transform: scale(1.02);
+        }
+
+        100% {
+            background-color: transparent;
+            transform: scale(1);
+        }
+    }
+
+    .suggestion-item {
+        padding: 12px 20px;
+        cursor: pointer;
+        font-size: 16px;
+        color: #111827;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        animation: fadeInScale 0.25s ease-out backwards;
+    }
+
+        .suggestion-item:hover {
+            background: #f3f4f6;
+            transform: translateX(4px);
+        }
+
+        .suggestion-item.selected-animation {
+            animation: highlightPulse 0.3s ease-out;
+        }
+
+    .suggestion-emoji {
+        font-size: 20px;
+        min-width: 32px;
+    }
+
+    .suggestion-text {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .suggestions-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #d8dde8;
+        border-radius: 14px;
+        margin-top: 8px;
+        max-height: 300px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        z-index: 1000;
+        box-shadow: 0 10px 25px rgba(0,0,0,.1);
+    }
+
+    .suggestions-container {
+        padding: 4px 0;
+    }
+
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .suggestions-dropdown::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .suggestions-dropdown::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+
+    .suggestions-dropdown::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 10px;
+    }
+
+        .suggestions-dropdown::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+    /* Desktop styles remain the same */
+    @@media (min-width: 769px) {
+        .suggestions-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 300px;
+        }
+    }
+</style>
+<script>
+    window.isMobileScreen = () => {
+        return window.innerWidth <= 1024;
+    };
+
+    window.scrollFieldIntoView = (id) => {
+        setTimeout(() => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }
+        }, 300); // wait for keyboard animation
+    };
+</script>
+@code {
+
+    private void UseCustomIndustry()
+    {
+        industrySuggestions.Clear();
+        showDropdown = false;
+    }
+
+    private string organizationText = "";
+    private string industryText = "";
+    private bool isLoadingIndustries = false;
+    private List<string> industrySuggestions = new();
+    private System.Timers.Timer debounceTimer;
+    private string organizationError = "";
+    private string industryError = "";
+    private bool LoaderVisible = false;
+    private bool showDropdown = true;
+    private string selectedSuggestion = "";
+    private ElementReference industryInputRef;
+
+    private async Task HandleContinue()
+    {
+        if (!ValidateForm())
+            return;
+
+        await Next();
+    }
+
+    private void HandlePageClick()
+    {
+        // Close dropdown when clicking outside
+        if (showDropdown)
+        {
+            showDropdown = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnIndustryFocus()
+    {
+        // Show dropdown when focusing on input if there are suggestions
+        if (industrySuggestions.Any() && !string.IsNullOrEmpty(industryText))
+        {
+            showDropdown = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnIndustryKeyUp(KeyboardEventArgs e)
+    {
+        // Clear any previous error when user types
+        industryError = "";
+
+        // Show dropdown when typing
+        showDropdown = true;
+
+        // Cancel previous timer if exists
+        debounceTimer?.Stop();
+        debounceTimer?.Dispose();
+
+        // If user typed something and it's valid, keep the typed value
+        // No need to clear industryText - it stays as is
+
+        if (industryText.Length < 2)
+        {
+            industrySuggestions.Clear();
+            StateHasChanged();
+            return;
+        }
+
+        // Debounce API calls
+        debounceTimer = new System.Timers.Timer(500);
+        debounceTimer.Elapsed += async (sender, args) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                isLoadingIndustries = true;
+                StateHasChanged();
+
+                var suggestions = await FetchIndustrySuggestions(
+                    industryText,
+                    ApiConfig.ApiBaseUrl);
+
+                bool isMobile =
+    await JSRuntime.InvokeAsync<bool>("isMobileScreen");
+
+                int maxSuggestions = isMobile ? 4 : 8;
+
+                // Only show suggestions that match or are relevant to what user typed
+                industrySuggestions = suggestions
+                    .Where(s => s.Contains(industryText, StringComparison.OrdinalIgnoreCase))
+                    .Take(maxSuggestions)
+                    .ToList();
+
+                isLoadingIndustries = false;
+                showDropdown = true;
+                StateHasChanged();
+            });
+            debounceTimer.Stop();
+        };
+        debounceTimer.AutoReset = false;
+        debounceTimer.Start();
+    }
+
+    private bool IsMobile()
+    {
+        // Check if the screen width is 768px or less (typical mobile breakpoint)
+        // You can also use JSRuntime to get actual window width, but this is simpler
+        return System.Environment.GetEnvironmentVariable("BlazorEnvironment")?.Contains("Mobile") ?? false;
+    }
+
+    private async Task SelectIndustry(string industry)
+    {
+        // Apply selection animation
+        selectedSuggestion = industry;
+        StateHasChanged();
+
+        // Wait for animation
+        await Task.Delay(150);
+
+        industryText = industry;
+        industrySuggestions.Clear();
+        industryError = "";
+        showDropdown = false;
+        selectedSuggestion = "";
+        StateHasChanged();
+    }
+    private async Task ScrollToField(string id)
+    {
+        if (IsMobileDevice)
+        {
+            await JSRuntime.InvokeVoidAsync("scrollFieldIntoView", id);
+        }
+    }
+
+    private async Task OnIndustryFocusAndScroll()
+    {
+        OnIndustryFocus();
+
+        if (IsMobileDevice)
+        {
+            await JSRuntime.InvokeVoidAsync("scrollFieldIntoView", "industryInput");
+        }
+    }
+    private string GetIndustryEmoji(string industry)
+    {
+        if (string.IsNullOrWhiteSpace(industry)) return "→";
+
+        var lowerIndustry = industry.ToLower();
+
+        // Technology
+        if (lowerIndustry.Contains("technology") ||
+            lowerIndustry.Contains("software") ||
+            lowerIndustry.Contains("saas") ||
+            lowerIndustry.Contains("it"))
+            return "💻";
+
+        // Marketing
+        if (lowerIndustry.Contains("marketing") ||
+            lowerIndustry.Contains("advertising") ||
+            lowerIndustry.Contains("pr") ||
+            lowerIndustry.Contains("social media"))
+            return "📣";
+
+        // Ecommerce / Retail
+        if (lowerIndustry.Contains("ecommerce") ||
+            lowerIndustry.Contains("e-commerce") ||
+            lowerIndustry.Contains("retail") ||
+            lowerIndustry.Contains("shop"))
+            return "🛍️";
+
+        // Design
+        if (lowerIndustry.Contains("design") ||
+            lowerIndustry.Contains("creative") ||
+            lowerIndustry.Contains("art") ||
+            lowerIndustry.Contains("graphic"))
+            return "🎨";
+
+        // Education
+        if (lowerIndustry.Contains("education") ||
+            lowerIndustry.Contains("training") ||
+            lowerIndustry.Contains("learning") ||
+            lowerIndustry.Contains("school"))
+            return "🎓";
+
+        // Healthcare
+        if (lowerIndustry.Contains("health") ||
+            lowerIndustry.Contains("medical") ||
+            lowerIndustry.Contains("wellness"))
+            return "🏥";
+
+        if (lowerIndustry.Contains("fitness"))
+            return "💪";
+
+        // Finance
+        if (lowerIndustry.Contains("finance") ||
+            lowerIndustry.Contains("banking") ||
+            lowerIndustry.Contains("investment") ||
+            lowerIndustry.Contains("accounting"))
+            return "💰";
+
+        // Real Estate
+        if (lowerIndustry.Contains("real estate") ||
+            lowerIndustry.Contains("property") ||
+            lowerIndustry.Contains("housing"))
+            return "🏠";
+
+        // Consulting
+        if (lowerIndustry.Contains("consulting") ||
+            lowerIndustry.Contains("strategy"))
+            return "💼";
+
+        // Manufacturing
+        if (lowerIndustry.Contains("manufacturing") ||
+            lowerIndustry.Contains("production"))
+            return "🏭";
+
+        // Hospitality
+        if (lowerIndustry.Contains("restaurant"))
+            return "🍽️";
+
+        if (lowerIndustry.Contains("hotel") ||
+            lowerIndustry.Contains("hospitality"))
+            return "🏨";
+
+        if (lowerIndustry.Contains("travel"))
+            return "✈️";
+
+        // Entertainment
+        if (lowerIndustry.Contains("entertainment") ||
+            lowerIndustry.Contains("film"))
+            return "🎬";
+
+        if (lowerIndustry.Contains("gaming"))
+            return "🎮";
+
+        if (lowerIndustry.Contains("media"))
+            return "📺";
+
+        // Construction
+        if (lowerIndustry.Contains("construction") ||
+            lowerIndustry.Contains("building"))
+            return "🏗️";
+
+        if (lowerIndustry.Contains("architecture"))
+            return "📐";
+
+        // Legal
+        if (lowerIndustry.Contains("legal") ||
+            lowerIndustry.Contains("law") ||
+            lowerIndustry.Contains("attorney"))
+            return "⚖️";
+
+        // Nonprofit
+        if (lowerIndustry.Contains("nonprofit") ||
+            lowerIndustry.Contains("charity") ||
+            lowerIndustry.Contains("ngo"))
+            return "🤝";
+
+        // Agriculture
+        if (lowerIndustry.Contains("agriculture") ||
+            lowerIndustry.Contains("farming"))
+            return "🌾";
+
+        if (lowerIndustry.Contains("food"))
+            return "🍎";
+
+        // Logistics
+        if (lowerIndustry.Contains("transportation") ||
+            lowerIndustry.Contains("logistics") ||
+            lowerIndustry.Contains("delivery"))
+            return "🚚";
+
+        // Energy
+        if (lowerIndustry.Contains("solar"))
+            return "☀️";
+
+        if (lowerIndustry.Contains("renewable"))
+            return "🌱";
+
+        if (lowerIndustry.Contains("energy") ||
+            lowerIndustry.Contains("utilities"))
+            return "⚡";
+
+        // Oil & Gas
+        if (lowerIndustry.Contains("gas utility"))
+            return "🔥";
+
+        if (lowerIndustry.Contains("gasoline"))
+            return "⛽";
+
+        if (lowerIndustry.Contains("oil"))
+            return "🛢️";
+
+        if (lowerIndustry.Contains("gas"))
+            return "🔥";
+
+        // Chemicals
+        if (lowerIndustry.Contains("chemical"))
+            return "🧪";
+
+        // Insurance
+        if (lowerIndustry.Contains("insurance"))
+            return "🛡️";
+
+        // Automotive
+        if (lowerIndustry.Contains("automotive") ||
+            lowerIndustry.Contains("car") ||
+            lowerIndustry.Contains("vehicle"))
+            return "🚗";
+
+        return "→";
+    }
+
+    public class IndustrySearchRequest
+    {
+        public string Query { get; set; }
+    }
+
+    private bool isAuthorized = false;
+    private string? username;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = Nav.Uri;
+        var queryString = new Uri(uri).Query;
+    }
+    private async Task<CheckUserOnboardedResponse> CheckUserOnboarded(string username, string url)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+
+            string functionUrl =
+                $"{url}api/CheckUserOnboarded?username={Uri.EscapeDataString(username)}&code=REDACTED_FOR_GROOMING";
+
+            var response = await client.GetAsync(functionUrl);
+
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            var result = await response.Content.ReadFromJsonAsync<CheckUserOnboardedResponse>();
+
+            return result;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+    public class CheckUserOnboardedResponse
+    {
+        public bool Success { get; set; }
+        public string Username { get; set; }
+        public string UserId { get; set; }
+        public string Onboarded { get; set; }
+    }
+    private async Task<bool> UpdateUserOnboarded(string userId, string url)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+
+            string functionUrl =
+                $"{url}api/UpdateOnboarded?code=REDACTED_FOR_GROOMING";
+
+            var response = await client.PostAsJsonAsync(
+                functionUrl,
+                new UpdateOnboardedRequest
+                    {
+                        UserId = userId,
+                        Onboarded = "1"
+                    });
+
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public class UpdateOnboardedRequest
+    {
+        public string UserId { get; set; }
+        public string Onboarded { get; set; }
+    }
+
+    private async Task<List<string>> FetchIndustrySuggestions(string query, string url)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+
+            string functionUrl =
+                $"{url}api/GetIndustrySuggestions?code=REDACTED_FOR_GROOMING";
+
+            var response = await client.PostAsJsonAsync(
+                functionUrl,
+                new IndustrySearchRequest
+                    {
+                        Query = query
+                    });
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<List<string>>()
+                       ?? new List<string>();
+            }
+
+            return new List<string>();
+        }
+        catch
+        {
+            return new List<string>();
+        }
+    }
+
+    private bool ValidateForm()
+    {
+        organizationError = "";
+        industryError = "";
+
+        bool valid = true;
+
+        // if (string.IsNullOrWhiteSpace(organizationText))
+        // {
+        //     organizationError = "Company name is required.";
+        //     valid = false;
+        // }
+
+        if (string.IsNullOrWhiteSpace(industryText))
+        {
+            industryError = "Please select an industry or enter your own.";
+            valid = false;
+        }
+
+        return valid;
+    }
+
+    private async Task Next()
+    {
+        LoaderVisible = true;
+        StateHasChanged();
+
+        // Your existing Next logic here
+        await Task.Delay(1000); // Simulate API call
+
+        LoaderVisible = false;
+        StateHasChanged();
+
+        // Add your logic here (e.g., navigation or form submission)
+        var test = organizationText;
+        var test2 = industryText;
+
+        try
+        {
+            // Do not read the content if you don't need it
+            //Console.WriteLine("Success: Operation completed successfully.");
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            isAuthorized = user.Identity?.IsAuthenticated == true;
+
+            //Handle the full deliverable for this version
+            if (isAuthorized)
+            {
+                username = user.Identity?.Name;
+
+                if (!string.IsNullOrWhiteSpace(username))
+                {
+                    var checkOnboard = await CheckUserOnboarded(username, ApiConfig.ApiBaseUrl);
+                    var updateOnboard = await UpdateUserOnboarded(checkOnboard.UserId, ApiConfig.ApiBaseUrl);
+                }
+            }
+            Navigation.NavigateTo($"init/idea?name={Uri.EscapeDataString(test)}&industry={Uri.EscapeDataString(test2)}");
+        }
+        catch (Exception ex)
+        {
+            //Console.WriteLine("Exception occurred: " + ex.Message);
+        }
+    }
+
+    private async Task Skip()
+    {
+        LoaderVisible = true;
+        StateHasChanged();
+
+        // Your existing Skip logic here
+        await Task.Delay(1000); // Simulate API call
+
+        LoaderVisible = false;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        debounceTimer?.Stop();
+        debounceTimer?.Dispose();
+    }
+
+    private bool IsMobileDevice;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            IsMobileDevice =
+                await JSRuntime.InvokeAsync<bool>("isMobileScreen");
+
+            StateHasChanged();
+        }
+    }
+}

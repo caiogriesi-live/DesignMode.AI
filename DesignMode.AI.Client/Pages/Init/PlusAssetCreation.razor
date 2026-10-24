@@ -1,0 +1,1186 @@
+@inherits DesignMode.AI.Client.Components.GenerationAwareComponent
+@using System.Collections.Generic
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.AspNetCore.Components.Authorization;
+@using System.Text.RegularExpressions;
+
+@if (IsBusy)
+{
+    <div class="modal-busy-overlay">
+        <div class="loader"></div>
+    </div>
+}
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="vertical-modal-wrapper" style="height: auto; min-height: fit-content; padding-bottom: 0px;" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+
+            <div class="modal-scroll-content" style="margin-left: -34px;margin-right: 6px;overflow-y:hidden;">
+                <div class="modal-header">
+                    <h2>@DeliverableName</h2>
+                </div>
+                <div style="margin-bottom: 30px;">
+                </div>
+                <div class="image-grid" style="margin-bottom: 8px;">
+                    <!-- Options -->
+                    <div class="asset-options">
+                        <!-- Option 1: Create New -->
+                        <div class="asset-card">
+                            <div class="asset-icon">
+                                <img src="assets/img/create-new.png" style="width: 75px;margin-left: -11px;" />
+                            </div>
+                            <h3>Create New</h3>
+                            <p>Generate another AI image for your @DeliverableName to keep building your visual set or explore new styles.</p>
+                            <button class="btn-blue" style="background-color:#f5f7fa;color:#000;" @onclick="GenerateImage">Generate Image</button>
+                        </div>
+
+                        <!-- Option 2: Upload Brand Image -->
+                        @* <div class="asset-card">
+                            <div class="asset-icon icon-upload"></div>
+                            <h3>Upload Brand Image</h3>
+                            <p>Upload your logo or existing brand visuals. The AI will generate matching assets or extend your brand system.</p>
+                            <button class="btn-yellow" style="background-color:#000;color:#fff;">Upload Brand Image</button>
+                        </div> *@
+
+                        <!-- Option 3: Dynamic Template -->
+                        <div class="asset-card" style="border: 2px dashed #244d88;">
+                            <div class="asset-icon">
+                                <img src="@DynamicOptionImage" style="@DynamicOptionImageDim" />
+                            </div>
+                            <h3>@DynamicOption.Title</h3>
+                            <p>@DynamicOption.Description</p>
+                            <button class="btn-green" @onclick="HandleDynamicOptionClick" style="background-color:#244d88;color:white;">@DynamicOption.ButtonLabel</button>
+                        </div>
+                    </div>
+                    @functions {
+                    RenderFragment ImageCard(DesignMode.AI.Client.Pages.Init.Gen.ConceptImageWithIdeaDto image) => __builder =>
+                    {
+                        var isMarkedForRemoval = RemovedImages.Contains(image.ImageId);
+                        <div class="image-card @(isMarkedForRemoval ? "marked-for-removal" : "")"
+                             @onclick="() => ToggleSelection(image.ImageUrl, image.ImageId)">
+                            <img src="@image.ImageUrl" alt="Concept image" class="image-thumb" />
+                            <div class="image-controls">
+                                <button class="icon-btn"
+                                        @onclick="() => ToggleSelection(image.ImageUrl, image.ImageId)"
+                                        alt="Remove from Concept"
+                                @onclick:stopPropagation>
+                                    @if (isMarkedForRemoval)
+                                    {
+                                        <span style="color: red;font-weight: bold;">✕</span>
+                                    }
+                                    else
+                                    {
+                                        <text>🗑️</text>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    };
+                }
+            </div>
+        </div>
+
+
+    </div>
+</div>
+}
+
+@code {
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; }
+    [Inject] private HttpClient Http { get; set; }
+    private bool ShowMakeVideoSelectImages { get; set; } = false;
+    private bool ShowCreateNewImage { get; set; } = false; // NEW: State for the new modal
+
+
+    private bool IsBusy = false;
+    //[Parameter] public bool Save { get; set; }
+
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    // 🔑 Forwarded from parent
+    [Parameter] public List<string> RunwareImageIds { get; set; } = new List<string>();
+    [Parameter] public List<string> SecondaryRunwareImageIds { get; set; } = new List<string>();
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ConceptImageWithIdeaDto> SelectedImages { get; set; }
+    [Parameter] public EventCallback<List<string>> OnImagesRemoved { get; set; }
+    [Parameter] public EventCallback<bool> OnConfirm { get; set; }
+    [Parameter] public string DeliverableName { get; set; } = "Generate New Video";
+    [Parameter] public List<string> PromptTexts { get; set; } = new List<string>();
+    [Parameter] public string PromptText { get; set; } = "";
+
+    private HashSet<string> SelectedImageUrls = new();
+    private HashSet<string> SelectedImageIds = new();
+    private List<DesignMode.AI.Client.Pages.Init.Gen.ConceptImageWithIdeaDto> OriginalImages = new();
+    private List<string> RemovedImages = new();
+    private bool HasChanges => RemovedImages.Count > 0;
+    private bool IsConceptPopoverVisible = false;
+
+    protected async override void OnInitialized()
+    {
+        var mainImageIds = RunwareImageIds;
+        var secondaryImageIds = SecondaryRunwareImageIds;
+        var prompt1= PromptText;
+        var prompt2 = PromptTexts;
+        var deliverableName = DeliverableName;
+    }
+
+    private class DeliverableOption
+    {
+        public string Title { get; set; }
+        public string Description { get; set; }
+        public string ButtonLabel { get; set; }
+    }
+
+    private async Task HandleImageGeneratedFromChild(string imageData)
+    {
+        // Forward the data to the parent
+        if (OnImageGenerated.HasDelegate)
+        {
+            await OnImageGenerated.InvokeAsync(imageData);
+        }
+    }
+
+    private async Task GenerateImage()
+    {
+        //IsBusy = true;
+        //StateHasChanged();
+
+        try
+        {
+            Console.WriteLine($"Generating image for deliverable: {DeliverableName}");
+
+            //var imageUrl = await CallRunwareImageFunction(finalPrompt, 896, 896, 1);
+
+            var final = finalPrompt + "$$$" + DeliverableName;
+
+            // Notify parent through the chain
+            if (OnImageGenerated.HasDelegate)
+            {
+                IsBusy = false;
+                await CloseModal();
+
+                if (Show) return;
+                await OnImageGenerated.InvokeAsync(final); // Pass whatever data you need
+                StateHasChanged();
+            }
+
+            // Simulate API call
+            //await Task.Delay(1000);
+            //await CloseModal();
+
+            // Notify parent component (existing functionality)
+            if (OnConfirm.HasDelegate)
+            {
+                await OnConfirm.InvokeAsync(true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error generating image: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    // Add this parameter in PlusModal to receive from parent and forward to CreateNewImage
+    [Parameter]
+    public EventCallback<string> OnImageGenerated { get; set; }
+
+    private DeliverableOption DynamicOption
+    {
+        get
+        {
+            var name = DeliverableName?.ToLower() ?? "";
+
+            if (name.Contains("social"))
+            {
+                return new DeliverableOption
+                    {
+                        Title = "Expand Your Images into Posts",
+                        Description = "Transform your AI-created visuals into branded social media content optimized for Facebook, Instagram, and more.",
+                        ButtonLabel = "Generate Posts"
+                    };
+            }
+            else if (name.Contains("web"))
+            {
+                return new DeliverableOption
+                    {
+                        Title = "Expand Your Images into a Website",
+                        Description = "Automatically build and preview your branded website using your uploaded assets or styles.",
+                        ButtonLabel = "Generate Website"
+                    };
+            }
+            else if (name.Contains("print"))
+            {
+                return new DeliverableOption
+                    {
+                        Title = "Expand Your Images into Print Materials",
+                        Description = "Instantly create a print-ready PDF layout aligned with your brand design.",
+                        ButtonLabel = "Generate PDF"
+                    };
+            }
+            else if (name.Contains("label"))
+            {
+                return new DeliverableOption
+                    {
+                        Title = "Generate Package Label",
+                        Description = "Automatically generate branded labels for your product packaging.",
+                        ButtonLabel = "Generate Label"
+                    };
+            }
+            else if (name.Contains("digital"))
+            {
+                return new DeliverableOption
+                    {
+                        Title = "Expand Your Images into Digital Marketing",
+                        Description = "Create ready-to-use marketing campaigns aligned with your brand identity.",
+                        ButtonLabel = "Generate Campaign"
+                    };
+            }
+            else if (name.Contains("video"))
+            {
+                return new DeliverableOption
+                    {
+                        Title = "Expand Your Images into Videos",
+                        Description = "Use AI to produce a branded video or photo storyboard based on your uploaded visuals and tone.",
+                        ButtonLabel = "Generate Video"
+                    };
+            }
+            else if (name.Contains("logo"))
+            {
+                return new DeliverableOption
+                    {
+                        Title = "Expand Your Images into Full Branding",
+                        Description = "Use AI to produce branding based on your uploaded visuals and tone.",
+                        ButtonLabel = "Generate Branding"
+                    };
+            }
+            else if (name.Contains("event"))
+            {
+                return new DeliverableOption
+                    {
+                        Title = "Expand Your Images into Events & Activations",
+                        Description = "Use AI to produce Events and Activations on your uploaded visuals and tone.",
+                        ButtonLabel = "Generate Event"
+                    };
+            }
+            else
+            {
+                // fallback option
+                return new DeliverableOption
+                    {
+                        Title = "AI Recommendations",
+                        Description = "Use your saved brand kit or existing templates to generate consistent deliverables.",
+                        ButtonLabel = "Use AI Recommendations"
+                    };
+            }
+        }
+    }
+
+    private string DynamicOptionImage
+    {
+        get
+        {
+            var name = DeliverableName?.ToLower() ?? "";
+            if (name.Contains("social")) return "assets/img/social-media.png";
+            if (name.Contains("web")) return "assets/img/web.png";
+            if (name.Contains("print")) return "assets/img/print.png";
+            if (name.Contains("label")) return "assets/img/label.png";
+            if (name.Contains("digital")) return "assets/img/digital.png";
+            if (name.Contains("video")) return "assets/img/video.png";
+            if (name.Contains("logo")) return "assets/img/brand.png";
+            if (name.Contains("event")) return "assets/img/banner.png";
+            return ""; // fallback
+        }
+    }
+
+    private string DynamicOptionImageDim
+    {
+        get
+        {
+            var name = DeliverableName?.ToLower() ?? "";
+            if (name.Contains("social")) return "width: 120px; margin-left: -33px;";
+            if (name.Contains("web")) return "width: 65px;margin-left: -9px;";
+            if (name.Contains("print")) return "width: 65px;margin-left: -9px;";
+            if (name.Contains("label")) return "width: 65px;margin-left: -9px;";
+            if (name.Contains("digital")) return "width: 65px;margin-left: -9px;";
+            if (name.Contains("video")) return "width: 65px;margin-left: -9px;";
+            if (name.Contains("logo")) return "width: 65px;margin-left: -9px;";
+            return "width: 65px;margin-left: -9px;"; // fallback
+        }
+    }
+
+    [Parameter] public EventCallback OnDynamicOptionClick { get; set; }
+    // Add this parameter to receive deliverable name context if needed
+    [Parameter] public string CurrentDeliverableName { get; set; }
+
+    // Add the handler method
+    // Modify the handler to pass the deliverable name
+    private async Task HandleDynamicOptionClick()
+    {
+        if (!await ConfirmGenerationCloseAsync()) return;
+        // Close current modal
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+
+        // Notify parent with the deliverable name to determine which modal to open
+        if (OnDynamicOptionClick.HasDelegate)
+        {
+            await OnDynamicOptionClick.InvokeAsync();
+        }
+    }
+
+    // NEW: Method to open the Create New Image modal
+    private async Task OpenCreateNewImage()
+    {
+        if (!await ConfirmGenerationCloseAsync()) return;
+        // Close current modal
+        Show = false;
+
+        // Open the new Create New Image modal
+        ShowCreateNewImage = true;
+        StateHasChanged();
+    }
+
+    // NEW: Method to close the Create New Image modal
+    private async Task CloseCreateNewImage()
+    {
+        ShowCreateNewImage = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+
+    private void OpenMakeVideoSelectImages()
+    {
+        // Close current modal
+        Show = false;
+
+        // Open next modal
+        ShowMakeVideoSelectImages = true;
+    }
+
+    private async Task CloseMakeVideoSelectImages()
+    {
+        ShowMakeVideoSelectImages = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+    private string finalPrompt { get; set; } = "";
+
+    protected override void OnParametersSet()
+    {
+        if (Show)
+        {
+            var deliverableName = DeliverableName;
+            var normalizedDeliverable = Normalize(deliverableName);
+
+            Console.WriteLine($"CreateNewImage modal opened for deliverable: {deliverableName}");
+
+            // Check single PromptText
+            if (!string.IsNullOrEmpty(PromptText))
+            {
+                var parts = PromptText.Split('|');
+                if (parts.Length > 5)
+                {
+                    var normalizedPart = Normalize(parts[5]);
+
+                    if (normalizedPart.Contains(normalizedDeliverable) ||
+                        normalizedDeliverable.Contains(normalizedPart))
+                    {
+                        finalPrompt = PromptText;
+                    }
+                }
+            }
+
+            // Check PromptTexts list
+            if (PromptTexts != null)
+            {
+                foreach (var prompt in PromptTexts)
+                {
+                    var parts = prompt.Split('|');
+                    if (parts.Length > 5)
+                    {
+                        var normalizedPart = Normalize(parts[5]);
+
+                        if (normalizedPart.Contains(normalizedDeliverable) ||
+                            normalizedDeliverable.Contains(normalizedPart))
+                        {
+                            finalPrompt = prompt;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (SelectedImages != null && SelectedImages.Any())
+        {
+            // Store the original list of images
+            OriginalImages = new List<DesignMode.AI.Client.Pages.Init.Gen.ConceptImageWithIdeaDto>(SelectedImages);
+
+            SelectedImageUrls = new HashSet<string>(SelectedImages.Select(x => x.ImageUrl));
+            SelectedImageIds = new HashSet<string>(SelectedImages.Select(x => x.ImageId));
+            RemovedImages.Clear();
+        }
+        else
+        {
+            OriginalImages.Clear();
+            SelectedImageUrls.Clear();
+            SelectedImageIds.Clear();
+            RemovedImages.Clear();
+        }
+    }
+
+    private string Normalize(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return string.Empty;
+
+        return Regex.Replace(input, @"[\s\-_\|]", "")
+                    .ToLowerInvariant()
+                    .Trim();
+    }
+
+    private void ToggleSelection(string url, string id)
+    {
+        if (SelectedImageUrls.Contains(url))
+        {
+            SelectedImageUrls.Remove(url);
+            SelectedImageIds.Remove(id);
+            RemovedImages.Add(id);
+        }
+        else
+        {
+            SelectedImageUrls.Add(url);
+            SelectedImageIds.Add(id);
+            RemovedImages.Remove(id);
+        }
+    }
+
+    private async Task SaveChanges()
+    {
+        IsBusy = true;
+
+        bool confirmed = false;
+
+        foreach (var imageId in RemovedImages)
+        {
+            confirmed = await DeleteConceptImageFromDatabaseAsync(imageId);
+        }
+
+        IsBusy = false;
+
+        if (confirmed)
+        {
+            // Success: hide balloon, close modal
+            IsConceptPopoverVisible = false;
+
+            // Notify parent of removed images
+            if (OnImagesRemoved.HasDelegate)
+            {
+                await OnImagesRemoved.InvokeAsync(RemovedImages.ToList());
+            }
+
+            if (OnConfirm.HasDelegate)
+            {
+                await OnConfirm.InvokeAsync(true);
+            }
+
+            await CloseModal();
+
+
+            if (Show) return;
+        }
+        else
+        {
+            // Failure: show balloon again
+            IsConceptPopoverVisible = true;
+        }
+    }
+    private async Task<bool> DeleteConceptImageFromDatabaseAsync(string imageId)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var requestBody = new { ImageId = imageId };
+
+                var response = await Http.PostAsJsonAsync(
+                    $"{ApiConfig.ApiBaseUrl}api/DeleteConceptImage?code=REDACTED_FOR_GROOMING",
+                    requestBody);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("✅ Deleted concept image successfully.");
+                    return true;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to delete concept image: {response.StatusCode}");
+                    return false;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception deleting concept image: {ex.Message}");
+            return false;
+        }
+    }
+
+
+    private async Task CloseModal()
+    {
+        if (GenerationGuard is null && (IsBusy)) return;
+        if (!await ConfirmGenerationCloseAsync()) return;
+
+        // Reset the state when closing
+        RemovedImages.Clear();
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+}
+
+<style>
+    .vertical-modal-wrapper {
+        padding-top: 14px;
+        padding-left: 36px;
+        position: relative;
+        width: 100%;
+        max-width: 800px;
+        height: 57vh; /* changed from 70vh */
+        background: white;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-scroll-content {
+        flex: 1;
+        overflow-y: hidden;
+        padding: 24px;
+    }
+
+    .modal-header {
+        text-align: left;
+        margin: 33px 0 -4px 0px;
+        padding-right: 24px;
+    }
+
+        .modal-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+            margin-top: 0;
+        }
+
+        .modal-header p {
+            color: #666;
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+
+    .image-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+    }
+
+    .image-item {
+        position: relative;
+        border-radius: 8px;
+        overflow: hidden;
+        aspect-ratio: 1/1;
+    }
+
+        .image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+    .empty-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 40px 0;
+        color: #666;
+    }
+
+    .footer-actions {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: white;
+        border-top: 1px solid #ccc;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 32px;
+        z-index: 1050;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .fixed-footer {
+        position: sticky;
+        bottom: 0;
+        background: white;
+        padding: 16px 24px;
+        border-top: 1px solid #eee;
+        display: flex;
+        justify-content: flex-end;
+        gap: 16px;
+        z-index: 100;
+    }
+
+    .discard-button,
+    .save-button {
+        font-size: 1rem;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+    }
+
+    .discard-button {
+        background-color: transparent;
+        border: 2px solid #ddd;
+        color: #333;
+        transition: all 0.3s ease;
+    }
+
+        .discard-button:hover {
+            border-color: #999;
+            color: #000;
+        }
+
+    .save-button {
+        background-color: #244d88;
+        color: white;
+        transition: background-color 0.3s ease;
+    }
+
+        .save-button:hover {
+            background-color: #1b3a66;
+        }
+
+        .save-button:disabled {
+            background-color: #eee;
+            color: #ababab;
+            cursor: not-allowed;
+        }
+
+    .deliverable-section {
+        padding-bottom: 24px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .image-col {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+
+    .image-card {
+        position: relative;
+        width: 200px;
+        height: 200px;
+        border-radius: 16px;
+        overflow: hidden;
+        background-color: #fff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #eee;
+        transition: transform 0.2s, border-color 0.2s;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+        .image-card.marked-for-removal {
+            border: 5px solid #ff4d4d;
+        }
+
+    .image-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        flex-grow: 1;
+    }
+
+    .image-controls {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+    }
+
+    .icon-btn {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #ddd;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s;
+    }
+
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, 1);
+        }
+
+        .icon-btn.remove-btn {
+            border: 1px solid #ff4d4d;
+            background: white;
+        }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #222;
+        margin-bottom: 12px;
+    }
+
+    .modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.4);
+        border: none;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        color: #000;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(6px);
+        z-index: 10;
+    }
+
+        .modal-close:hover {
+            background-color: rgba(255, 255, 255, 0.6);
+            color: #000;
+        }
+
+    @@keyframes zoomFadeIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes blurIn {
+        0% {
+            backdrop-filter: blur(0px);
+            background-color: rgba(0, 0, 0, 0);
+        }
+
+        100% {
+            backdrop-filter: blur(5px);
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+    }
+
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        backdrop-filter: blur(5px);
+        background-color: rgba(0, 0, 0, 0.7);
+        animation: blurIn 0.3s ease-out forwards;
+    }
+
+    .vertical-modal-wrapper {
+        animation: zoomFadeIn 0.3s ease-out forwards;
+    }
+
+    .modal-busy-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .modal-options {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .option-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 1.25rem;
+        text-align: center;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+        .option-card img {
+            width: 100%;
+            border-radius: 12px;
+        }
+
+        .option-card.recommended {
+            border-color: #facc15;
+            background: #fffbeb;
+        }
+
+    .badge {
+        background: #fde68a;
+        color: #92400e;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        align-self: center;
+    }
+
+    .preview-images {
+        display: flex;
+        justify-content: center;
+        gap: 0.25rem;
+    }
+
+        .preview-images img {
+            width: 60px;
+            height: 40px;
+            border-radius: 6px;
+        }
+
+    le >
+    /* === Modal Core === */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(5px);
+        background-color: rgba(0, 0, 0, 0.7);
+        animation: blurIn 0.3s ease-out forwards;
+        z-index: 1000;
+    }
+
+    .vertical-modal-wrapper {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 30px rgba(0,0,0,0.2);
+        animation: zoomFadeIn 0.3s ease-out forwards;
+        position: relative;
+    }
+
+    .vertical-modal-wrapper {
+        padding-top: 14px;
+        padding-left: 36px;
+        position: relative;
+        width: 100%;
+        max-width: 800px;
+        background: white;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow: visible; /* allow it to grow naturally */
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+        height: auto; /* auto-fit to children */
+        min-height: fit-content; /* ensure it expands as needed */
+    }
+
+
+    .modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 32px;
+        height: 32px;
+        background: rgba(255,255,255,0.4);
+        border: none;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #000;
+        backdrop-filter: blur(6px);
+    }
+
+        .modal-close:hover {
+            background: rgba(255,255,255,0.6);
+        }
+
+    .modal-header {
+        text-align: center;
+        margin-bottom: 1.75rem;
+    }
+
+        .modal-header h2 {
+            font-size: 1.6rem;
+            margin-bottom: 0.5rem;
+            color: #111827;
+        }
+
+        .modal-header p {
+            color: #6b7280;
+            font-size: 1rem;
+            margin: 0;
+        }
+
+    /* === Card Grid === */
+    .asset-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .asset-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 1.5rem;
+        text-align: center;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+        .asset-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+        }
+
+        .asset-card.highlight {
+            background-color: #fffbeb;
+            border-color: #facc15;
+            margin-top: 1px;
+        }
+
+    .asset-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        margin-bottom: 0.75rem;
+    }
+
+    .icon-create {
+        background: url('https://cdn-icons-png.flaticon.com/512/2983/2983788.png') no-repeat center/contain;
+    }
+
+    .icon-upload {
+        background: url('https://cdn-icons-png.flaticon.com/512/1828/1828919.png') no-repeat center/contain;
+    }
+
+    .icon-template {
+        background: url('https://cdn-icons-png.flaticon.com/512/1828/1828859.png') no-repeat center/contain;
+    }
+
+    .asset-card h3 {
+        font-size: 1.15rem;
+        margin: 0.5rem 0;
+        color: #111827;
+    }
+
+    .asset-card p {
+        color: #000;
+        font-size: 15px;
+        margin-bottom: 1.25rem;
+        font-weight: 350;
+    }
+
+    /* === Buttons === */
+    .btn-blue,
+    .btn-yellow,
+    .btn-green {
+        padding: 0.6rem 1rem;
+        border-radius: 8px;
+        border: none;
+        font-weight: 600;
+        color: white;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+        width: 100%;
+    }
+
+    .btn-blue {
+        background-color: #2563eb;
+    }
+
+        .btn-blue:hover {
+            background-color: #1d4ed8;
+        }
+
+    .btn-yellow {
+        background-color: #fbbf24;
+        color: #000;
+    }
+
+        .btn-yellow:hover {
+            background-color: #f59e0b;
+        }
+
+    .btn-green {
+        background-color: #10b981;
+    }
+
+        .btn-green:hover {
+            background-color: #059669;
+        }
+
+    /* === Badge === */
+    .ai-recommendation-badge {
+        background-color: #fde68a;
+        color: #92400e;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        margin-bottom: 0.5rem;
+    }
+
+    /* === Animations === */
+    @@keyframes zoomFadeIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes blurIn {
+        0% {
+            backdrop-filter: blur(0px);
+            background-color: rgba(0,0,0,0);
+        }
+
+        100% {
+            backdrop-filter: blur(5px);
+            background-color: rgba(0,0,0,0.7);
+        }
+    }
+
+    /* === Loader === */
+    .modal-busy-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255,255,255,0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #2563eb;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .modal-overlay {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+</style>
+
+<!-- NEW: Include the CreateNewImage modal component -->
+<CreateNewImage Show="@ShowCreateNewImage"
+                ShowChanged="CloseCreateNewImage"
+                RunwareImageIds="@RunwareImageIds"
+                SecondaryRunwareImageIds="@SecondaryRunwareImageIds"
+                OnImagesRemoved="@OnImagesRemoved"
+                PromptText="@PromptText"
+                PromptTexts="@PromptTexts"
+                OnConfirm="@OnConfirm"
+                DeliverableName="@DeliverableName"
+                OnImageGenerated="HandleImageGeneratedFromChild" />
+
+<MakeVideoSelectImages Show="@ShowMakeVideoSelectImages"
+                       ShowChanged="CloseMakeVideoSelectImages"
+                       RunwareImageIds="@RunwareImageIds"
+                       SecondaryRunwareImageIds="@SecondaryRunwareImageIds"
+                       OnImagesRemoved="@OnImagesRemoved"
+                       OnConfirm="@OnConfirm" />

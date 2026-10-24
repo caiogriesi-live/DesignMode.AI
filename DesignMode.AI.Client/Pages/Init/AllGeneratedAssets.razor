@@ -1,0 +1,786 @@
+@using System.Collections.Generic
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.AspNetCore.Components.Authorization;
+@using Newtonsoft.Json;
+
+@if (IsBusy)
+{
+    <div class="modal-busy-overlay">
+        <div class="loader"></div>
+    </div>
+}
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="vertical-modal-wrapper" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+
+            <div class="modal-scroll-content">
+                <div class="modal-header">
+                    <h2>All Generated Assets</h2>
+                </div>
+                <div style="margin-bottom: 30px;">
+                    Review all your generated images. Click any image to add/remove from Brand Kit.
+                </div>
+
+                <!-- Brand Kit Status -->
+                <div class="brand-kit-status">
+                    <span class="brand-kit-count">
+                        <span class="brand-kit-icon">✨</span>
+                        @(conceptImages?.Count ?? 0) assets in Brand Kit
+                    </span>
+                </div>
+
+                <div class="image-grid">
+                    @if (SelectedImages != null && SelectedImages.Any())
+                    {
+@*                         // Convert the entire SelectedImages list to a JSON string
+                        var selectedImagesJson = JsonConvert.SerializeObject(SelectedImages, Formatting.None);
+
+                        // (Optional) You can log or pass it to AI later
+                        Console.WriteLine(selectedImagesJson); *@
+
+                        // Group by DeliverableType and SubCategory
+                        var groupedImages = SelectedImages
+                        .GroupBy(img => img.SubCategory?.ToLower() == "generic" ? img.DeliverableType : img.SubCategory);
+
+                        @foreach (var group in groupedImages)
+                        {
+                            var firstImage = group.First();
+                            var sectionTitle = group.Key;
+
+                            // If this is a generic group, get the DeliverableType from the first image
+                            if (firstImage.SubCategory?.ToLower() == "generic")
+                            {
+                                sectionTitle = firstImage.DeliverableType;
+                            }
+
+                            // Only render the section if there are images with valid URLs
+                            var validImages = group
+                            .Where(i => !string.IsNullOrWhiteSpace(i.ImageUrl))
+                            .OrderBy(i => i.CountId)
+                            .ToList();
+
+                            if (validImages.Any())
+                            {
+                                <div class="deliverable-section">
+                                    <h3 class="section-title">@sectionTitle</h3>
+                                    <div class="image-col">
+                                        @foreach (var image in validImages)
+                                        {
+                                            @ImageCard(image)
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+
+                    }
+                    else
+                    {
+                        <div class="empty-state">
+                            <p>No generated assets found</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="footer-actions sticky-footer">
+                <button class="discard-button" @onclick="CloseModal">
+                    Discard
+                </button>
+                <button class="save-button"
+                        @onclick="SaveChanges"
+                        disabled="@(!HasChanges)"
+                        style="@(!HasChanges ? "background-color:#eee; color: #ababab;" : null)">
+                    @GetSaveButtonText()
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; }
+    [Inject] private HttpClient Http { get; set; }
+    [Inject] private NavigationManager NavigationManager { get; set; }
+
+    private bool IsBusy = false;
+
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> SelectedImages { get; set; }
+    [Parameter] public EventCallback<List<string>> OnImagesRemoved { get; set; }
+    [Parameter] public EventCallback<bool> OnConfirm { get; set; }
+
+    // Add parameter for concept images to check selection status
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ConceptImageWithIdeaDto> conceptImages { get; set; }
+
+    private HashSet<string> SelectedImageUrls = new();
+    private HashSet<string> SelectedImageIds = new();
+    private List<string> ImagesToAdd = new();
+    private List<string> ImagesToRemove = new();
+    private bool HasChanges => ImagesToAdd.Count > 0 || ImagesToRemove.Count > 0;
+
+    protected override void OnParametersSet()
+    {
+        if (SelectedImages != null && SelectedImages.Any())
+        {
+            SelectedImageUrls = new HashSet<string>(SelectedImages.Select(x => x.ImageUrl));
+            SelectedImageIds = new HashSet<string>(SelectedImages.Select(x => x.Id));
+            ImagesToAdd.Clear();
+            ImagesToRemove.Clear();
+        }
+        else
+        {
+            SelectedImageUrls.Clear();
+            SelectedImageIds.Clear();
+            ImagesToAdd.Clear();
+            ImagesToRemove.Clear();
+        }
+    }
+
+    private void ToggleSelection(string url, string id)
+    {
+        // Check if image is currently in brand kit
+        bool isInBrandKit = conceptImages?.Any(x => x.ImageUrl == url) ?? false;
+
+        if (isInBrandKit)
+        {
+            // Toggle removal
+            if (ImagesToRemove.Contains(id))
+            {
+                ImagesToRemove.Remove(id);
+            }
+            else
+            {
+                ImagesToRemove.Add(id);
+                // Remove from add list if it was there
+                ImagesToAdd.Remove(id);
+            }
+        }
+        else
+        {
+            // Toggle addition
+            if (ImagesToAdd.Contains(id))
+            {
+                ImagesToAdd.Remove(id);
+            }
+            else
+            {
+                ImagesToAdd.Add(id);
+                // Remove from remove list if it was there
+                ImagesToRemove.Remove(id);
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private string GetSaveButtonText()
+    {
+        if (!HasChanges)
+        {
+            return conceptImages?.Any() ?? false ? "No Changes Made" : "No Assets Selected";
+        }
+
+        var actions = new List<string>();
+
+        if (ImagesToAdd.Count > 0)
+        {
+            actions.Add($"{ImagesToAdd.Count} asset{(ImagesToAdd.Count > 1 ? "s" : "")} to add");
+        }
+
+        if (ImagesToRemove.Count > 0)
+        {
+            actions.Add($"{ImagesToRemove.Count} asset{(ImagesToRemove.Count > 1 ? "s" : "")} to remove");
+        }
+
+        return $"Update Brand Kit ({string.Join(" and ", actions)})";
+    }
+
+    private async Task SaveChanges()
+    {
+        if (IsBusy) return;
+
+        IsBusy = true;
+        StateHasChanged();
+
+        try
+        {
+            bool allOperationsSuccessful = true;
+
+            // Process removals first - call database directly like EditConcept modal
+            if (ImagesToRemove.Any())
+            {
+                foreach (var imageId in ImagesToRemove)
+                {
+                    bool removed = await DeleteConceptImageFromDatabaseAsync(imageId);
+                    if (!removed)
+                    {
+                        allOperationsSuccessful = false;
+                    }
+                }
+            }
+
+            // Process additions - call database directly
+            if (ImagesToAdd.Any())
+            {
+                foreach (var imageId in ImagesToAdd)
+                {
+                    bool added = await SaveConceptImageToDatabaseAsync(imageId);
+                    if (!added)
+                    {
+                        allOperationsSuccessful = false;
+                    }
+                }
+            }
+
+            if (allOperationsSuccessful)
+            {
+                // IMPORTANT: Force parent to reload concept images from database
+                if (OnImagesRemoved.HasDelegate)
+                {
+                    // Pass both additions and removals to let parent know to refresh
+                    var allChangedImages = ImagesToAdd.Concat(ImagesToRemove).ToList();
+                    await OnImagesRemoved.InvokeAsync(allChangedImages);
+                }
+
+                // Also call OnConfirm to ensure parent refreshes
+                if (OnConfirm.HasDelegate)
+                {
+                    await OnConfirm.InvokeAsync(true);
+                }
+
+                // Reset changes after successful save
+                ImagesToAdd.Clear();
+                ImagesToRemove.Clear();
+
+                IsBusy = false;
+
+                // Close the modal
+                await CloseModal();
+            }
+            else
+            {
+                // Handle partial failure - you might want to show an error message
+                Console.WriteLine("Some operations failed. Please try again.");
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+            StateHasChanged();
+        }
+    }
+    private async Task<bool> DeleteConceptImageFromDatabaseAsync(string imageId)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var requestBody = new { ImageId = imageId };
+
+                var response = await Http.PostAsJsonAsync(
+                    $"{ApiConfig.ApiBaseUrl}api/DeleteConceptImage?code=REDACTED_FOR_GROOMING",
+                    requestBody);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("✅ Deleted concept image successfully.");
+                    return true;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to delete concept image: {response.StatusCode}");
+                    return false;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception deleting concept image: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task<bool> SaveConceptImageToDatabaseAsync(string imageId)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var requestBody = new { ImageId = imageId };
+
+                var response = await Http.PostAsJsonAsync(
+                    $"{ApiConfig.ApiBaseUrl}api/SaveConceptImage?code=REDACTED_FOR_GROOMING",
+                    requestBody);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("✅ Saved concept image successfully.");
+                    return true;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to save concept image: {response.StatusCode}");
+                    return false;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception saving concept image: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        if (IsBusy)
+            return;
+
+        // Reset the state when closing
+        ImagesToAdd.Clear();
+        ImagesToRemove.Clear();
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+
+    private RenderFragment ImageCard(DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel image) => __builder =>
+    {
+        var isInBrandKit = conceptImages?.Any(x => x.ImageUrl == image.ImageUrl) ?? false;
+        var isMarkedForAdd = ImagesToAdd.Contains(image.Id);
+        var isMarkedForRemove = ImagesToRemove.Contains(image.Id);
+        var isCurrentlySelected = isInBrandKit && !isMarkedForRemove || !isInBrandKit && isMarkedForAdd;
+
+        <div class="image-card @(isCurrentlySelected ? "in-brand-kit" : "") @((isMarkedForAdd || isMarkedForRemove) ? "pending-change" : "")"
+             @onclick="() => ToggleSelection(image.ImageUrl, image.Id)">
+            <img src="@image.ImageUrl" alt="Generated asset" class="image-thumb" />
+            <div class="image-controls">
+                <div class="brand-kit-indicator @(isCurrentlySelected ? "selected" : "")"
+                     @onclick="() => ToggleSelection(image.ImageUrl, image.Id)"
+                @onclick:stopPropagation>
+                    @if (isCurrentlySelected)
+                    {
+                        <span class="indicator-icon" title="In Brand Kit">✓</span>
+                    }
+                    else
+                    {
+                        <span class="indicator-icon" title="Add to Brand Kit">+</span>
+                    }
+                </div>
+            </div>
+            @if (isMarkedForAdd)
+            {
+                <div class="change-badge add-badge">
+                    <span class="badge-icon">+</span>
+                    To Add
+                </div>
+            }
+            else if (isMarkedForRemove)
+            {
+                <div class="change-badge remove-badge">
+                    <span class="badge-icon">−</span>
+                    To Remove
+                </div>
+            }
+            else if (isCurrentlySelected)
+            {
+                <div class="brand-kit-badge">
+                    <span class="badge-icon">✨</span>
+                    In Brand Kit
+                </div>
+            }
+        </div>
+    };
+}
+<style>
+    /* Keep all your existing CSS styles and add these new ones */
+    
+    .brand-kit-status {
+        margin-bottom: 20px;
+        padding: 12px 16px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #244d88;
+    }
+    
+    .brand-kit-count {
+        font-weight: 600;
+        color: #244d88;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .brand-kit-icon {
+        font-size: 16px;
+    }
+    
+    .image-card.in-brand-kit {
+        border: 2px solid #244d88;
+        box-shadow: 0 4px 12px rgba(36, 77, 136, 0.2);
+    }
+    
+    .image-card.pending-change {
+        border: 2px dashed #244d88;
+    }
+    
+    .brand-kit-indicator {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: rgba(255, 255, 255, 0.95);
+        border: 2px solid #ddd;
+        font-weight: bold;
+        font-size: 14px;
+    }
+    
+    .brand-kit-indicator.selected {
+        background: #244d88;
+        border-color: #244d88;
+        color: white;
+    }
+    
+    .brand-kit-indicator:hover {
+        transform: scale(1.1);
+        border-color: #244d88;
+    }
+    
+    .indicator-icon {
+        line-height: 1;
+    }
+    
+    .brand-kit-badge {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        background: #244d88;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(36, 77, 136, 0.3);
+    }
+    
+    .change-badge {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    .add-badge {
+        background: #28a745;
+        color: white;
+    }
+    
+    .remove-badge {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .badge-icon {
+        font-size: 10px;
+        font-weight: bold;
+    }
+    
+    .save-button {
+        background-color: #244d88;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+    
+    .save-button:hover:not(:disabled) {
+        background-color: #1b3a66;
+    }
+    
+    .save-button:disabled {
+        background-color: #eee;
+        color: #ababab;
+        cursor: not-allowed;
+    }
+    
+    /* Rest of your existing CSS remains the same */
+    .footer-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+    }
+    
+    .vertical-modal-wrapper {
+        padding-top: 14px;
+        padding-left: 36px;
+        padding-bottom: 83px;
+        position: relative;
+        width: 100%;
+        max-width: 800px;
+        height: 90vh;
+        background: white;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-scroll-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px;
+    }
+
+    .modal-header {
+        text-align: left;
+        margin: 33px 0 -4px 0px;
+        padding-right: 24px;
+    }
+
+        .modal-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+            margin-top: 0;
+        }
+
+    .image-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+    }
+
+    .empty-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 40px 0;
+        color: #666;
+    }
+
+    .footer-actions {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: white;
+        border-top: 1px solid #ccc;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 32px;
+        z-index: 1050;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .discard-button {
+        font-size: 1rem;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        background-color: transparent;
+        border: 2px solid #ddd;
+        color: #333;
+        transition: all 0.3s ease;
+    }
+
+        .discard-button:hover {
+            border-color: #999;
+            color: #000;
+        }
+
+    .deliverable-section {
+        padding-bottom: 24px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .image-col {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+
+    .image-card {
+        position: relative;
+        width: 200px;
+        height: 200px;
+        border-radius: 16px;
+        overflow: hidden;
+        background-color: #fff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #eee;
+        transition: border-color 0.2s ease;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        cursor: pointer;
+    }
+
+    .image-card:hover {
+        border: 1px solid #244d88;
+    }
+
+        .image-card.in-brand-kit:hover {
+            border: 2px solid #ff4d4d; /* Slightly darker blue on hover for selected cards */
+        }
+
+    .image-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        flex-grow: 1;
+    }
+
+    .image-controls {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #222;
+        margin-bottom: 12px;
+    }
+
+    .modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.4);
+        border: none;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        color: #000;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(6px);
+        z-index: 10;
+    }
+
+        .modal-close:hover {
+            background-color: rgba(255, 255, 255, 0.6);
+            color: #000;
+        }
+
+    @@keyframes zoomFadeIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes blurIn {
+        0% {
+            backdrop-filter: blur(0px);
+            background-color: rgba(0, 0, 0, 0);
+        }
+
+        100% {
+            backdrop-filter: blur(5px);
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+    }
+
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        backdrop-filter: blur(5px);
+        background-color: rgba(0, 0, 0, 0.7);
+        animation: blurIn 0.3s ease-out forwards;
+    }
+
+    .vertical-modal-wrapper {
+        animation: zoomFadeIn 0.3s ease-out forwards;
+    }
+
+    .modal-busy-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+</style>

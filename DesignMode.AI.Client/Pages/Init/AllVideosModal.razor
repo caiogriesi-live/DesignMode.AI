@@ -1,0 +1,858 @@
+@using DesignMode.AI.Shared.Models
+@using Microsoft.AspNetCore.Components
+@using Newtonsoft.Json
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components.Authorization;
+@using System.Text;
+@inject ModalService ModalService
+
+@if (IsBusy)
+{
+    <div class="modal-busy-overlay">
+        <div class="loader"></div>
+    </div>
+}
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="vertical-modal-wrapper" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+
+            <div class="modal-scroll-content">
+                <div class="modal-header">
+                    <h2>All Generated Videos</h2>
+                </div>
+
+                <div style="margin-bottom: 30px;">
+                    Review all your generated videos. Click any video to add/remove from Brand Kit.
+                </div>
+
+                <div class="brand-kit-status">
+                    <span class="brand-kit-count">
+                        <span class="brand-kit-icon">🎬</span>
+                        @(conceptImages?.Count ?? 0) videos in Brand Kit
+                    </span>
+                </div>
+
+                <div class="video-grid">
+                    @if (Videos != null && Videos.Any())
+                    {
+                        // Group completed videos (exists == true)
+                        var completedVideos = Videos
+                        .Where(v => VideoExistsCache.ContainsKey(v.VideoId) && VideoExistsCache[v.VideoId] == true)
+                        .GroupBy(v => v.VideoId)
+                        .OrderBy(g => g.Key);
+
+                        // Pending videos (exists == false)
+                        var pendingVideos = Videos
+                        .Where(v => VideoExistsCache.ContainsKey(v.VideoId) && VideoExistsCache[v.VideoId] == false)
+                        .GroupBy(v => v.VideoId)
+                        .OrderBy(g => g.Key);
+
+                        <!-- COMPLETED VIDEOS -->
+                        <h3 class="group-title completed-title">Completed Videos</h3>
+                        @if (!completedVideos.Any())
+                        {
+                            <p class="group-empty-msg">No completed videos yet.</p>
+                        }
+                        else
+                        {
+                            @foreach (var group in completedVideos)
+                            {
+                                <div class="deliverable-section">
+                                    <div class="video-col">
+                                        @foreach (var video in group)
+                                        {
+                                            @VideoCard(video)
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+
+                        <!-- PENDING VIDEOS -->
+                        <h3 class="group-title pending-title">In Progress</h3>
+                        @if (!pendingVideos.Any())
+                        {
+                            <p class="group-empty-msg">No pending videos.</p>
+                        }
+                        else
+                        {
+                            @foreach (var group in pendingVideos)
+                            {
+                                <div class="deliverable-section">
+                                    <div class="video-col">
+                                        @foreach (var video in group)
+                                        {
+                                            @VideoCard(video)
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    }
+                    else
+                    {
+                        <div class="empty-state">
+                            <p>No videos available.</p>
+                        </div>
+                    }
+                </div>
+
+            </div>
+
+            <div class="footer-actions sticky-footer">
+                <button class="discard-button" @onclick="CloseModal">
+                    Discard
+                </button>
+                <button class="save-button"
+                        @onclick="SaveChanges"
+                        disabled="@(!HasChanges)"
+                        style="@(!HasChanges ? "background-color:#eee; color: #ababab;" : null)">
+                    @GetSaveButtonText()
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+@code {
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; }
+    [Inject] private HttpClient Http { get; set; }
+    [Inject] private NavigationManager NavigationManager { get; set; }
+
+    private bool IsBusy = false;
+
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public List<Gen.VideoItem> Videos { get; set; }
+    [Parameter] public List<Gen.VideoItem> ConceptVideos { get; set; }
+    [Parameter] public EventCallback<List<string>> OnVideosChanged { get; set; }
+    [Parameter] public EventCallback<bool> OnConfirm { get; set; }
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> SelectedImages { get; set; }
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ConceptImageWithIdeaDto> conceptImages { get; set; }
+
+    [Parameter] public EventCallback<List<string>> OnImagesRemoved { get; set; }
+    [Parameter] public List<string> RunwareImageIds { get; set; } = new();
+    [Parameter] public List<string> SecondaryRunwareImageIds { get; set; } = new();
+    [Parameter] public bool GenerateNew { get; set; }
+    [Parameter] public string VideoId { get; set; }
+    [Parameter] public DesignMode.AI.Client.Pages.Init.MakeVideoModal.ImageIdeaCountResult AllIdeas { get; set; }
+    [Parameter] public string Main { get; set; }
+
+    [Parameter] public EventCallback OnSecondaryModalClosed { get; set; }
+
+    private bool ShowMakeVideoSelectImages { get; set; } = false;
+    private bool ShowNewVideoGenerationModal { get; set; } = false;
+    public string videoId { get; set; }
+    private bool isGenerating = false;
+    private string errorMessage = "";
+    private int loadingCounter = 0;
+    private Timer loadingTimer;
+
+    public class VideoExistsResponse
+    {
+        public bool Exists { get; set; }
+        public string VideoId { get; set; }
+    }
+
+    private async Task HandleSecondaryModalClosed()
+    {
+        // you can do internal stuff here...
+
+        // 🔥 bubble upward to parent page
+        //StateHasChanged();
+        await OnSecondaryModalClosed.InvokeAsync();
+    }
+
+    public class VideoChangeItem
+    {
+        public string ImageId { get; set; }
+        public string VideoId { get; set; }
+    }
+
+    private List<VideoChangeItem> VideosToAdd = new();
+    private List<VideoChangeItem> VideosToRemove = new();
+
+    private bool HasChanges => VideosToAdd.Count > 0 || VideosToRemove.Count > 0;
+
+    protected override void OnParametersSet()
+    {
+        // Clear any pending changes when modal opens
+        if (Show)
+        {
+            VideosToAdd.Clear();
+            VideosToRemove.Clear();
+        }
+    }
+
+    private async Task<bool?> CheckVideoExistsAsync(string videoId)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url = $"{ApiConfig.ApiBaseUrl}api/CheckVideoExists?code=REDACTED_FOR_GROOMING";
+
+                var requestBody = new
+                {
+                    VideoId = videoId
+                };
+
+                var response = await client.PostAsJsonAsync(url, requestBody);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<VideoExistsResponse>();
+                    return result?.Exists;
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void ToggleSelection(string videoId, Gen.VideoItem video)
+    {
+        // Match the corresponding image ID by thumbnail
+        string imageId = SelectedImages?
+            .FirstOrDefault(img => img.ImageUrl == video.ThumbnailUrl)?
+            .Id;
+
+        var item = new VideoChangeItem
+            {
+                ImageId = imageId,
+                VideoId = videoId
+            };
+
+        bool isInBrandKit = conceptImages?.Any(x => x.ImageUrl == video.ThumbnailUrl) ?? false;
+
+        if (isInBrandKit)
+        {
+            // REMOVE LOGIC
+            if (VideosToRemove.Any(x => x.ImageId == imageId))
+                VideosToRemove.RemoveAll(x => x.ImageId == imageId);
+            else
+            {
+                VideosToRemove.Add(item);
+                VideosToAdd.RemoveAll(x => x.ImageId == imageId);
+            }
+        }
+        else
+        {
+            // ADD LOGIC
+            if (VideosToAdd.Any(x => x.ImageId == imageId))
+                VideosToAdd.RemoveAll(x => x.ImageId == imageId);
+            else
+            {
+                VideosToAdd.Add(item);
+                VideosToRemove.RemoveAll(x => x.ImageId == imageId);
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private string GetSaveButtonText()
+    {
+        if (!HasChanges)
+        {
+            return conceptImages?.Any() ?? false ? "No Changes Made" : "No Videos Selected";
+        }
+
+        var actions = new List<string>();
+
+        if (VideosToAdd.Count > 0)
+        {
+            actions.Add($"{VideosToAdd.Count} video{(VideosToAdd.Count > 1 ? "s" : "")} to add");
+        }
+
+        if (VideosToRemove.Count > 0)
+        {
+            actions.Add($"{VideosToRemove.Count} video{(VideosToRemove.Count > 1 ? "s" : "")} to remove");
+        }
+
+        return $"Update Brand Kit ({string.Join(" and ", actions)})";
+    }
+
+    private async Task SaveChanges()
+    {
+        if (IsBusy) return;
+
+        IsBusy = true;
+        StateHasChanged();
+
+        try
+        {
+            bool allOperationsSuccessful = true;
+
+            // Process removals first
+            if (VideosToRemove.Any())
+            {
+                foreach (var item in VideosToRemove)
+                {
+                    bool removed = await DeleteConceptVideoFromDatabaseAsync(item);
+                }
+            }
+
+            // Process additions
+            if (VideosToAdd.Any())
+            {
+                foreach (var videoId in VideosToAdd)
+                {
+                    bool added = await SaveConceptVideoToDatabaseAsync(videoId);
+                    if (!added)
+                    {
+                        allOperationsSuccessful = false;
+                    }
+                }
+            }
+
+            if (allOperationsSuccessful)
+            {
+                // Notify parent to refresh concept videos
+                if (OnVideosChanged.HasDelegate)
+                {
+                    var changes = VideosToAdd.Concat(VideosToRemove)
+                        .Select(x => x.VideoId)   // or ImageId — whichever your parent needs
+                        .ToList();
+
+                    await OnVideosChanged.InvokeAsync(changes);
+                }
+
+                // Also call OnConfirm to ensure parent refreshes
+                if (OnConfirm.HasDelegate)
+                {
+                    await OnConfirm.InvokeAsync(true);
+                }
+
+                // Reset changes after successful save
+                VideosToAdd.Clear();
+                VideosToRemove.Clear();
+
+                IsBusy = false;
+
+                // Close the modal
+                await CloseModal();
+            }
+            else
+            {
+                Console.WriteLine("Some operations failed. Please try again.");
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+            StateHasChanged();
+        }
+    }
+    private async Task CloseMakeVideoSelectImages()
+    {
+        ShowMakeVideoSelectImages = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+    private async Task<bool> DeleteConceptVideoFromDatabaseAsync(VideoChangeItem item)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                // ⭐ If no match found, you can decide what to do; for now, send null
+                var requestBody = new
+                {
+                    ImageId = item.ImageId,
+                    VideoId = item.VideoId
+                };
+
+                var response = await Http.PostAsJsonAsync(
+                    $"{ApiConfig.ApiBaseUrl}api/DeleteConceptImage?code=REDACTED_FOR_GROOMING",
+                    requestBody);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("✅ Deleted concept video successfully.");
+                    return true;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to delete concept video: {response.StatusCode}");
+                    return false;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception deleting concept video: {ex.Message}");
+            return false;
+        }
+    }
+    private string GetQueryParameter(string queryString, string key, string defaultValue)
+    {
+        var parameters = System.Web.HttpUtility.ParseQueryString(queryString);
+        return parameters[key] ?? defaultValue;
+    }
+    private async Task<bool> SaveConceptVideoToDatabaseAsync(VideoChangeItem item)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var uri = NavigationManager.Uri;
+                var queryString = new Uri(uri).Query;
+                string cid = GetQueryParameter(queryString, "cid", null);
+                string companyIdeaId = null;
+
+                if (!string.IsNullOrEmpty(cid))
+                {
+                    companyIdeaId = cid;
+                }
+                // ⭐ If no match found, you can decide what to do; for now, send null
+                var requestBody = new
+                {
+                    ImageId = item.ImageId,
+                    VideoId = item.VideoId,
+                    CompanyIdeaId = companyIdeaId,
+                    PromptId = SelectedImages?
+                        .FirstOrDefault(img => img.Id == item.ImageId)?
+                        .PromptId
+                };
+
+                var response = await Http.PostAsJsonAsync(
+                    $"{ApiConfig.ApiBaseUrl}api/SaveConceptImage?code=REDACTED_FOR_GROOMING",
+                    requestBody);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("✅ Saved concept video successfully.");
+                    return true;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to save concept video: {response.StatusCode}");
+                    return false;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception saving concept video: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        if (IsBusy)
+            return;
+
+        // Reset the state when closing
+        VideosToAdd.Clear();
+        VideosToRemove.Clear();
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+
+    private Dictionary<string, bool?> VideoExistsCache = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && Videos != null)
+        {
+            foreach (var v in Videos)
+            {
+                if (!VideoExistsCache.ContainsKey(v.VideoId))
+                {
+                    var exists = await CheckVideoExistsAsync(v.VideoId);
+                    VideoExistsCache[v.VideoId] = exists;
+                }
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private RenderFragment VideoCard(Gen.VideoItem video) => __builder =>
+    {
+        // ⭐ NEW CODE: match ImageId from SelectedImages based on thumbnail URL
+        string matchedImageId = SelectedImages?
+        .FirstOrDefault(img => img.ImageUrl == video.ThumbnailUrl)?
+        .Id;
+        // var isInBrandKit = ConceptVideos?.Any(v => v.VideoId == video.VideoId) ?? false;
+        // var isMarkedForAdd = VideosToAdd.Contains(video.VideoId);
+        // var isMarkedForRemove = VideosToRemove.Contains(video.VideoId);
+        // var isCurrentlySelected = isInBrandKit && !isMarkedForRemove || !isInBrandKit && isMarkedForAdd;
+
+        var isInBrandKit = conceptImages?.Any(x => x.ImageUrl == video.ThumbnailUrl) ?? false;
+        var isMarkedForAdd = VideosToAdd.Any(x => x.ImageId == matchedImageId);
+        var isMarkedForRemove = VideosToRemove.Any(x => x.ImageId == matchedImageId);
+        var isCurrentlySelected = isInBrandKit && !isMarkedForRemove || !isInBrandKit && isMarkedForAdd;
+
+        VideoExistsCache.TryGetValue(video.VideoId, out var exists);
+        string thumbUrl = video.ThumbnailUrl;
+
+        <div class="video-card @(isCurrentlySelected ? "in-brand-kit" : "")">
+            <img class="video-thumb" src="@thumbUrl" @onclick="() => HandleCardClick(video)" />
+
+            @if (exists == false)
+            {
+                <div class="pending-banner" @onclick="() => HandleCardClick(video)">
+                    <span>In Progress | Click to edit</span>
+                </div>
+            }
+            else if (exists == true)
+            {
+                <div class="completed-banner" @onclick="() => HandleCardClick(video)">
+                    <span>Completed | Click to view</span>
+                </div>
+            }
+
+            @if (isMarkedForAdd)
+            {
+                <div class="change-badge-video add-badge-video">
+                    <span class="badge-icon">+</span>
+                    To Add
+                </div>
+            }
+            else if (isMarkedForRemove)
+            {
+                <div class="change-badge-video remove-badge-video">
+                    <span class="badge-icon">−</span>
+                    To Remove
+                </div>
+            }
+            else if (isInBrandKit)
+            {
+                <div class="brand-kit-badge-video">
+                    <span class="badge-icon">✨</span>
+                    In Brand Kit
+                </div>
+            }
+
+            <div class="video-controls">
+                <div class="brand-kit-indicator @(isCurrentlySelected ? "selected" : "")"
+                     @onclick="() => ToggleSelection(video.VideoId, video)"
+                @onclick:stopPropagation>
+                    @if (isCurrentlySelected)
+                    {
+                        <span class="indicator-icon" title="In Brand Kit">✓</span>
+                    }
+                    else
+                    {
+                        <span class="indicator-icon" title="Add to Brand Kit">+</span>
+                    }
+                </div>
+            </div>
+        </div>
+    };
+    private void OpenMakeVideoSelectImages(Gen.VideoItem video)
+    {
+        // Close the current modal
+        Show = false;
+        ShowChanged.InvokeAsync(false);
+
+        // Pass parameters to secondary modal
+        videoId = video.VideoId;
+
+        // Optional: set GenerateNew based on status
+        VideoExistsCache.TryGetValue(video.VideoId, out var exists);
+        //GenerateNew = exists == false; // true if pending video
+
+        // Open secondary modal
+        ShowMakeVideoSelectImages = true;
+
+        StateHasChanged();
+    }
+
+    private async Task HandleCardClick(Gen.VideoItem video)
+    {
+        VideoExistsCache.TryGetValue(video.VideoId, out var exists);
+
+        if (exists == false || exists == true)
+        {
+            // Same behavior for both: open make video modal
+            OpenMakeVideoSelectImages(video);
+        }
+    }
+}
+<style>
+    .video-col {
+        margin-top: 25px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+    }
+
+    .video-card {
+        position: relative;
+        width: 260px;
+        height: 180px;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid #eee;
+        cursor: pointer;
+        background: white;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .video-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        cursor: pointer;
+    }
+
+    .video-card.in-brand-kit {
+        border: 2px solid #244d88;
+        box-shadow: 0 4px 12px rgba(36, 77, 136, 0.2);
+    }
+
+    .brand-kit-status {
+        margin-bottom: 20px;
+        padding: 12px 16px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #244d88;
+    }
+
+    .brand-kit-count {
+        font-weight: 600;
+        color: #244d88;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .brand-kit-icon {
+        font-size: 16px;
+    }
+
+    .brand-kit-indicator {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: rgba(255, 255, 255, 0.95);
+        border: 2px solid #ddd;
+        font-weight: bold;
+        font-size: 14px;
+        z-index: 2;
+    }
+
+        .brand-kit-indicator.selected {
+            background: #244d88;
+            border-color: #244d88;
+            color: white;
+        }
+
+        .brand-kit-indicator:hover {
+            transform: scale(1.1);
+            border-color: #244d88;
+        }
+
+    .indicator-icon {
+        line-height: 1;
+        padding-bottom: 2px;
+    }
+
+    .vertical-modal-wrapper {
+        height: 87vh;
+    }
+
+    .pending-banner {
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        background: rgba(255, 200, 0, 0.9);
+        color: #000;
+        padding: 6px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 14px;
+        z-index: 1;
+    }
+
+    .group-title {
+        margin-top: 35px;
+        margin-bottom: 10px;
+        font-size: 22px;
+        font-weight: bold;
+    }
+
+    .completed-title {
+        color: #244d88;
+    }
+
+    .pending-title {
+        color: #cc8b00;
+    }
+
+    .group-empty-msg {
+        font-size: 14px;
+        opacity: 0.7;
+    }
+
+    .completed-banner {
+        position: absolute;
+        bottom: 0;
+        width: 100%;
+        background: rgba(36, 77, 136, 0.9);
+        color: #fff;
+        padding: 5px;
+        text-align: center;
+        font-weight: 500;
+        font-size: 14px;
+        z-index: 1;
+    }
+
+    .brand-kit-badge-video {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: #244d88;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(36, 77, 136, 0.3);
+        z-index: 2;
+    }
+
+    .change-badge-video {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        z-index: 2;
+        height: 25px;
+    }
+
+    .add-badge-video {
+        background: #28a745;
+        color: white;
+    }
+
+    .remove-badge-video {
+        background: #dc3545;
+        color: white;
+    }
+
+    .badge-icon {
+        font-size: 10px;
+        font-weight: bold;
+    }
+
+    /* Busy overlay and loader styles */
+    .modal-busy-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #007bff;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Save button styles */
+    .save-button {
+        background-color: #244d88;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+        .save-button:hover:not(:disabled) {
+            background-color: #1b3a66;
+        }
+
+        .save-button:disabled {
+            background-color: #eee;
+            color: #ababab;
+            cursor: not-allowed;
+        }
+
+    .video-controls {
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 2;
+    }
+</style>
+<MakeVideoSelectImages Show="@ShowMakeVideoSelectImages"
+                       ShowChanged="CloseMakeVideoSelectImages"
+                       SelectedImages="@SelectedImages"
+                       RunwareImageIds="@RunwareImageIds"
+                       SecondaryRunwareImageIds="@SecondaryRunwareImageIds"
+                       OnImagesRemoved="@OnImagesRemoved"
+                       AllIdeas="@AllIdeas"
+                       OnConfirm="@OnConfirm"
+                       OnClose="HandleSecondaryModalClosed"
+                       GenerateNew=false
+                       VideoId="@videoId" />

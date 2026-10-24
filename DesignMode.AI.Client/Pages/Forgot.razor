@@ -1,0 +1,243 @@
+﻿@page "/forgot"
+@using DesignMode.AI.Shared.Security;
+@using DesignMode.AI.Client.Services;
+@using DesignMode.AI.Shared.Util;
+@inject AuthService Auth
+@inject NavigationManager Nav
+@inject SavePending SavePending
+@inject ApiConfigService ApiConfig
+@inject IJSRuntime JS
+
+<link href="assets/css/brief-landing.css" rel="stylesheet" />
+
+<div class="wrapper" style="overflow-x: auto; overflow-y: auto; width: 100%; height: 100vh;">
+    <div class="page-header"
+         style="background: url('images/header-bg.png') center calc(100% + 350px) no-repeat,
+            linear-gradient(180deg, #Fff 2%, #CDE8EE 60%);
+            background-size: cover;
+            background-color: #f2f3f8;
+            width: 100%;
+            min-height: 100vh;
+            overflow-y: auto;
+            position: relative;
+            animation: fadeInImage 1s ease-in forwards;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding-top: 25px;">
+
+        <!-- Logo above the card -->
+        <div class="logo-container text-center" style="margin-bottom: 20px;">
+            <img src="assets/img/logo-left.png" width="26px" height="26px" class="navbar-brand-img h-100" alt="main_logo"
+                 style="width: 20px; height: 20px; margin-top: -9px; object-fit: contain;">
+            <span style="font-family: 'SF Pro Display','Arial'; font-weight: 650; font-size: 24px; color: #1f2951; text-transform: none;">
+                design<span style="color: #ffa900; font-weight: 650;">
+                    <img src="images/logo-m3.svg" style="
+                            width: 30px;
+                            margin-left: 3px;
+                            margin-right: 3px;
+                            margin-bottom: 3px;
+                        ">
+                </span>ode.ai
+            </span>
+        </div>
+
+        <!-- Forgot Password Card -->
+        <div class="login-box text-center"
+             style="background: white; padding: 40px; border-radius: 12px;
+            box-shadow: 0px 4px 20px rgba(0,0,0,0.1); min-width: 320px; max-width: 400px;">
+
+            <!-- Show email entry form or success message based on state -->
+            @if (!isEmailSent)
+            {
+                <h1 class="text-dark h1font" tabindex="-1" style="font-size: 28px; color: #1f2951 !important; margin-bottom:10px;">
+                    Forgot Password
+                </h1>
+
+                <p style="color:#5d5d5d;font-size:16px; margin-bottom:20px;font-weight: 400;">
+                    Enter your email address and we'll send you a link to reset your password.
+                </p>
+
+                <!-- Email input -->
+                <input @bind="email" type="email" placeholder="Email address"
+                       disabled="@isLoading"
+                       style="
+                          display:block;
+                          margin:10px auto;
+                          padding: 10px 12px 12px 15px;
+                          width:100%;
+                          border:1px solid #ccc;
+                          border-radius:25px;
+                          text-indent:10px;
+                          @(isLoading ? "background-color:#f5f5f5;" : "")
+                                  " />
+
+                <!-- Error message display -->
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div style="color: #dc3545; font-size: 14px; margin-top: 10px; margin-bottom: 10px;">
+                        @errorMessage
+                    </div>
+                }
+
+                <!-- Send reset link button -->
+                <button @onclick="HandleSendResetLink"
+                        disabled="@isLoading"
+                        style="margin-top:15px; padding:12px; width:100%; border:none;
+                               border-radius:25px; background:#244d88; color:#fff; font-weight:bold;
+                               @(isLoading ? "opacity: 0.6; cursor: not-allowed;" : "")">
+                    @if (isLoading)
+                    {
+                        <span>Sending...</span>
+                    }
+                    else
+                    {
+                        <span>Send Reset Link</span>
+                    }
+                </button>
+
+                <!-- Back to login link -->
+                <div style="margin-top: 20px;">
+                    <a @onclick="!isLoading ? GoToLogin : null"
+                       style="color:#244d88; text-decoration:none; cursor:@(isLoading ? "not-allowed" : "pointer"); @(isLoading ? "opacity:0.5;" : "")">
+                        ← Back to Log in
+                    </a>
+                </div>
+            }
+            else
+            {
+                <!-- Success message after email sent -->
+                <div style="text-align: center;">
+                    <div style="font-size: 64px; margin-bottom: 20px;">
+                        ✉️
+                    </div>
+                    <h1 class="text-dark h1font" tabindex="-1" style="font-size: 28px; color: #1f2951 !important; margin-bottom:10px;">
+                        Check Your Email
+                    </h1>
+                    <p style="color:#5d5d5d;font-size:16px; margin-bottom:20px;font-weight: 400;">
+                        We've sent a password reset link to:<br />
+                        <strong style="color: #244d88;">@email</strong>
+                    </p>
+                    <p style="color:#5d5d5d;font-size:14px; margin-bottom:30px;">
+                        Didn't receive the email? Check your spam folder or
+                        <a @onclick="!isLoading ? ResetForm : null"
+                           style="color:#244d88; text-decoration:none; cursor:@(isLoading ? "not-allowed" : "pointer"); @(isLoading ? "opacity:0.5;" : "")">
+                            try again
+                        </a>
+                    </p>
+                    <button @onclick="GoToLogin"
+                            style="margin-top:15px; padding:12px; width:100%; border:none;
+                                   border-radius:25px; background:#244d88; color:#fff; font-weight:bold;">
+                        Return to Log in
+                    </button>
+                </div>
+            }
+
+            <!-- Footer -->
+            <div style="margin-top:20px; font-size:12px; color:#666;">
+                <a href="/terms.html" target="_blank"
+                   style="color:#666; text-decoration:none; margin-right:8px; @(isLoading ? "opacity:0.5; cursor:not-allowed; pointer-events:none;" : "")"
+                   @onclick="!isLoading ? null : (Action)null">Terms of Use</a> |
+                <a href="/privacy.html" target="_blank"
+                   style="color:#666; text-decoration:none; margin-left:8px; @(isLoading ? "opacity:0.5; cursor:not-allowed; pointer-events:none;" : "")"
+                   @onclick="!isLoading ? null : (Action)null">Privacy Policy</a>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    string email = "";
+    string errorMessage = "";
+    bool isLoading = false;
+    bool isEmailSent = false;
+
+    async Task HandleSendResetLink()
+    {
+        if (isLoading) return;
+
+        // Clear previous error
+        errorMessage = "";
+        StateHasChanged();
+
+        // Validate email
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            errorMessage = "Please enter your email address.";
+            return;
+        }
+
+        if (!IsValidEmail(email))
+        {
+            errorMessage = "Please enter a valid email address.";
+            return;
+        }
+
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            // Call your password reset API
+            // You'll need to implement this method in your AuthService
+            var success = await Auth.ForgotPassword(email, ApiConfig.ApiBaseUrl);
+
+            if (success)
+            {
+                isEmailSent = true;
+                isLoading = false;
+                StateHasChanged();
+            }
+            else
+            {
+                // Don't reveal if email exists or not for security reasons
+                // But you can show a generic message
+                errorMessage = "If an account exists with this email, you will receive a reset link.";
+                isLoading = false;
+                StateHasChanged();
+                // Optionally still show success to prevent email enumeration
+                // isEmailSent = true; // Uncomment if you want to always show success
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "An error occurred. Please try again later.";
+            Console.WriteLine($"Password reset error: {ex.Message}");
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    bool IsValidEmail(string email)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    void GoToLogin()
+    {
+        if (!isLoading)
+        {
+            Nav.NavigateTo("/login", true);
+        }
+    }
+
+    void ResetForm()
+    {
+        if (!isLoading)
+        {
+            isEmailSent = false;
+            email = "";
+            errorMessage = "";
+        }
+    }
+}

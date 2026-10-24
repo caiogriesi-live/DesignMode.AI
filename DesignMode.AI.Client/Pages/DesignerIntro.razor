@@ -1,0 +1,5457 @@
+@page "/designerintro"
+@using DesignMode.AI.Client.Services
+@using DesignMode.AI.Shared.Security
+@using System.Text
+@using Microsoft.AspNetCore.Components.Authorization
+@using Newtonsoft.Json
+@using System.Text.RegularExpressions
+@using System.Web
+@using System.Security.Cryptography
+@using System.Net.Http.Json
+@using DesignMode.AI.Shared.Util
+@using DesignMode.AI.Shared.Models.Attribution
+@inject Blazored.LocalStorage.ILocalStorageService _localStorage
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@inject ApiConfigService ApiConfig
+@inject AuthenticationStateProvider AuthStateProvider
+@inject AuthService Auth
+@inject PostAuthNavigationService PostAuthNavigation
+@inject SavePending SavePending
+@inject AttributionContextService AttributionContext
+@using Microsoft.AspNetCore.WebUtilities
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+<!--
+    IMPORTANT:
+    Replace the value below with an ACTIVE Google OAuth 2.0 Client ID
+    whose Application type is "Web application".
+
+    In Google Cloud Console, add this site's exact origin under:
+    APIs & Services > Credentials > OAuth 2.0 Client IDs >
+    [your Web application client] > Authorized JavaScript origins.
+
+    This OAuth client is currently configured for:
+      https://localhost:7178
+
+    If you deploy elsewhere, add that exact scheme + host + port
+    to Authorized JavaScript origins in Google Cloud Console.
+
+    Do NOT put a client secret in this file.
+-->
+<meta name="google-signin-client_id"
+      content="920601965266-dio1oduk6jek0jnlti1t8nbgsnb5a7g9.apps.googleusercontent.com" />
+<main class="designer-intro-stage">
+    <div class="ambient-stage-glow" id="ambientStageGlow" aria-hidden="true"></div>
+
+    <div class="card intro-3d search-mode" id="introContainer" data-website="@WebsiteFunnel.ToString().ToLowerInvariant()">
+
+        <!-- avatar section -->
+        <div class="avatar-section" id="avatarSection">
+            <div class="avatar-ring" id="avatarRing">
+                <img class="avatar-img" id="designerAvatar" src="https://i.pravatar.cc/400?img=12" alt="designer avatar">
+                <div class="pulse-ring" id="pulseRing"></div>
+                <div class="orbit-container" id="orbitContainer">
+                    <div class="orbit-icon" style="color: #d62976;"><i class="@(WebsiteFunnel ? "fas fa-window-maximize" : "fab fa-instagram")"></i></div>
+                    <div class="orbit-icon" style="color: #1877f2;"><i class="@(WebsiteFunnel ? "fas fa-font" : "fab fa-facebook")"></i></div>
+                    <div class="orbit-icon" style="color: #1da1f2;"><i class="@(WebsiteFunnel ? "fas fa-laptop" : "fab fa-twitter")"></i></div>
+                    <div class="orbit-icon" style="color: #ff0050;">
+                        @if (WebsiteFunnel)
+                        {
+                            <span style="margin-top:15px;"><ResponsiveDevicesIcon /></span>
+                        }
+                        else { <i class="fab fa-tiktok"></i> }
+                    </div>
+                </div>
+            </div>
+            <div class="designer-name" id="designerName">
+                <span>Aria Chen</span> <i class="fas fa-check-circle" style="color: #007aff;"></i>
+            </div>
+            <div class="search-badge" id="searchBadge">
+                <i class="fas fa-search"></i> searching designer...
+            </div>
+        </div>
+
+        <!-- progress & text -->
+        <div class="progress-area" id="progressArea">
+            <div class="progress-text">
+                <span id="progressLabel">🔍 Analyzing company & industry</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+            </div>
+            <div class="step-label" id="stepLabel">
+                <i class="fas fa-rotate-right fa-spin"></i> <span id="stepText">Initializing creative engine...</span>
+            </div>
+        </div>
+
+        <!-- social icons row -->
+        <div class="social-icons-row" id="socialIconsRow">
+            <div class="social-icon-item" style="--i:1;">
+                <i class="@(WebsiteFunnel ? "fas fa-window-maximize" : "fab fa-instagram")" style="color: #d62976;"></i>
+                <span>@(WebsiteFunnel ? "Homepage" : "Instagram")</span>
+            </div>
+            <div class="social-icon-item" style="--i:2;">
+                <i class="@(WebsiteFunnel ? "fas fa-font" : "fab fa-facebook")" style="color: #1877f2;"></i>
+                <span>@(WebsiteFunnel ? "Typography" : "Facebook")</span>
+            </div>
+            <div class="social-icon-item" style="--i:3;">
+                @if (WebsiteFunnel) { <span style="margin-top:15px;"><ResponsiveDevicesIcon /></span> }
+                else { <i class="fab fa-tiktok" style="color: #000000; text-shadow: 0 0 6px #ff0050;"></i> }
+                <span>@(WebsiteFunnel ? "Responsive" : "TikTok")</span>
+            </div>
+        </div>
+
+        <div class="dots-ring" id="dotsRing">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+        </div>
+
+        <div class="data-transfer-glow" id="dataGlow">
+            <i class="fas fa-bolt"></i> data transfer <i class="fas fa-arrow-right"></i> <i class="fas fa-circle" style="font-size: 0.4rem;"></i>
+        </div>
+    </div>
+
+    <!-- REQUIRED ACCOUNT CREATION MODAL -->
+    <div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="workspaceModalTitle">
+        <div class="modal-content account-modal-content">
+            <div class="modal-icon" id="accountModalIcon">
+                <i class="fas fa-user-plus"></i>
+            </div>
+
+            <div class="modal-title" id="workspaceModalTitle">
+                Create your free workspace
+            </div>
+
+            <div class="modal-subtitle" id="accountModalSubtitle">
+                Create your account so your personalized directions, previews, and brand system are saved automatically.
+            </div>
+
+            <div class="modal-google-wrap" id="modalGoogleWrap">
+                <div id="googleSignInButton" class="google-signin-button"></div>
+            </div>
+
+            <div class="modal-or-divider" id="modalOrDivider" aria-hidden="true">
+                <hr />
+                <span>OR</span>
+                <hr />
+            </div>
+
+            <div class="modal-input-group">
+                <input type="email"
+                       id="modalEmailInput"
+                       name="email"
+                       autocomplete="username"
+                       placeholder="Email address">
+
+                <input type="password"
+                       id="modalPasswordInput"
+                       name="password"
+                       autocomplete="new-password"
+                       placeholder="Password">
+
+                <div class="modal-error" id="modalError" role="alert"></div>
+
+                <button class="modal-btn modal-btn-primary" id="modalSubmitBtn">
+                    Create Account &amp; Continue →
+                </button>
+
+                <div class="modal-login-row">
+                    <span id="accountModePrompt">Already have an account?</span>
+                    <a href="#" id="accountModeToggle">Log in</a>
+                </div>
+
+                <div class="modal-legal" id="accountModalLegal">
+                    By creating an account, you agree to our
+                    <a href="/terms.html" target="_blank" rel="noopener noreferrer">Terms</a>
+                    and
+                    <a href="/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+                </div>
+
+                <div class="modal-success" id="modalSuccess">
+                    <i class="fas fa-check-circle"></i>
+                    <span id="modalSuccessText">Account created. Saving your workspace...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BRAND FEELING MODAL OVERLAY - Premium Apple Style -->
+    <div class="modal-overlay" id="brandFeelingModal" style="display:none;">
+        <div class="modal-content">
+            <button class="modal-close-icon" id="brandModalCloseBtn">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="modal-icon">
+                <i class="fas fa-heart"></i>
+            </div>
+            <div class="modal-title">
+                How should your brand feel?
+            </div>
+            <div class="modal-subtitle">
+                Choose the emotion you want people to experience when they interact with your brand.
+            </div>
+            <div class="brand-options-grid">
+                <button class="brand-option-btn" data-value="Trustworthy">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>Trustworthy</span>
+                </button>
+                <button class="brand-option-btn" data-value="Premium">
+                    <i class="fas fa-crown"></i>
+                    <span>Premium</span>
+                </button>
+                <button class="brand-option-btn" data-value="Playful">
+                    <i class="fas fa-smile"></i>
+                    <span>Playful</span>
+                </button>
+                <button class="brand-option-btn" data-value="Bold">
+                    <i class="fas fa-rocket"></i>
+                    <span>Bold</span>
+                </button>
+                <button class="brand-option-btn" data-value="Innovative">
+                    <i class="fas fa-lightbulb"></i>
+                    <span>Innovative</span>
+                </button>
+            </div>
+            <div class="modal-success" id="brandModalSuccess">
+                <i class="fas fa-check-circle"></i>
+                Great choice! Continuing with your brand direction...
+            </div>
+        </div>
+    </div>
+</main>
+
+<style>
+    .designer-intro-stage {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        min-height: 100vh;
+        min-height: 100svh;
+        padding: 32px 16px;
+        display: grid;
+        place-items: center;
+    }
+
+    #introContainer {
+        box-sizing: border-box;
+        max-width: 780px;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 3rem 3rem 2.5rem 2.5rem;
+        box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.25), 0 10px 30px -10px rgba(0, 0, 0, 0.05);
+        padding: 2.5rem 2rem 2.8rem;
+        transition: box-shadow 0.3s, min-height 0.8s cubic-bezier(0.65, 0, 0.35, 1), filter 0.4s ease;
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        position: relative;
+        overflow: hidden;
+        min-height: 520px;
+        display: flex;
+        flex-direction: column;
+    }
+
+        #introContainer.blurred {
+            filter: blur(8px);
+            pointer-events: none;
+        }
+
+    #introContainer.intro-3d {
+        perspective: 1200px;
+        animation: intro3D 1.8s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        transform-style: preserve-3d;
+        opacity: 0;
+        transform: rotateX(12deg) rotateY(-6deg) scale(0.92) translateY(18px);
+        display: flex;
+        flex-direction: column;
+        flex: none;
+        min-height: 400px;
+        transition: min-height 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+    }
+
+        #introContainer.intro-3d.search-mode {
+            min-height: 600px;
+        }
+
+        #introContainer.intro-3d.expanded {
+            min-height: 520px;
+        }
+
+    @@keyframes intro3D {
+        0% {
+            opacity: 0;
+            transform: rotateX(18deg) rotateY(-12deg) scale(0.85) translateY(40px);
+            filter: blur(6px);
+        }
+
+        60% {
+            opacity: 1;
+            transform: rotateX(4deg) rotateY(2deg) scale(1.02) translateY(-4px);
+            filter: blur(0);
+        }
+
+        100% {
+            opacity: 1;
+            transform: rotateX(0deg) rotateY(0deg) scale(1) translateY(0);
+            filter: blur(0);
+        }
+    }
+
+    .avatar-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        min-height: 500px;
+        transition: min-height 1.2s cubic-bezier(0.65, 0, 0.35, 1), padding-top 1.2s cubic-bezier(0.65, 0, 0.35, 1), justify-content 1.2s cubic-bezier(0.65, 0, 0.35, 1);
+        padding-top: 0;
+        flex-shrink: 0;
+    }
+
+        .avatar-section.compact {
+            min-height: 240px;
+            justify-content: flex-start;
+            padding-top: 0.5rem;
+        }
+
+    .avatar-ring {
+        position: relative;
+        width: 200px;
+        height: 200px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: transform 0.8s cubic-bezier(0.65, 0, 0.35, 1), width 0.8s cubic-bezier(0.65, 0, 0.35, 1), height 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+    }
+
+    .avatar-section.big-avatar .avatar-ring {
+        width: 220px;
+        height: 220px;
+    }
+
+    .avatar-section.big-avatar.compact .avatar-ring {
+        width: 160px;
+        height: 160px;
+    }
+
+    .avatar-img {
+        width: 170px;
+        height: 170px;
+        border-radius: 50%;
+        object-fit: cover;
+        box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.25);
+        border: 5px solid white;
+        transition: transform 0.3s ease, box-shadow 0.3s, width 0.8s cubic-bezier(0.65, 0, 0.35, 1), height 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+        background: #f0f0f5;
+        display: block;
+        position: relative;
+        z-index: 2;
+    }
+
+    .avatar-section.big-avatar .avatar-img {
+        width: 190px;
+        height: 190px;
+    }
+
+    .avatar-section.big-avatar.compact .avatar-img {
+        width: 130px;
+        height: 130px;
+    }
+
+    .pulse-ring {
+        position: absolute;
+        inset: -14px;
+        border-radius: 50%;
+        border: 5px solid rgba(0, 140, 255, 0.3);
+        animation: pulseFound 2s ease-in-out infinite;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.4s;
+        z-index: 1;
+    }
+
+    .avatar-section.big-avatar .pulse-ring {
+        inset: -16px;
+    }
+
+    .avatar-section.big-avatar.compact .pulse-ring {
+        inset: -12px;
+    }
+
+    .pulse-ring.active {
+        opacity: 1;
+    }
+
+    @@keyframes pulseFound {
+        0% {
+            transform: scale(1);
+            opacity: 0.7;
+        }
+
+        70% {
+            transform: scale(1.28);
+            opacity: 0;
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 0;
+        }
+    }
+
+    .orbit-container {
+        position: absolute;
+        inset: -80px;
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 0;
+        opacity: 0;
+        transition: opacity 0.8s ease, inset 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+    }
+
+    .avatar-section.big-avatar .orbit-container {
+        inset: -90px;
+    }
+
+    .avatar-section.big-avatar.compact .orbit-container {
+        inset: -65px;
+    }
+
+    .orbit-container.active {
+        opacity: 1;
+        animation: spinOrbit 8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+    }
+
+    @@keyframes spinOrbit {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .orbit-icon {
+        position: absolute;
+        width: 55px;
+        height: 55px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.7rem;
+        box-shadow: 0 8px 24px -8px rgba(0,0,0,0.12);
+        border: 1px solid rgba(255,255,255,0.6);
+        transition: transform 0.3s ease, width 0.8s cubic-bezier(0.65, 0, 0.35, 1), height 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+        top: 50%;
+        left: 50%;
+        transform-origin: center center;
+    }
+
+    .avatar-section.big-avatar .orbit-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 1.8rem;
+    }
+
+    .avatar-section.big-avatar.compact .orbit-icon {
+        width: 46px;
+        height: 46px;
+        font-size: 1.3rem;
+    }
+
+    .orbit-icon:nth-child(1) {
+        transform: translate(-50%, -50%) translateX(-100px);
+    }
+
+    .orbit-icon:nth-child(2) {
+        transform: translate(-50%, -50%) translateX(100px);
+    }
+
+    .orbit-icon:nth-child(3) {
+        transform: translate(-50%, -50%) translateY(-100px);
+    }
+
+    .orbit-icon:nth-child(4) {
+        transform: translate(-50%, -50%) translateY(100px);
+    }
+
+    .avatar-section.big-avatar .orbit-icon:nth-child(1) {
+        transform: translate(-50%, -50%) translateX(-110px);
+    }
+
+    .avatar-section.big-avatar .orbit-icon:nth-child(2) {
+        transform: translate(-50%, -50%) translateX(110px);
+    }
+
+    .avatar-section.big-avatar .orbit-icon:nth-child(3) {
+        transform: translate(-50%, -50%) translateY(-110px);
+    }
+
+    .avatar-section.big-avatar .orbit-icon:nth-child(4) {
+        transform: translate(-50%, -50%) translateY(110px);
+    }
+
+    .avatar-section.big-avatar.compact .orbit-icon:nth-child(1) {
+        transform: translate(-50%, -50%) translateX(-78px);
+    }
+
+    .avatar-section.big-avatar.compact .orbit-icon:nth-child(2) {
+        transform: translate(-50%, -50%) translateX(78px);
+    }
+
+    .avatar-section.big-avatar.compact .orbit-icon:nth-child(3) {
+        transform: translate(-50%, -50%) translateY(-78px);
+    }
+
+    .avatar-section.big-avatar.compact .orbit-icon:nth-child(4) {
+        transform: translate(-50%, -50%) translateY(78px);
+    }
+
+    .orbit-container.active .orbit-icon {
+        animation: counterSpin 8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+    }
+
+    @@keyframes counterSpin {
+        0% {
+            transform: translate(-50%, -50%) translateX(var(--tx, 0px)) rotate(0deg);
+        }
+
+        100% {
+            transform: translate(-50%, -50%) translateX(var(--tx, 0px)) rotate(-360deg);
+        }
+    }
+
+    .orbit-icon:nth-child(1) {
+        --tx: -100px;
+    }
+
+    .orbit-icon:nth-child(2) {
+        --tx: 100px;
+    }
+
+    .orbit-icon:nth-child(3) {
+        --tx: 0px;
+        --ty: -100px;
+        transform: translate(-50%, -50%) translateY(-100px);
+    }
+
+    .orbit-icon:nth-child(4) {
+        --tx: 0px;
+        --ty: 100px;
+        transform: translate(-50%, -50%) translateY(100px);
+    }
+
+    .avatar-section.big-avatar .orbit-icon:nth-child(1) {
+        --tx: -110px;
+    }
+
+    .avatar-section.big-avatar .orbit-icon:nth-child(2) {
+        --tx: 110px;
+    }
+
+    .avatar-section.big-avatar .orbit-icon:nth-child(3) {
+        --tx: 0px;
+        --ty: -110px;
+        transform: translate(-50%, -50%) translateY(-110px);
+    }
+
+    .avatar-section.big-avatar .orbit-icon:nth-child(4) {
+        --tx: 0px;
+        --ty: 110px;
+        transform: translate(-50%, -50%) translateY(110px);
+    }
+
+    .avatar-section.big-avatar.compact .orbit-icon:nth-child(1) {
+        --tx: -78px;
+    }
+
+    .avatar-section.big-avatar.compact .orbit-icon:nth-child(2) {
+        --tx: 78px;
+    }
+
+    .avatar-section.big-avatar.compact .orbit-icon:nth-child(3) {
+        --tx: 0px;
+        --ty: -78px;
+        transform: translate(-50%, -50%) translateY(-78px);
+    }
+
+    .avatar-section.big-avatar.compact .orbit-icon:nth-child(4) {
+        --tx: 0px;
+        --ty: 78px;
+        transform: translate(-50%, -50%) translateY(78px);
+    }
+
+    .orbit-icon:nth-child(3) {
+        animation-name: counterSpinY;
+    }
+
+    .orbit-icon:nth-child(4) {
+        animation-name: counterSpinY;
+    }
+
+    @@keyframes counterSpinY {
+        0% {
+            transform: translate(-50%, -50%) translateY(var(--ty, 0px)) rotate(0deg);
+        }
+
+        100% {
+            transform: translate(-50%, -50%) translateY(var(--ty, 0px)) rotate(-360deg);
+        }
+    }
+
+    .designer-name {
+        margin-top: 1.2rem;
+        font-weight: 600;
+        font-size: 1.6rem;
+        letter-spacing: -0.3px;
+        color: #1c1c1e;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        position: relative;
+        z-index: 2;
+        transition: font-size 0.8s cubic-bezier(0.65, 0, 0.35, 1), margin-top 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+    }
+
+    .avatar-section.big-avatar .designer-name {
+        font-size: 1.8rem;
+        margin-top: 1.2rem;
+    }
+
+    .avatar-section.big-avatar.compact .designer-name {
+        font-size: 1.3rem;
+        margin-top: 0.6rem;
+    }
+
+    .designer-name i {
+        color: #007aff;
+        font-size: 1.2rem;
+        opacity: 0.8;
+    }
+
+    .search-badge {
+        background: #e9edf2;
+        border-radius: 40px;
+        padding: 0.5rem 1.8rem;
+        font-size: 1rem;
+        font-weight: 500;
+        color: #2c3e50;
+        margin-top: 0.5rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        backdrop-filter: blur(4px);
+        background: rgba(230, 235, 245, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        position: relative;
+        z-index: 2;
+        transition: font-size 0.8s cubic-bezier(0.65, 0, 0.35, 1), padding 0.8s cubic-bezier(0.65, 0, 0.35, 1), margin-top 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+        text-align: center;
+        max-width: 100%;
+    }
+
+    .avatar-section.big-avatar .search-badge {
+        font-size: 1.1rem;
+        padding: 0.6rem 2rem;
+        margin-top: 0.6rem;
+    }
+
+    .avatar-section.big-avatar.compact .search-badge {
+        font-size: 0.9rem;
+        padding: 0.35rem 1.4rem;
+        margin-top: 0.3rem;
+    }
+
+    .search-badge i {
+        font-size: 0.85rem;
+        color: #007aff;
+    }
+
+    .progress-area {
+        margin: 0rem 0 1.2rem;
+        opacity: 0;
+        transform: translateY(30px);
+        transition: opacity 0.8s ease, transform 0.8s ease, margin 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+        pointer-events: none;
+        flex-shrink: 0;
+    }
+
+        .progress-area.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+    .progress-text {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9rem;
+        font-weight: 450;
+        color: #1d1d1f;
+        letter-spacing: -0.2px;
+        padding: 0 2px;
+    }
+
+        .progress-text span:first-child {
+            color: #1c1c1e;
+            font-weight: 500;
+        }
+
+        .progress-text span:last-child {
+            color: #3a6ea5;
+            font-weight: 500;
+            background: rgba(0, 122, 255, 0.06);
+            padding: 0 12px;
+            border-radius: 30px;
+        }
+
+    .progress-bar-bg {
+        width: 100%;
+        height: 8px;
+        background: #e7ecf3;
+        border-radius: 20px;
+        margin: 12px 0 4px;
+        overflow: hidden;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .progress-fill {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #007aff, #47a9ff);
+        border-radius: 20px;
+        transition: width 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+        box-shadow: 0 0 10px #007aff55;
+    }
+
+    .step-label {
+        margin-top: 1.2rem;
+        font-size: 1rem;
+        font-weight: 450;
+        color: #1d1d1f;
+        min-height: 2.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        background: rgba(245, 247, 250, 0.5);
+        border-radius: 80px;
+        padding: 0.5rem 1.2rem;
+        backdrop-filter: blur(2px);
+        border: 1px solid rgba(255,255,255,0.6);
+    }
+
+        .step-label i {
+            font-size: 1.1rem;
+            color: #007aff;
+        }
+
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        animation: modalFadeIn 0.4s ease;
+        padding: 1.5rem;
+    }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+    @@keyframes modalFadeIn {
+        0% {
+            opacity: 0;
+        }
+
+        100% {
+            opacity: 1;
+        }
+    }
+
+    .modal-content {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 2rem;
+        padding: 2.5rem 2.8rem;
+        max-width: 520px;
+        width: 100%;
+        box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.3), 0 20px 40px -10px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        animation: modalSlideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        position: relative;
+    }
+
+    @@keyframes modalSlideUp {
+        0% {
+            opacity: 0;
+            transform: translateY(40px) scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    .modal-icon {
+        font-size: 2.5rem;
+        color: #007aff;
+        margin-bottom: 0.8rem;
+        display: block;
+    }
+
+    .modal-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: #1c1c1e;
+        margin-bottom: 0.5rem;
+    }
+
+    .modal-subtitle {
+        font-size: 0.95rem;
+        color: #4a4a5a;
+        margin-bottom: 1.5rem;
+        line-height: 1.5;
+    }
+
+    .modal-input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+        .modal-input-group input {
+            padding: 0.8rem 1.2rem;
+            border-radius: 30px;
+            border: 2px solid #d0d5dd;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            background: rgba(255,255,255,0.8);
+            outline: none;
+            width: 100%;
+        }
+
+            .modal-input-group input:focus {
+                border-color: #007aff;
+                box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.12);
+            }
+
+            .modal-input-group input::placeholder {
+                color: #9aa3b0;
+            }
+
+    .modal-btn {
+        padding: 0.8rem 1.8rem;
+        border-radius: 30px;
+        border: none;
+        font-size: 19px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-family: inherit;
+        flex: 1;
+        min-width: 120px;
+    }
+
+    .modal-btn-primary {
+        background: #007aff;
+        color: white;
+        box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+    }
+
+        .modal-btn-primary:hover {
+            background: #0066d6;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.35);
+        }
+
+        .modal-btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+    .modal-success {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        color: #34c759;
+        font-weight: 500;
+        font-size: 1rem;
+        margin-top: 0.5rem;
+        padding: 0.8rem;
+        background: rgba(52, 199, 89, 0.08);
+        border-radius: 12px;
+    }
+
+        .modal-success.show {
+            display: flex;
+        }
+
+        .modal-success i {
+            font-size: 1.3rem;
+        }
+
+    .modal-close-icon {
+        position: absolute;
+        top: 1rem;
+        right: 1.2rem;
+        font-size: 1.2rem;
+        color: #9aa3b0;
+        cursor: pointer;
+        transition: color 0.2s;
+        background: none;
+        border: none;
+    }
+
+        .modal-close-icon:hover {
+            color: #1c1c1e;
+        }
+
+    .modal-link-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        margin-top: 3px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #6B7280;
+        cursor: pointer;
+        transition: .2s ease;
+    }
+
+        .modal-link-btn:hover {
+            color: #4F46E5;
+        }
+
+    .account-modal-content {
+        width: min(453px, 100%);
+        max-width: 100%;
+        padding: 2.5rem 2.5rem 2.2rem;
+        text-align: center;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+        .account-modal-content .modal-title {
+            font-size: 1.75rem;
+            line-height: 1.15;
+            letter-spacing: -0.04em;
+            margin-bottom: 0.75rem;
+        }
+
+        .account-modal-content .modal-subtitle {
+            max-width: 360px;
+            margin-left: auto;
+            margin-right: auto;
+            color: #5d5d5d;
+            font-size: 0.96rem;
+        }
+
+        .account-modal-content .modal-input-group input {
+            border: 1px solid #ccc;
+            border-radius: 25px;
+            padding: 10px 12px 12px 15px;
+            text-indent: 10px;
+        }
+
+            .account-modal-content .modal-input-group input:focus {
+                border-color: #244d88;
+                box-shadow: 0 0 0 4px rgba(36, 77, 136, 0.12);
+            }
+
+        .account-modal-content .modal-btn-primary {
+            background: #244d88;
+            border-radius: 25px;
+            box-shadow: 0 4px 16px rgba(36, 77, 136, 0.25);
+        }
+
+            .account-modal-content .modal-btn-primary:hover {
+                background: #1d3f70;
+                box-shadow: 0 8px 24px rgba(36, 77, 136, 0.3);
+            }
+
+    .modal-error {
+        display: none;
+        color: #dc3545;
+        font-size: 0.82rem;
+        line-height: 1.4;
+        text-align: left;
+        padding: 0 0.8rem;
+    }
+
+        .modal-error.show {
+            display: block;
+        }
+
+    .modal-login-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        margin-top: 2px;
+        font-size: 0.84rem;
+        color: #666;
+    }
+
+        .modal-login-row a,
+        .modal-legal a {
+            color: #244d88;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+            .modal-login-row a:hover,
+            .modal-legal a:hover {
+                text-decoration: underline;
+            }
+
+    .modal-legal {
+        margin-top: 4px;
+        color: #777;
+        font-size: 0.72rem;
+        line-height: 1.5;
+    }
+
+    .modal-input-group input[disabled] {
+        background: #f5f5f5;
+        cursor: not-allowed;
+        opacity: 0.8;
+    }
+
+    .modal-or-divider {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        margin: 8px 0 8px;
+        text-align: center;
+    }
+
+        .modal-or-divider hr {
+            flex: 1;
+            border: 0;
+            border-top: 1px solid #ddd;
+            margin: 0;
+        }
+
+        .modal-or-divider span {
+            margin: 0 10px;
+            color: #999;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+    .modal-google-wrap {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        transition: opacity 0.2s ease;
+    }
+
+        .modal-google-wrap.is-disabled {
+            opacity: 0.55;
+            pointer-events: none;
+        }
+
+    .google-signin-button {
+        width: 100%;
+        max-width: 400px;
+        min-width: 0;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+        /*
+                    Do not force Google's iframe to width:100%.
+                    GIS renders the iframe at the exact pixel width supplied to
+                    renderButton(). Stretching that iframe afterwards can clip the
+                    internally-rendered pill on mobile devices.
+                */
+        .google-signin-button > div {
+            max-width: 100% !important;
+            min-width: 0 !important;
+            margin: 0 auto !important;
+        }
+
+        .google-signin-button iframe {
+            display: block !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+        }
+
+    @@media (max-width: 500px) {
+        .modal-overlay {
+            padding: 1rem;
+            box-sizing: border-box;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        .account-modal-content {
+            width: 100%;
+            max-width: 100%;
+            padding: 2rem 1.25rem 1.8rem;
+        }
+
+        .modal-google-wrap,
+        .google-signin-button {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .account-modal-content .modal-title {
+            font-size: clamp(1.55rem, 8vw, 1.75rem);
+        }
+
+        .account-modal-content .modal-subtitle {
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .account-modal-content .modal-input-group,
+        .account-modal-content .modal-input-group input,
+        .account-modal-content .modal-btn,
+        .modal-or-divider {
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+    }
+
+    @@media (max-width: 360px) {
+        .modal-overlay {
+            padding: 0.65rem;
+        }
+
+        .account-modal-content {
+            padding: 1.7rem 0.9rem 1.5rem;
+            border-radius: 1.65rem;
+        }
+
+            .account-modal-content .modal-title {
+                font-size: 1.45rem;
+            }
+
+            .account-modal-content .modal-subtitle {
+                font-size: 0.84rem;
+            }
+
+        .modal-login-row {
+            flex-wrap: wrap;
+        }
+    }
+
+    .social-icons-row {
+        display: flex;
+        justify-content: center;
+        gap: 2.2rem;
+        margin: 0.5rem 0 0.2rem;
+        flex-wrap: wrap;
+        opacity: 0;
+        transform: translateY(30px);
+        transition: opacity 1s ease, transform 1s ease, margin 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+        pointer-events: none;
+        flex-shrink: 0;
+    }
+
+        .social-icons-row.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+    .social-icon-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        animation: iconPulse 2.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+        animation-delay: calc(0.4s * var(--i, 1));
+        opacity: 0.6;
+        transform: scale(0.92);
+    }
+
+    .social-icons-row.visible .social-icon-item {
+        animation-play-state: running;
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    @@keyframes iconPulse {
+        0%, 100% {
+            opacity: 0.6;
+            transform: scale(0.92) translateY(0px);
+        }
+
+        30% {
+            opacity: 1;
+            transform: scale(1.08) translateY(-4px);
+        }
+
+        70% {
+            opacity: 0.8;
+            transform: scale(1) translateY(2px);
+        }
+    }
+
+    .social-icon-item i {
+        font-size: 2.6rem;
+        color: #1c1c1e;
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(4px);
+        padding: 12px;
+        border-radius: 24px;
+        box-shadow: 0 12px 24px -12px rgba(0,0,0,0.1), 0 4px 10px -4px rgba(0,0,0,0.02);
+        border: 1px solid rgba(255,255,255,0.7);
+        transition: all 0.2s;
+        width: 70px;
+        text-align: center;
+    }
+
+    .social-icon-item span {
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: #3a3a3e;
+        letter-spacing: 0.3px;
+        background: rgba(245, 245, 250, 0.6);
+        backdrop-filter: blur(2px);
+        padding: 0.2rem 0.8rem;
+        border-radius: 30px;
+        border: 1px solid rgba(255,255,255,0.4);
+    }
+
+    .dots-ring {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 0.5rem;
+        opacity: 0;
+        transition: opacity 0.8s ease;
+        flex-shrink: 0;
+    }
+
+        .dots-ring.visible {
+            opacity: 1;
+        }
+
+    .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #007aff;
+        animation: dotSpin 1.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+    }
+
+        .dot:nth-child(1) {
+            animation-delay: 0s;
+            background: #d62976;
+        }
+
+        .dot:nth-child(2) {
+            animation-delay: 0.2s;
+            background: #1877f2;
+        }
+
+        .dot:nth-child(3) {
+            animation-delay: 0.4s;
+            background: #ff0050;
+        }
+
+        .dot:nth-child(4) {
+            animation-delay: 0.6s;
+            background: #1da1f2;
+        }
+
+        .dot:nth-child(5) {
+            animation-delay: 0.8s;
+            background: #007aff;
+        }
+
+        .dot:nth-child(6) {
+            animation-delay: 1.0s;
+            background: #d62976;
+        }
+
+    @@keyframes dotSpin {
+        0%, 100% {
+            transform: scale(0.6) rotate(0deg);
+            opacity: 0.3;
+        }
+
+        50% {
+            transform: scale(1.2) rotate(180deg);
+            opacity: 1;
+        }
+    }
+
+    .data-transfer-glow {
+        margin-top: 0.8rem;
+        font-size: 0.75rem;
+        color: #5a5a6e;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        letter-spacing: 0.3px;
+        opacity: 0;
+        transition: opacity 1s ease;
+        flex-shrink: 0;
+    }
+
+        .data-transfer-glow.visible {
+            opacity: 0.7;
+        }
+
+        .data-transfer-glow i {
+            color: #007aff;
+            animation: shimmer 1.8s infinite alternate;
+        }
+
+    @@keyframes shimmer {
+        0% {
+            opacity: 0.4;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+    }
+
+    /* Brand Feeling Modal Styles */
+    #brandFeelingModal .modal-content {
+        max-width: 750px;
+        width: 100%;
+        padding: 2.5rem 2.8rem;
+    }
+
+    .brand-options-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+        margin: 1.5rem 0 1rem;
+        width: 100%;
+    }
+
+    .brand-option-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 1rem 0.5rem;
+        border-radius: 14px;
+        border: 2px solid #e8ecf2;
+        background: rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-family: inherit;
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: #1c1c1e;
+        text-align: center;
+        min-height: 80px;
+        width: 100%;
+    }
+
+        .brand-option-btn:hover {
+            border-color: #007aff;
+            background: rgba(0, 122, 255, 0.05);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.1);
+        }
+
+        .brand-option-btn:active {
+            transform: scale(0.96);
+        }
+
+        .brand-option-btn i {
+            font-size: 1.8rem;
+            margin-bottom: 2px;
+        }
+
+            .brand-option-btn i.fa-shield-alt {
+                color: #4a90d9;
+            }
+
+            .brand-option-btn i.fa-crown {
+                color: #f5a623;
+            }
+
+            .brand-option-btn i.fa-smile {
+                color: #ff6b6b;
+            }
+
+            .brand-option-btn i.fa-rocket {
+                color: #e74c3c;
+            }
+
+            .brand-option-btn i.fa-lightbulb {
+                color: #f39c12;
+            }
+
+        .brand-option-btn.selected {
+            border-color: #007aff;
+            background: rgba(0, 122, 255, 0.1);
+            box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+            .brand-option-btn.selected i {
+                transform: scale(1.1);
+            }
+
+    /* Responsive Styles */
+    @@media (max-width: 500px) {
+        #introContainer {
+            padding: 1.8rem 1.2rem;
+            min-height: 460px;
+        }
+
+        #introContainer.intro-3d.search-mode {
+            min-height: 500px;
+        }
+
+        #introContainer.intro-3d.expanded {
+            min-height: 460px;
+        }
+
+        .avatar-section {
+            min-height: 420px;
+        }
+
+            .avatar-section.big-avatar {
+                min-height: 260px;
+            }
+
+                .avatar-section.big-avatar.compact {
+                    min-height: 200px;
+                }
+
+        .avatar-ring {
+            width: 160px;
+            height: 160px;
+        }
+
+        .avatar-section.big-avatar .avatar-ring {
+            width: 180px;
+            height: 180px;
+        }
+
+        .avatar-section.big-avatar.compact .avatar-ring {
+            width: 120px;
+            height: 120px;
+        }
+
+        .avatar-img {
+            width: 135px;
+            height: 135px;
+        }
+
+        .avatar-section.big-avatar .avatar-img {
+            width: 155px;
+            height: 155px;
+        }
+
+        .avatar-section.big-avatar.compact .avatar-img {
+            width: 100px;
+            height: 100px;
+        }
+
+        .social-icons-row {
+            gap: 1.2rem;
+        }
+
+        .social-icon-item i {
+            width: 60px;
+            font-size: 2rem;
+            padding: 10px;
+        }
+
+        .orbit-container {
+            inset: -60px;
+        }
+
+        .avatar-section.big-avatar .orbit-container {
+            inset: -70px;
+        }
+
+        .avatar-section.big-avatar.compact .orbit-container {
+            inset: -50px;
+        }
+
+        .orbit-icon {
+            width: 44px;
+            height: 44px;
+            font-size: 1.3rem;
+        }
+
+        .avatar-section.big-avatar .orbit-icon {
+            width: 50px;
+            height: 50px;
+            font-size: 1.5rem;
+        }
+
+        .avatar-section.big-avatar.compact .orbit-icon {
+            width: 36px;
+            height: 36px;
+            font-size: 1rem;
+        }
+
+        .orbit-icon:nth-child(1) {
+            transform: translate(-50%, -50%) translateX(-70px);
+        }
+
+        .orbit-icon:nth-child(2) {
+            transform: translate(-50%, -50%) translateX(70px);
+        }
+
+        .orbit-icon:nth-child(3) {
+            transform: translate(-50%, -50%) translateY(-70px);
+        }
+
+        .orbit-icon:nth-child(4) {
+            transform: translate(-50%, -50%) translateY(70px);
+        }
+
+        .orbit-icon:nth-child(1) {
+            --tx: -70px;
+        }
+
+        .orbit-icon:nth-child(2) {
+            --tx: 70px;
+        }
+
+        .orbit-icon:nth-child(3) {
+            --ty: -70px;
+        }
+
+        .orbit-icon:nth-child(4) {
+            --ty: 70px;
+        }
+
+        .avatar-section.big-avatar .orbit-icon:nth-child(1) {
+            transform: translate(-50%, -50%) translateX(-85px);
+        }
+
+        .avatar-section.big-avatar .orbit-icon:nth-child(2) {
+            transform: translate(-50%, -50%) translateX(85px);
+        }
+
+        .avatar-section.big-avatar .orbit-icon:nth-child(3) {
+            transform: translate(-50%, -50%) translateY(-85px);
+        }
+
+        .avatar-section.big-avatar .orbit-icon:nth-child(4) {
+            transform: translate(-50%, -50%) translateY(85px);
+        }
+
+        .avatar-section.big-avatar .orbit-icon:nth-child(1) {
+            --tx: -85px;
+        }
+
+        .avatar-section.big-avatar .orbit-icon:nth-child(2) {
+            --tx: 85px;
+        }
+
+        .avatar-section.big-avatar .orbit-icon:nth-child(3) {
+            --ty: -85px;
+        }
+
+        .avatar-section.big-avatar .orbit-icon:nth-child(4) {
+            --ty: 85px;
+        }
+
+        .avatar-section.big-avatar.compact .orbit-icon:nth-child(1) {
+            transform: translate(-50%, -50%) translateX(-58px);
+        }
+
+        .avatar-section.big-avatar.compact .orbit-icon:nth-child(2) {
+            transform: translate(-50%, -50%) translateX(58px);
+        }
+
+        .avatar-section.big-avatar.compact .orbit-icon:nth-child(3) {
+            transform: translate(-50%, -50%) translateY(-58px);
+        }
+
+        .avatar-section.big-avatar.compact .orbit-icon:nth-child(4) {
+            transform: translate(-50%, -50%) translateY(58px);
+        }
+
+        .avatar-section.big-avatar.compact .orbit-icon:nth-child(1) {
+            --tx: -58px;
+        }
+
+        .avatar-section.big-avatar.compact .orbit-icon:nth-child(2) {
+            --tx: 58px;
+        }
+
+        .avatar-section.big-avatar.compact .orbit-icon:nth-child(3) {
+            --ty: -58px;
+        }
+
+        .avatar-section.big-avatar.compact .orbit-icon:nth-child(4) {
+            --ty: 58px;
+        }
+
+        .designer-name {
+            font-size: 1.2rem;
+        }
+
+        .avatar-section.big-avatar .designer-name {
+            font-size: 1.3rem;
+        }
+
+        .avatar-section.big-avatar.compact .designer-name {
+            font-size: 1.05rem;
+        }
+
+        .search-badge {
+            font-size: 0.85rem;
+            padding: 0.3rem 1rem;
+        }
+
+        .avatar-section.big-avatar .search-badge {
+            font-size: 0.9rem;
+            padding: 0.4rem 1.2rem;
+        }
+
+        .avatar-section.big-avatar.compact .search-badge {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.9rem;
+        }
+
+        .modal-content {
+            padding: 1.8rem 1.5rem;
+        }
+
+        .modal-title {
+            font-size: 1.1rem;
+        }
+
+        .modal-subtitle {
+            font-size: 0.85rem;
+        }
+
+        .modal-btn {
+            font-size: 0.85rem;
+            padding: 0.6rem 1.2rem;
+            min-width: 100px;
+        }
+
+        #brandFeelingModal .modal-content {
+            max-width: 95%;
+            padding: 1.5rem 1rem;
+        }
+
+        .brand-options-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .brand-option-btn {
+            padding: 0.8rem 0.3rem;
+            min-height: 65px;
+            font-size: 0.7rem;
+            border-radius: 12px;
+        }
+
+            .brand-option-btn i {
+                font-size: 1.3rem;
+            }
+    }
+
+    @@media (max-width: 768px) {
+        #brandFeelingModal .modal-content {
+            max-width: 90%;
+            padding: 2rem 1.5rem;
+        }
+
+        .brand-options-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .brand-option-btn {
+            padding: 0.9rem 0.4rem;
+            min-height: 70px;
+            font-size: 0.72rem;
+        }
+
+            .brand-option-btn i {
+                font-size: 1.5rem;
+            }
+    }
+
+    @@media (max-width: 360px) {
+        .brand-options-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .brand-option-btn {
+            flex-direction: row;
+            justify-content: flex-start;
+            padding: 0.7rem 1rem;
+            min-height: 50px;
+            gap: 12px;
+        }
+
+            .brand-option-btn i {
+                font-size: 1.2rem;
+                margin-bottom: 0;
+            }
+    }
+    /* Premium Apple-Style Brand Feeling Modal */
+    #brandFeelingModal .modal-content {
+        max-width: 720px;
+        width: 100%;
+        padding: 3rem 3rem 2.8rem;
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(40px);
+        -webkit-backdrop-filter: blur(40px);
+        border-radius: 2.5rem;
+        box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.5) inset, 0 0 0 1px rgba(0, 0, 0, 0.03);
+        border: none;
+    }
+
+    #brandFeelingModal .modal-icon {
+        font-size: 2.8rem;
+        color: #ff6b6b;
+        margin-bottom: 0.6rem;
+        display: block;
+        background: linear-gradient(135deg, #ff6b6b, #ff4757);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    #brandFeelingModal .modal-title {
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: #1c1c1e;
+        margin-bottom: 0.4rem;
+        letter-spacing: -0.5px;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    }
+
+    #brandFeelingModal .modal-subtitle {
+        font-size: 1rem;
+        color: #86868b;
+        margin-bottom: 1.8rem;
+        line-height: 1.6;
+        font-weight: 400;
+        letter-spacing: -0.2px;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    }
+
+    .brand-options-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        margin: 0.5rem 0 1.5rem;
+        width: 100%;
+    }
+
+    .brand-option-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 1.4rem 0.5rem 1.2rem;
+        border-radius: 20px;
+        border: 1.5px solid #e8ecf0;
+        background: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        transition: all 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #1c1c1e;
+        text-align: center;
+        min-height: 100px;
+        width: 100%;
+        position: relative;
+        overflow: hidden;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+        .brand-option-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 20px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0));
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+
+        .brand-option-btn:hover {
+            border-color: #007aff;
+            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 12px 32px -8px rgba(0, 122, 255, 0.15), 0 0 0 1px rgba(0, 122, 255, 0.1);
+        }
+
+            .brand-option-btn:hover::before {
+                opacity: 1;
+            }
+
+        .brand-option-btn:active {
+            transform: scale(0.96);
+        }
+
+        .brand-option-btn i {
+            font-size: 2.2rem;
+            margin-bottom: 4px;
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .brand-option-btn:hover i {
+            transform: scale(1.1);
+        }
+
+        .brand-option-btn i.fa-shield-alt {
+            color: #4a90d9;
+            filter: drop-shadow(0 2px 4px rgba(74, 144, 217, 0.2));
+        }
+
+        .brand-option-btn i.fa-crown {
+            color: #f5a623;
+            filter: drop-shadow(0 2px 4px rgba(245, 166, 35, 0.2));
+        }
+
+        .brand-option-btn i.fa-smile {
+            color: #ff6b6b;
+            filter: drop-shadow(0 2px 4px rgba(255, 107, 107, 0.2));
+        }
+
+        .brand-option-btn i.fa-rocket {
+            color: #e74c3c;
+            filter: drop-shadow(0 2px 4px rgba(231, 76, 60, 0.2));
+        }
+
+        .brand-option-btn i.fa-lightbulb {
+            color: #f39c12;
+            filter: drop-shadow(0 2px 4px rgba(243, 156, 18, 0.2));
+        }
+
+        .brand-option-btn span {
+            font-size: 0.78rem;
+            font-weight: 500;
+            letter-spacing: -0.2px;
+            color: #1c1c1e;
+        }
+
+        .brand-option-btn .option-subtext {
+            display: none;
+            font-size: 0.6rem;
+            color: #86868b;
+            font-weight: 400;
+            margin-top: 2px;
+            letter-spacing: 0px;
+        }
+
+        .brand-option-btn.selected {
+            border-color: #007aff;
+            background: linear-gradient(135deg, rgba(0, 122, 255, 0.08), rgba(0, 122, 255, 0.02));
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15), 0 8px 24px -6px rgba(0, 122, 255, 0.2);
+            transform: translateY(-3px);
+        }
+
+            .brand-option-btn.selected::before {
+                opacity: 0.5;
+            }
+
+            .brand-option-btn.selected i {
+                transform: scale(1.15);
+            }
+
+            .brand-option-btn.selected span {
+                color: #007aff;
+            }
+
+    #brandFeelingModal .modal-success {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        color: #34c759;
+        font-weight: 500;
+        font-size: 1rem;
+        margin-top: 0.8rem;
+        padding: 0.8rem 1.2rem;
+        background: rgba(52, 199, 89, 0.06);
+        border-radius: 16px;
+        border: 1px solid rgba(52, 199, 89, 0.15);
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+        letter-spacing: -0.2px;
+    }
+
+        #brandFeelingModal .modal-success.show {
+            display: flex;
+        }
+
+        #brandFeelingModal .modal-success i {
+            font-size: 1.4rem;
+        }
+
+    #brandFeelingModal .modal-close-icon {
+        position: absolute;
+        top: 1.2rem;
+        right: 1.5rem;
+        font-size: 1.4rem;
+        color: #aeaeb2;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: rgba(255, 255, 255, 0.6);
+        border: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+        #brandFeelingModal .modal-close-icon:hover {
+            color: #1c1c1e;
+            background: rgba(255, 255, 255, 0.9);
+            transform: rotate(90deg);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+    /* Responsive Styles for Premium Modal */
+    @@media (max-width: 768px) {
+        #brandFeelingModal .modal-content {
+            max-width: 92%;
+            padding: 2.2rem 1.8rem;
+            border-radius: 2rem;
+        }
+
+        #brandFeelingModal .modal-title {
+            font-size: 1.3rem;
+        }
+
+        #brandFeelingModal .modal-subtitle {
+            font-size: 0.9rem;
+        }
+
+        .brand-options-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .brand-option-btn {
+            padding: 1rem 0.4rem;
+            min-height: 80px;
+            font-size: 0.72rem;
+            border-radius: 16px;
+        }
+
+            .brand-option-btn i {
+                font-size: 1.8rem;
+            }
+    }
+
+    @@media (max-width: 500px) {
+        #brandFeelingModal .modal-content {
+            max-width: 95%;
+            padding: 1.8rem 1.2rem;
+            border-radius: 1.8rem;
+        }
+
+        #brandFeelingModal .modal-title {
+            font-size: 1.1rem;
+        }
+
+        #brandFeelingModal .modal-subtitle {
+            font-size: 0.8rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .brand-options-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .brand-option-btn {
+            padding: 0.8rem 0.3rem;
+            min-height: 70px;
+            font-size: 0.68rem;
+            border-radius: 14px;
+            gap: 6px;
+        }
+
+            .brand-option-btn i {
+                font-size: 1.5rem;
+            }
+
+        #brandFeelingModal .modal-close-icon {
+            width: 30px;
+            height: 30px;
+            font-size: 1.1rem;
+            top: 0.8rem;
+            right: 1rem;
+        }
+    }
+
+    @@media (max-width: 360px) {
+        .brand-options-grid {
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .brand-option-btn {
+            flex-direction: row;
+            justify-content: flex-start;
+            padding: 0.7rem 1rem;
+            min-height: 50px;
+            gap: 14px;
+            border-radius: 14px;
+        }
+
+            .brand-option-btn i {
+                font-size: 1.4rem;
+                margin-bottom: 0;
+                width: 30px;
+            }
+
+            .brand-option-btn span {
+                font-size: 0.85rem;
+            }
+    }
+
+
+    /* Animated stage glow: the card itself always remains white. */
+    #introContainer {
+        --stage-glow-start: #c7d2fe;
+        --stage-glow-end: #bae6fd;
+        --stage-progress-start: #6c8cff;
+        --stage-progress-end: #56c5ff;
+        background: #ffffff;
+        box-shadow: 0 30px 70px -24px color-mix(in srgb, var(--stage-glow-start) 72%, transparent), 0 16px 44px -24px color-mix(in srgb, var(--stage-glow-end) 76%, transparent), 0 10px 30px -14px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.82) inset;
+        transition: box-shadow 1.1s cubic-bezier(0.65, 0, 0.35, 1), min-height 0.8s cubic-bezier(0.65, 0, 0.35, 1), filter 0.4s ease;
+        will-change: box-shadow;
+    }
+
+    .progress-fill {
+        background: linear-gradient(90deg, var(--stage-progress-start), var(--stage-progress-end));
+        transition: width 1.05s cubic-bezier(0.65, 0, 0.35, 1), background 1.05s cubic-bezier(0.65, 0, 0.35, 1), box-shadow 1.05s cubic-bezier(0.65, 0, 0.35, 1);
+        box-shadow: 0 0 14px color-mix(in srgb, var(--stage-progress-start) 45%, transparent);
+        will-change: width, background;
+    }
+
+    .progress-text span:last-child,
+    .step-label i,
+    .data-transfer-glow i {
+        transition: color 0.9s cubic-bezier(0.65, 0, 0.35, 1), background-color 0.9s cubic-bezier(0.65, 0, 0.35, 1);
+    }
+
+
+    /* Visible stage halo. The card remains white. */
+    .designer-intro-stage {
+        position: relative;
+        isolation: isolate;
+        overflow-x: hidden;
+        background: #f7f8fc;
+    }
+
+    .ambient-stage-glow {
+        --page-pulse-start: #dbeafe;
+        --page-pulse-end: #fce7f3;
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        overflow: hidden;
+        opacity: 1;
+    }
+
+        .ambient-stage-glow::before,
+        .ambient-stage-glow::after {
+            content: '';
+            position: absolute;
+            width: min(72vw, 900px);
+            height: min(72vw, 900px);
+            border-radius: 50%;
+            filter: blur(70px) saturate(135%);
+            opacity: 0.72;
+            will-change: transform, opacity, background-color;
+            transition: background-color 1.1s cubic-bezier(0.65, 0, 0.35, 1);
+        }
+
+        .ambient-stage-glow::before {
+            top: 50%;
+            left: 50%;
+            background-color: var(--page-pulse-start);
+            animation: ambientPulseOne 4.2s ease-in-out infinite;
+        }
+
+        .ambient-stage-glow::after {
+            top: 50%;
+            left: 50%;
+            background-color: var(--page-pulse-end);
+            animation: ambientPulseTwo 4.2s ease-in-out infinite;
+        }
+
+    #introContainer {
+        z-index: 2;
+    }
+
+    .modal-overlay {
+        z-index: 1000;
+    }
+
+    @@keyframes ambientPulseOne {
+        0%, 100% {
+            opacity: 0.38;
+            transform: translate(-72%, -62%) scale(0.78);
+        }
+
+        50% {
+            opacity: 0.9;
+            transform: translate(-64%, -56%) scale(1.12);
+        }
+    }
+
+    @@keyframes ambientPulseTwo {
+        0%, 100% {
+            opacity: 0.82;
+            transform: translate(-30%, -38%) scale(1.08);
+        }
+
+        50% {
+            opacity: 0.32;
+            transform: translate(-38%, -46%) scale(0.76);
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .ambient-stage-glow::before,
+        .ambient-stage-glow::after {
+            width: 110vw;
+            height: 110vw;
+            filter: blur(52px) saturate(130%);
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .ambient-stage-glow::before,
+        .ambient-stage-glow::after {
+            animation: none;
+            opacity: 0.58;
+        }
+
+        .ambient-stage-glow::before {
+            transform: translate(-70%, -60%) scale(1);
+        }
+
+        .ambient-stage-glow::after {
+            transform: translate(-32%, -40%) scale(1);
+        }
+    }
+
+</style>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<script>
+    window.initDesignerIntro = function () {
+        "use strict";
+
+        const MAX_PROGRESS = 95;
+        const EASE = 'cubic-bezier(0.65, 0, 0.35, 1)';
+
+        const introContainer = document.getElementById('introContainer');
+        const ambientStageGlow = document.getElementById('ambientStageGlow');
+        const avatarSection = document.getElementById('avatarSection');
+        const avatar = document.getElementById('designerAvatar');
+        const designerName = document.getElementById('designerName');
+        const searchBadge = document.getElementById('searchBadge');
+        const pulseRing = document.getElementById('pulseRing');
+        const progressFill = document.getElementById('progressFill');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressLabel = document.getElementById('progressLabel');
+        const stepText = document.getElementById('stepText');
+        const stepLabel = document.getElementById('stepLabel');
+        const progressArea = document.getElementById('progressArea');
+        const socialRow = document.getElementById('socialIconsRow');
+        const orbitContainer = document.getElementById('orbitContainer');
+        const dataGlow = document.getElementById('dataGlow');
+        const dotsRing = document.getElementById('dotsRing');
+
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalEmailInput = document.getElementById('modalEmailInput');
+        const modalPasswordInput = document.getElementById('modalPasswordInput');
+        const modalSubmitBtn = document.getElementById('modalSubmitBtn');
+        const modalGoogleWrap = document.getElementById('modalGoogleWrap');
+        const googleSignInButton = document.getElementById('googleSignInButton');
+        const modalOrDivider = document.getElementById('modalOrDivider');
+        const modalSuccess = document.getElementById('modalSuccess');
+        const modalError = document.getElementById('modalError');
+        const accountModalIcon = document.getElementById('accountModalIcon');
+        const workspaceModalTitle = document.getElementById('workspaceModalTitle');
+        const accountModalSubtitle = document.getElementById('accountModalSubtitle');
+        const accountModePrompt = document.getElementById('accountModePrompt');
+        const accountModeToggle = document.getElementById('accountModeToggle');
+        const accountModalLegal = document.getElementById('accountModalLegal');
+        const modalSuccessText = document.getElementById('modalSuccessText');
+
+        const brandModal = document.getElementById('brandFeelingModal');
+        const brandModalCloseBtn = document.getElementById('brandModalCloseBtn');
+        const brandModalSuccess = document.getElementById('brandModalSuccess');
+        const brandOptionBtns = document.querySelectorAll('.brand-option-btn');
+
+        const avatars = [
+            { img: 'https://i.pravatar.cc/400?img=12', name: 'Aria Chen' },
+            { img: 'https://i.pravatar.cc/400?img=33', name: 'Marcus Rivera' },
+            { img: 'https://i.pravatar.cc/400?img=45', name: 'Lea Kim' },
+            { img: 'https://i.pravatar.cc/400?img=62', name: 'Jordan Lee' }
+        ];
+
+        const stages = [
+            { p: 6, label: '🧭 Organizing your creative direction', step: 'Structuring the project brief', icon: 'fa-compass', glow: ['#fff4f7', '#fff9f0'], progress: ['#ff7aa2', '#ffb56b'] },
+            { p: 15, label: '🧠 Building personalized directions', step: 'Matching ideas to your company and industry', icon: 'fa-lightbulb', glow: ['#fff0f6', '#f8f0ff'], progress: ['#d946ef', '#f472b6'] },
+            { p: 24, label: (document.getElementById('introContainer').dataset.website === 'true' ? '🌐 Mapping your website experience' : '📱 Mapping social opportunities'), step: 'Organizing recommended content directions', icon: 'fa-mobile-screen', glow: ['#eef6ff', '#f2f7ff'], progress: ['#3b82f6', '#60a5fa'] },
+            { p: 34, label: '🎯 Refining brand positioning', step: 'Aligning tone, audience, and objectives', icon: 'fa-bullseye', glow: ['#f5f3ff', '#fff1f5'], progress: ['#8b5cf6', '#ec4899'] },
+            { p: 46, label: '✨ Shaping your brand system', step: 'Organizing the creative system for your workspace', icon: 'fa-wand-magic-sparkles', glow: ['#effdf8', '#eefbf3'], progress: ['#10b981', '#34d399'] },
+            { p: 60, label: '✅ Reviewing project details', step: 'Checking the saved workspace information', icon: 'fa-check-double', glow: ['#fffbea', '#fff6e8'], progress: ['#f59e0b', '#fbbf24'] },
+            { p: 78, label: '📊 Preparing recommendations', step: 'Prioritizing the strongest creative directions', icon: 'fa-chart-line', glow: ['#eef9ff', '#eff6ff'], progress: ['#06b6d4', '#3b82f6'] },
+            { p: 95, label: '🎨 Finalizing your personalized previews', step: 'Generating and saving the final creative directions', icon: 'fa-wand-magic-sparkles', glow: ['#f1fdf5', '#eefbf8'], progress: ['#22c55e', '#14b8a6'] }
+        ];
+
+        const imageGenerationStages = [
+            { p: 0, label: '🎨 Starting image generation', step: 'Preparing your personalized preview prompts', icon: 'fa-wand-magic-sparkles', glow: ['#f5f3ff', '#fff1f5'], progress: ['#8b5cf6', '#ec4899'] },
+            { p: 12, label: '🧠 Building creative prompts', step: 'Turning your brand direction into image prompts', icon: 'fa-lightbulb', glow: ['#fff0f6', '#f8f0ff'], progress: ['#d946ef', '#f472b6'] },
+            { p: 28, label: '🖼️ Generating preview 1 of 3', step: 'Creating your first personalized visual direction', icon: 'fa-image', glow: ['#eef6ff', '#f2f7ff'], progress: ['#3b82f6', '#60a5fa'] },
+            { p: 46, label: '🖼️ Generating preview 2 of 3', step: 'Creating your second personalized visual direction', icon: 'fa-images', glow: ['#effdf8', '#eefbf3'], progress: ['#10b981', '#34d399'] },
+            { p: 64, label: '🖼️ Generating preview 3 of 3', step: 'Creating your third personalized visual direction', icon: 'fa-photo-film', glow: ['#fffbea', '#fff6e8'], progress: ['#f59e0b', '#fbbf24'] },
+            { p: 82, label: '💾 Saving your generated previews', step: 'Attaching generated images to your workspace', icon: 'fa-floppy-disk', glow: ['#eef9ff', '#eff6ff'], progress: ['#06b6d4', '#3b82f6'] },
+            { p: 95, label: '✨ Finalizing your workspace', step: 'Finishing image saves and brand assets', icon: 'fa-wand-magic-sparkles', glow: ['#f1fdf5', '#eefbf8'], progress: ['#22c55e', '#14b8a6'] }
+        ];
+
+        let avatarIndex = 0;
+        let progressTimer = null;
+        let isEmailResolved = false;
+        let isBrandResolved = false;
+        let isProgressComplete = false;
+        let isGenerationComplete = false;
+        let isGenerationFailed = false;
+        let imageProgressTimer = null;
+        let imageProgressIndex = 0;
+        let selectedBrandFeeling = null;
+
+        const GOOGLE_CLIENT_ID =
+            document.querySelector('meta[name="google-signin-client_id"]')
+                ?.getAttribute('content')
+                ?.trim() || '';
+        let googleButtonRendered = false;
+        let googleRenderRetryTimer = null;
+        let googleResizeTimer = null;
+        let lastGoogleButtonWidth = 0;
+        let dotNetHelper = null;
+        let redirectNotificationSent = false;
+        let isEmailModalOpen = false;
+        let isBrandModalOpen = false;
+        let brandModalRequested = false;
+        let queuedBrandOpenTimer = null;
+        let accountModalMode = 'signup';
+
+        window.setDotNetHelper = function (helper) {
+            dotNetHelper = helper;
+            checkAndNotifyModalsClosed();
+        };
+
+        window.designerIntroGenerationComplete = function () {
+            isGenerationComplete = true;
+            isGenerationFailed = false;
+
+            if (progressTimer) {
+                clearInterval(progressTimer);
+                progressTimer = null;
+            }
+
+            if (imageProgressTimer) {
+                clearInterval(imageProgressTimer);
+                imageProgressTimer = null;
+            }
+
+            updateProgress(
+                100,
+                '✅ Ready · workspace prepared',
+                'Your personalized previews and brand system are ready',
+                'fa-check-circle',
+                stages[stages.length - 1]
+            );
+
+            isProgressComplete = true;
+            checkAndNotifyModalsClosed();
+        };
+
+        window.designerIntroGenerationFailed = function (message) {
+            isGenerationFailed = true;
+
+            if (imageProgressTimer) {
+                clearInterval(imageProgressTimer);
+                imageProgressTimer = null;
+            }
+
+            progressLabel.textContent = '⚠️ We hit a problem preparing your workspace';
+            stepText.textContent = message || 'Please refresh and try again.';
+            const iconEl = stepLabel.querySelector('i');
+            if (iconEl) {
+                iconEl.className = 'fas fa-triangle-exclamation';
+                iconEl.style.color = '#dc3545';
+            }
+        };
+
+        window.designerIntroImagesReady = function () {
+            return Array.from(document.images).every(img => img.complete && img.naturalWidth > 0);
+        };
+
+        function notifyEmailModalClosed(email) {
+            return dotNetHelper ? dotNetHelper.invokeMethodAsync('OnEmailModalClosed', email) : Promise.resolve();
+        }
+
+        function notifyBrandModalClosed() {
+            return dotNetHelper ? dotNetHelper.invokeMethodAsync('OnBrandModalClosed') : Promise.resolve();
+        }
+
+        function notifyModalsClosed() {
+            return dotNetHelper ? dotNetHelper.invokeMethodAsync('OnModalsClosed') : Promise.resolve();
+        }
+
+        function checkAndNotifyModalsClosed() {
+            if (!redirectNotificationSent && dotNetHelper && isProgressComplete && isEmailResolved && isBrandResolved) {
+                redirectNotificationSent = true;
+                notifyModalsClosed().catch(() => { redirectNotificationSent = false; });
+            }
+        }
+
+        function loadImage(url) {
+            return new Promise(resolve => {
+                const image = new Image();
+                image.onload = () => resolve(true);
+                image.onerror = () => resolve(false);
+                image.src = url;
+                if (image.complete) resolve(image.naturalWidth > 0);
+            });
+        }
+
+        async function preloadAvatarImages() {
+            await Promise.all(avatars.map(item => loadImage(item.img)));
+        }
+
+        function waitForImageElement(img) {
+            if (img.complete && img.naturalWidth > 0) return Promise.resolve(true);
+            return new Promise(resolve => {
+                const finish = success => resolve(success);
+                img.addEventListener('load', () => finish(true), { once: true });
+                img.addEventListener('error', () => finish(false), { once: true });
+            });
+        }
+
+        async function waitForAllImages() {
+            await preloadAvatarImages();
+            const images = Array.from(document.images);
+            const results = await Promise.all(images.map(waitForImageElement));
+            return results.every(Boolean);
+        }
+
+        function switchAvatar() {
+            avatarIndex = (avatarIndex + 1) % avatars.length;
+            const selected = avatars[avatarIndex];
+            avatar.src = selected.img;
+            designerName.innerHTML = `${selected.name} <i class="fas fa-check-circle" style="color: #007aff;"></i>`;
+        }
+
+        function pulseFound() {
+            pulseRing.classList.add('active');
+            const finalAvatar = avatars[3];
+            avatar.src = finalAvatar.img;
+            designerName.innerHTML = `${finalAvatar.name} <i class="fas fa-check-circle" style="color: #007aff;"></i>`;
+            searchBadge.innerHTML = `<i class="fas fa-check-circle" style="color: #007aff;"></i> designer found · ${finalAvatar.name}`;
+            orbitContainer.classList.add('active');
+            avatarSection.classList.add('big-avatar');
+        }
+
+        function applyStageTheme(stage) {
+            introContainer.style.setProperty('--stage-glow-start', stage.glow[0]);
+            introContainer.style.setProperty('--stage-glow-end', stage.glow[1]);
+            introContainer.style.setProperty('--stage-progress-start', stage.progress[0]);
+            introContainer.style.setProperty('--stage-progress-end', stage.progress[1]);
+
+            if (ambientStageGlow) {
+                ambientStageGlow.style.setProperty('--page-pulse-start', stage.glow[0]);
+                ambientStageGlow.style.setProperty('--page-pulse-end', stage.glow[1]);
+            }
+
+            progressFill.style.boxShadow = `0 0 16px ${stage.progress[0]}55`;
+            progressPercent.style.color = stage.progress[0];
+            progressPercent.style.backgroundColor = `${stage.progress[0]}12`;
+            const iconEl = stepLabel.querySelector('i');
+            if (iconEl) iconEl.style.color = stage.progress[0];
+        }
+
+        function updateProgress(value, labelText, stepTextContent, iconClass = 'fa-rotate-right', stage = null) {
+            const clamped = Math.min(isGenerationComplete ? 100 : MAX_PROGRESS, Math.max(0, value));
+            progressFill.style.transitionTimingFunction = EASE;
+            progressFill.style.width = clamped + '%';
+            progressPercent.textContent = Math.round(clamped) + '%';
+            if (labelText) progressLabel.textContent = labelText;
+            if (stage) applyStageTheme(stage);
+
+            if (stepTextContent) {
+                stepText.textContent = stepTextContent;
+                const iconEl = stepLabel.querySelector('i');
+                if (iconEl) {
+                    iconEl.className = 'fas ' + iconClass;
+                    iconEl.classList.toggle('fa-spin', iconClass.includes('fa-spin'));
+                }
+            }
+        }
+
+        function showContent() {
+            progressArea.classList.add('visible');
+            socialRow.classList.add('visible');
+            dataGlow.classList.add('visible');
+            dotsRing.classList.add('visible');
+        }
+
+        function resetProgressForImageGeneration() {
+            if (progressTimer) {
+                clearInterval(progressTimer);
+                progressTimer = null;
+            }
+
+            if (imageProgressTimer) {
+                clearInterval(imageProgressTimer);
+                imageProgressTimer = null;
+            }
+
+            isProgressComplete = false;
+            isGenerationComplete = false;
+            isGenerationFailed = false;
+            imageProgressIndex = 0;
+
+            progressArea.classList.add('visible');
+            socialRow.classList.add('visible');
+            dataGlow.classList.add('visible');
+            dotsRing.classList.add('visible');
+
+            const firstStage = imageGenerationStages[0];
+            updateProgress(
+                0,
+                firstStage.label,
+                firstStage.step,
+                firstStage.icon,
+                firstStage
+            );
+        }
+
+        function startImageGenerationProgress() {
+            resetProgressForImageGeneration();
+
+            // Start moving again immediately after the modal closes.
+            // The real Runware completion callback still controls 100%.
+            setTimeout(() => {
+                if (isGenerationComplete || isGenerationFailed) return;
+
+                imageProgressIndex = 1;
+                const firstMovingStage = imageGenerationStages[imageProgressIndex];
+                updateProgress(
+                    firstMovingStage.p,
+                    firstMovingStage.label,
+                    firstMovingStage.step,
+                    firstMovingStage.icon,
+                    firstMovingStage
+                );
+
+                imageProgressTimer = setInterval(() => {
+                    if (isGenerationComplete || isGenerationFailed) {
+                        clearInterval(imageProgressTimer);
+                        imageProgressTimer = null;
+                        return;
+                    }
+
+                    imageProgressIndex++;
+
+                    if (imageProgressIndex < imageGenerationStages.length) {
+                        const stage = imageGenerationStages[imageProgressIndex];
+                        updateProgress(stage.p, stage.label, stage.step, stage.icon, stage);
+                    }
+
+                    if (imageProgressIndex >= imageGenerationStages.length - 1) {
+                        clearInterval(imageProgressTimer);
+                        imageProgressTimer = null;
+                    }
+                }, 4500);
+            }, 250);
+        }
+
+        function hasValidConfiguredGoogleClientId() {
+            return !!GOOGLE_CLIENT_ID
+                && !GOOGLE_CLIENT_ID.includes('REPLACE_WITH_')
+                && GOOGLE_CLIENT_ID.endsWith('.apps.googleusercontent.com');
+        }
+
+        function getGoogleSignupButtonWidth() {
+            const wrapRect = modalGoogleWrap?.getBoundingClientRect();
+            const hostRect = googleSignInButton?.getBoundingClientRect();
+
+            const measuredWidth = Math.floor(
+                Math.min(
+                    hostRect?.width || Number.POSITIVE_INFINITY,
+                    wrapRect?.width || Number.POSITIVE_INFINITY
+                )
+            );
+
+            const availableWidth = Number.isFinite(measuredWidth) && measuredWidth > 0
+                ? measuredWidth
+                : 320;
+
+            /*
+                Google Identity Services renders a fixed-width iframe.
+                Leave a small safety gutter so sub-pixel rounding, borders,
+                browser zoom, and mobile device pixel ratios cannot clip the
+                right edge of the Google pill.
+            */
+            const safeWidth = Math.floor(availableWidth - 6);
+
+            return Math.max(120, Math.min(400, safeWidth));
+        }
+
+        function renderGoogleSignupButton(forceRender = false) {
+            if (!hasValidConfiguredGoogleClientId()) {
+                googleSignInButton.innerHTML = '';
+                showModalError(
+                    'Google sign-up is not configured yet. Add a valid OAuth 2.0 Web application Client ID to the google-signin-client_id meta tag.'
+                );
+                return;
+            }
+
+            if (!window.google || !google.accounts || !google.accounts.id) {
+                if (googleRenderRetryTimer) {
+                    clearTimeout(googleRenderRetryTimer);
+                }
+
+                googleRenderRetryTimer = setTimeout(() => renderGoogleSignupButton(forceRender), 250);
+                return;
+            }
+
+            const buttonWidth = getGoogleSignupButtonWidth();
+
+            if (
+                googleButtonRendered &&
+                !forceRender &&
+                Math.abs(buttonWidth - lastGoogleButtonWidth) < 2
+            ) {
+                return;
+            }
+
+            try {
+                google.accounts.id.initialize({
+                    client_id: GOOGLE_CLIENT_ID,
+                    callback: handleGoogleCredentialResponse,
+                    ux_mode: 'popup',
+                    auto_select: false,
+                    cancel_on_tap_outside: false
+                });
+
+                googleSignInButton.innerHTML = '';
+
+                google.accounts.id.renderButton(
+                    googleSignInButton,
+                    {
+                        type: 'standard',
+                        theme: 'outline',
+                        size: 'large',
+                        text: 'continue_with',
+                        shape: 'pill',
+                        logo_alignment: 'left',
+                        width: buttonWidth
+                    }
+                );
+
+                lastGoogleButtonWidth = buttonWidth;
+                googleButtonRendered = true;
+            } catch (error) {
+                console.error('Unable to initialize Google Identity Services:', error);
+                showModalError(
+                    'Google sign-up could not be initialized. Verify the Client ID is an active OAuth 2.0 Web application client and that this exact site origin is listed in Authorized JavaScript origins.'
+                );
+            }
+        }
+
+        function scheduleGoogleSignupButtonResize() {
+            if (!isEmailModalOpen || !modalOverlay.classList.contains('active')) {
+                return;
+            }
+
+            if (googleResizeTimer) {
+                clearTimeout(googleResizeTimer);
+            }
+
+            googleResizeTimer = setTimeout(() => {
+                googleResizeTimer = null;
+                renderGoogleSignupButton(true);
+            }, 120);
+        }
+
+        window.addEventListener('resize', scheduleGoogleSignupButtonResize);
+        window.addEventListener('orientationchange', scheduleGoogleSignupButtonResize);
+
+        async function handleGoogleCredentialResponse(response) {
+            const idToken = response?.credential;
+
+            if (!idToken) {
+                showModalError('Google did not return a valid sign-in credential.');
+                setAccountFormProcessing(false);
+                return;
+            }
+
+            modalError.classList.remove('show');
+            modalError.textContent = '';
+            setAccountFormProcessing(true, 'google');
+
+            try {
+                if (!dotNetHelper) {
+                    showModalError('The account form is still loading. Please try again.');
+                    setAccountFormProcessing(false);
+                    return;
+                }
+
+                const result = await dotNetHelper.invokeMethodAsync(
+                    'CompleteWorkspaceGoogleLogin',
+                    idToken
+                );
+
+                const success = result?.success ?? result?.Success ?? false;
+                const errorMessage = result?.errorMessage ?? result?.ErrorMessage;
+                const email = result?.email ?? result?.Email ?? '';
+
+                if (!success) {
+                    showModalError(errorMessage || 'Google sign-in failed. Please try again.');
+                    setAccountFormProcessing(false);
+                    return;
+                }
+
+                await completeAuthenticatedAccount(email);
+            } catch (error) {
+                console.error('Google sign-in failed:', error);
+                showModalError('Google sign-in failed. Please try again.');
+                setAccountFormProcessing(false);
+            }
+        }
+
+        function applyAccountModalMode(mode) {
+            accountModalMode = mode === 'login' ? 'login' : 'signup';
+            const isLogin = accountModalMode === 'login';
+
+            accountModalIcon.innerHTML = isLogin
+                ? '<i class="fas fa-right-to-bracket"></i>'
+                : '<i class="fas fa-user-plus"></i>';
+
+            workspaceModalTitle.textContent = isLogin
+                ? 'Welcome back'
+                : 'Create your free workspace';
+
+            accountModalSubtitle.textContent = isLogin
+                ? 'Log in to continue with your personalized directions, previews, and brand system.'
+                : 'Create your account so your personalized directions, previews, and brand system are saved automatically.';
+
+            modalPasswordInput.setAttribute(
+                'autocomplete',
+                isLogin ? 'current-password' : 'REDACTED_FOR_GROOMING'
+            );
+
+            modalSubmitBtn.textContent = isLogin
+                ? 'Log In & Continue →'
+                : 'Create Account & Continue →';
+
+            accountModePrompt.textContent = isLogin
+                ? 'Don’t have an account?'
+                : 'Already have an account?';
+
+            accountModeToggle.textContent = isLogin
+                ? 'Create one'
+                : 'Log in';
+
+            accountModalLegal.style.display = isLogin ? 'none' : '';
+
+            modalSuccessText.textContent = isLogin
+                ? 'Logged in. Loading your workspace...'
+                : 'Account created. Saving your workspace...';
+
+            modalError.classList.remove('show');
+            modalError.textContent = '';
+            modalSuccess.classList.remove('show');
+
+            modalEmailInput.disabled = false;
+            modalPasswordInput.disabled = false;
+            modalSubmitBtn.disabled = false;
+            modalGoogleWrap.classList.remove('is-disabled');
+
+            if (!hasValidConfiguredGoogleClientId()) {
+                modalGoogleWrap.classList.add('is-disabled');
+            }
+
+            requestAnimationFrame(() => renderGoogleSignupButton(true));
+        }
+
+        let checkingAccountSession = false;
+        async function showEmailModal() {
+            if (isEmailModalOpen || isBrandModalOpen || isEmailResolved || checkingAccountSession) return;
+            checkingAccountSession = true;
+            try {
+                const email = await dotNetHelper.invokeMethodAsync('GetWorkspaceSessionEmail');
+                if (email) {
+                    await completeAuthenticatedAccount(email);
+                    return;
+                }
+            } catch (error) {
+                window.designerIntroGenerationFailed('We could not resume your signed-in workspace. Please refresh and try again.');
+                return;
+            } finally {
+                checkingAccountSession = false;
+            }
+
+            isEmailModalOpen = true;
+            window.designModeAnalytics?.once("account_gate_view", { funnel_stage: "intro" });
+
+            // Freeze the pre-account progress while the required account modal is open.
+            if (progressTimer) {
+                clearInterval(progressTimer);
+                progressTimer = null;
+            }
+
+            modalOverlay.classList.add('active');
+            introContainer.classList.add('blurred');
+
+            modalEmailInput.value = '';
+            modalPasswordInput.value = '';
+            modalSuccess.classList.remove('show');
+            modalError.classList.remove('show');
+            modalError.textContent = '';
+
+            modalSubmitBtn.disabled = false;
+            modalSubmitBtn.style.display = '';
+            applyAccountModalMode('signup');
+
+            modalGoogleWrap.classList.remove('is-disabled');
+            modalGoogleWrap.style.display = '';
+            modalOrDivider.style.display = '';
+
+            if (!hasValidConfiguredGoogleClientId()) {
+                modalGoogleWrap.classList.add('is-disabled');
+            }
+
+            // Wait one animation frame so the modal has its final responsive
+            // width before Google creates its iframe-based button.
+            requestAnimationFrame(() => renderGoogleSignupButton(true));
+
+            modalEmailInput.disabled = false;
+            modalPasswordInput.disabled = false;
+            modalEmailInput.style.display = '';
+            modalPasswordInput.style.display = '';
+            modalEmailInput.focus();
+        }
+
+        function openQueuedBrandModal() {
+            if (!brandModalRequested || isEmailModalOpen || isBrandModalOpen || isBrandResolved) return;
+
+            if (queuedBrandOpenTimer) {
+                clearTimeout(queuedBrandOpenTimer);
+            }
+
+            queuedBrandOpenTimer = setTimeout(() => {
+                queuedBrandOpenTimer = null;
+
+                if (isEmailModalOpen || modalOverlay.classList.contains('active')) {
+                    return;
+                }
+
+                showBrandModal();
+            }, 350);
+        }
+
+        function hideEmailModalAfterSuccessfulSubmit() {
+            if (!isEmailResolved) return;
+
+            modalOverlay.classList.remove('active');
+            isEmailModalOpen = false;
+
+            if (brandModalRequested && !isBrandResolved) {
+                openQueuedBrandModal();
+            } else {
+                introContainer.classList.remove('blurred');
+            }
+        }
+
+        function showModalError(message) {
+            modalError.textContent = message || (accountModalMode === 'login' ? 'Unable to log in. Please try again.' : 'Unable to create your account. Please try again.');
+            modalError.classList.add('show');
+        }
+        window.showModalError = showModalError;
+
+        function setAccountFormProcessing(isProcessing, provider = 'email') {
+            modalSubmitBtn.disabled = isProcessing;
+            modalEmailInput.disabled = isProcessing;
+            modalPasswordInput.disabled = isProcessing;
+
+            modalGoogleWrap.classList.toggle('is-disabled', isProcessing);
+
+            const isLogin = accountModalMode === 'login';
+
+            if (isProcessing && provider === 'email') {
+                modalSubmitBtn.textContent = isLogin
+                    ? 'Logging in...'
+                    : 'Creating account...';
+            } else {
+                modalSubmitBtn.textContent = isLogin
+                    ? 'Log In & Continue →'
+                    : 'Create Account & Continue →';
+            }
+        }
+
+        async function completeAuthenticatedAccount(email) {
+            if (isEmailResolved) return;
+            if (!await dotNetHelper.invokeMethodAsync('NavigateAfterWorkspaceAuthentication')) return;
+
+            const authenticatedEmail = (await dotNetHelper.invokeMethodAsync('GetWorkspaceSessionEmail') || '').trim();
+
+            if (!authenticatedEmail) {
+                showModalError('Your account is signed in, but we could not determine the account email.');
+                setAccountFormProcessing(false);
+                return;
+            }
+
+            if (!isEmailResolved) {
+                isEmailResolved = true;
+            }
+
+            modalSuccess.classList.add('show');
+            modalSubmitBtn.style.display = 'none';
+            modalGoogleWrap.style.display = 'none';
+            modalOrDivider.style.display = 'none';
+            modalEmailInput.style.display = 'none';
+            modalPasswordInput.style.display = 'none';
+
+            hideEmailModalAfterSuccessfulSubmit();
+
+            // New authenticated phase: reset to 0%, then begin image generation.
+            startImageGenerationProgress();
+
+            // Continue project association + Runware generation after modal closure.
+            notifyEmailModalClosed(authenticatedEmail).catch(error => {
+                console.error('Post-signup workspace generation failed:', error);
+                window.designerIntroGenerationFailed(
+                    'We could not finish generating your workspace. Please refresh and try again.'
+                );
+            });
+
+            checkAndNotifyModalsClosed();
+        }
+
+        async function handleModalSubmit() {
+            if (modalSubmitBtn.disabled) return;
+
+            const email = modalEmailInput.value.trim();
+            const password = modalPasswordInput.value;
+
+            modalError.classList.remove('show');
+            modalError.textContent = '';
+
+            if (!email || !modalEmailInput.checkValidity()) {
+                showModalError('Please enter a valid email address.');
+                modalEmailInput.focus();
+                return;
+            }
+
+            if (!password) {
+                showModalError('Password is required.');
+                modalPasswordInput.focus();
+                return;
+            }
+
+            setAccountFormProcessing(true, 'email');
+
+            try {
+                if (!dotNetHelper) {
+                    showModalError('The account form is still loading. Please try again.');
+                    setAccountFormProcessing(false);
+                    return;
+                }
+
+                const result = await dotNetHelper.invokeMethodAsync(
+                    accountModalMode === 'login'
+                        ? 'LoginWorkspaceAccount'
+                        : 'CreateWorkspaceAccount',
+                    email,
+                    password
+                );
+
+                const success = result?.success ?? result?.Success ?? false;
+                const errorMessage = result?.errorMessage ?? result?.ErrorMessage;
+
+                if (!success) {
+                    showModalError(errorMessage || (accountModalMode === 'login' ? 'Unable to log in. Please check your email and password.' : 'Unable to create your account. Please try again.'));
+                    setAccountFormProcessing(false);
+                    return;
+                }
+
+                await completeAuthenticatedAccount(email);
+            } catch (error) {
+                console.error(accountModalMode === 'login' ? 'Login failed:' : 'Account creation failed:', error);
+                showModalError(accountModalMode === 'login' ? 'Unable to log in. Please try again.' : 'Unable to create your account. Please try again.');
+                setAccountFormProcessing(false);
+            }
+        }
+
+        function requestBrandModal() {
+            brandModalRequested = true;
+            openQueuedBrandModal();
+        }
+
+        function showBrandModal() {
+            if (isEmailModalOpen || modalOverlay.classList.contains('active')) {
+                brandModalRequested = true;
+                return;
+            }
+
+            if (isBrandModalOpen || isBrandResolved) return;
+
+            brandModalRequested = false;
+            isBrandModalOpen = true;
+            brandModal.style.display = '';
+            brandModal.classList.add('active');
+            introContainer.classList.add('blurred');
+            brandModalSuccess.classList.remove('show');
+            selectedBrandFeeling = null;
+            brandOptionBtns.forEach(btn => btn.classList.remove('selected'));
+        }
+
+        function hideBrandModal() {
+            brandModal.classList.remove('active');
+            isBrandModalOpen = false;
+            introContainer.classList.remove('blurred');
+
+            if (!isBrandResolved) {
+                isBrandResolved = true;
+                notifyBrandModalClosed().finally(checkAndNotifyModalsClosed);
+            }
+        }
+
+        function dismissBrandModal() {
+            // Closing is not a selection. Do not choose a default value and do not
+            // display the "Great choice" success state.
+            selectedBrandFeeling = null;
+            brandModalSuccess.classList.remove('show');
+            brandOptionBtns.forEach(btn => btn.classList.remove('selected'));
+            hideBrandModal();
+        }
+
+        function handleBrandSelection(value) {
+            selectedBrandFeeling = value;
+            brandOptionBtns.forEach(btn => btn.classList.toggle('selected', btn.dataset.value === value));
+            brandModalSuccess.classList.add('show');
+            setTimeout(hideBrandModal, 1200);
+        }
+
+        brandOptionBtns.forEach(btn => {
+            btn.addEventListener('click', function () {
+                if (!this.classList.contains('selected')) handleBrandSelection(this.dataset.value);
+            });
+        });
+
+        brandModalCloseBtn.addEventListener('click', dismissBrandModal);
+
+        brandModal.addEventListener('click', e => {
+            if (e.target === brandModal) dismissBrandModal();
+        });
+
+        accountModeToggle.addEventListener('click', e => {
+            e.preventDefault();
+
+            if (modalSubmitBtn.disabled) return;
+
+            applyAccountModalMode(
+                accountModalMode === 'signup' ? 'login' : 'signup'
+            );
+
+            modalPasswordInput.value = '';
+            modalEmailInput.focus();
+        });
+
+        modalSubmitBtn.addEventListener('click', handleModalSubmit);
+        modalEmailInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') handleModalSubmit();
+        });
+        modalPasswordInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') handleModalSubmit();
+        });
+
+        // Intentionally no close button, skip handler, backdrop-close handler,
+        // or Escape handler. This modal only closes after successful submission.
+
+        async function finishProgress() {
+            if (!isEmailResolved) {
+                // The required account modal owns the transition to the next phase.
+                // Do not mark progress complete before signup.
+                return;
+            }
+
+            // After signup, the image generation progress sequence owns the bar.
+            if (!isGenerationComplete && !isGenerationFailed) {
+                return;
+            }
+
+            if (isGenerationComplete) {
+                window.designerIntroGenerationComplete();
+            }
+        }
+
+        function runSequence() {
+            let switchCount = 0;
+            const switchInterval = setInterval(() => {
+                switchAvatar();
+                searchBadge.innerHTML = `<i class="fas fa-search"></i> searching designer...`;
+                switchCount++;
+
+                if (switchCount >= 8) {
+                    clearInterval(switchInterval);
+                    pulseFound();
+                    avatarSection.classList.add('compact');
+                    introContainer.classList.remove('search-mode');
+                    introContainer.classList.add('expanded');
+                    showContent();
+
+                    const stepDuration = 38000 / stages.length;
+                    let stepIndex = 0;
+                    updateProgress(stages[0].p, stages[0].label, stages[0].step, stages[0].icon, stages[0]);
+
+                    setTimeout(showEmailModal, 4000);
+                    setTimeout(requestBrandModal, 8000);
+
+                    progressTimer = setInterval(() => {
+                        stepIndex++;
+                        if (stepIndex < stages.length) {
+                            const stage = stages[stepIndex];
+                            updateProgress(stage.p, stage.label, stage.step, stage.icon, stage);
+                        }
+
+                        if (stepIndex >= stages.length - 1) {
+                            clearInterval(progressTimer);
+                            finishProgress();
+                        }
+                    }, stepDuration);
+                }
+            }, 375);
+        }
+
+        preloadAvatarImages().finally(() => {
+            setTimeout(runSequence, 2100);
+        });
+    };
+</script>
+
+@code {
+    [Parameter] public bool WebsiteFunnel { get; set; }
+    private DotNetObjectReference<DesignerIntro>? _dotNetHelper;
+    private bool _modalsResolvedEmail = false;
+    private bool _modalsResolvedBrand = false;
+    private string _enteredEmail = String.Empty;
+
+
+
+    public class DesignModeJobStatus
+    {
+        public string? JobId { get; set; }
+
+        public string? Status { get; set; }
+
+        public string? Name { get; set; }
+
+        public string? Industry { get; set; }
+
+        public string? ImageUrl { get; set; }
+
+        public string? ImageDescription { get; set; }
+
+        public string? Error { get; set; }
+
+        public string? CreatedAtUtc { get; set; }
+
+        public string? UpdatedAtUtc { get; set; }
+    }
+
+
+    [JSInvokable]
+    public Task<bool> NavigateAfterWorkspaceAuthentication() => PostAuthNavigation.NavigateAsync(resumeCurrentPage: true);
+
+    [JSInvokable]
+    public async Task<string?> GetWorkspaceSessionEmail()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        return WorkspaceSession.GetEmail(state.User);
+    }
+
+    public sealed class WorkspaceAccountResult
+    {
+        public bool Success { get; set; }
+        public string ErrorMessage { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+    }
+
+    [JSInvokable]
+    public async Task<WorkspaceAccountResult> CreateWorkspaceAccount(string email, string password)
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            return new WorkspaceAccountResult
+                {
+                    Success = false,
+                    ErrorMessage = "Email and password are required."
+                };
+        }
+
+        email = email.Trim();
+
+        if (!IsValidEmail(email))
+        {
+            return new WorkspaceAccountResult
+                {
+                    Success = false,
+                    ErrorMessage = "Please enter a valid email address."
+                };
+        }
+
+        if (!IsPasswordStrong(password))
+        {
+            return new WorkspaceAccountResult
+                {
+                    Success = false,
+                    ErrorMessage = "Password must be at least 8 characters and contain uppercase, lowercase, number, and special character."
+                };
+        }
+
+        try
+        {
+            // Same signup call used on /signup. No phone field in this modal.
+            var result = await Auth.Signup(
+                email,
+                password,
+                string.Empty,
+                ApiConfig.ApiBaseUrl);
+
+            if (!result.Success)
+            {
+                return new WorkspaceAccountResult
+                    {
+                        Success = false,
+                        ErrorMessage = result.ErrorMessage ?? "Unable to create your account."
+                    };
+            }
+
+            // Same automatic login used on /signup.
+            await Analytics.TrackAsync("sign_up", new { method = "email" });
+            var loginSuccess = await Auth.Login(
+                email,
+                password,
+                ApiConfig.ApiBaseUrl);
+
+            if (!loginSuccess)
+            {
+                return new WorkspaceAccountResult
+                    {
+                        Success = false,
+                        ErrorMessage = "Signup succeeded, but login failed. Please use the Log in link."
+                    };
+            }
+
+            // Same post-login pending saves used on /signup.
+            await SavePending.SavePendingIdeasAfterLogin(ApiConfig.ApiBaseUrl);
+            await SavePending.SavePendingCompanyInfoAfterLogin(ApiConfig.ApiBaseUrl);
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated != true)
+            {
+                return new WorkspaceAccountResult
+                    {
+                        Success = false,
+                        ErrorMessage = "Your account was created, but the authenticated session is not ready."
+                    };
+            }
+
+            _enteredEmail = email;
+
+            return new WorkspaceAccountResult
+                {
+                    Success = true,
+                    Email = email
+                };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Workspace signup error: {ex}");
+
+            return new WorkspaceAccountResult
+                {
+                    Success = false,
+                    ErrorMessage = $"Signup error: {ex.Message}"
+                };
+        }
+    }
+
+    [JSInvokable]
+    public async Task<WorkspaceAccountResult> LoginWorkspaceAccount(string email, string password)
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            return new WorkspaceAccountResult
+                {
+                    Success = false,
+                    ErrorMessage = "Email and password are required."
+                };
+        }
+
+        email = email.Trim();
+
+        if (!IsValidEmail(email))
+        {
+            return new WorkspaceAccountResult
+                {
+                    Success = false,
+                    ErrorMessage = "Please enter a valid email address."
+                };
+        }
+
+        try
+        {
+            // Reuse the exact email/password login flow already used after signup.
+            var loginSuccess = await Auth.Login(
+                email,
+                password,
+                ApiConfig.ApiBaseUrl);
+
+            if (!loginSuccess)
+            {
+                return new WorkspaceAccountResult
+                    {
+                        Success = false,
+                        ErrorMessage = "Unable to log in. Please check your email and password."
+                    };
+            }
+
+            // Keep the same post-login behavior as signup so pending workspace
+            // information is attached to the authenticated account.
+            await SavePending.SavePendingIdeasAfterLogin(ApiConfig.ApiBaseUrl);
+            await SavePending.SavePendingCompanyInfoAfterLogin(ApiConfig.ApiBaseUrl);
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated != true)
+            {
+                return new WorkspaceAccountResult
+                    {
+                        Success = false,
+                        ErrorMessage = "Login succeeded, but the authenticated session is not ready."
+                    };
+            }
+
+            _enteredEmail = email;
+            await Analytics.TrackAsync("login", new { method = "email" });
+
+            return new WorkspaceAccountResult
+                {
+                    Success = true,
+                    Email = email
+                };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Workspace login error: {ex}");
+
+            return new WorkspaceAccountResult
+                {
+                    Success = false,
+                    ErrorMessage = $"Login error: {ex.Message}"
+                };
+        }
+    }
+
+    [JSInvokable]
+    public async Task<WorkspaceAccountResult> CompleteWorkspaceGoogleLogin(string idToken)
+    {
+        if (string.IsNullOrWhiteSpace(idToken))
+        {
+            return new WorkspaceAccountResult
+                {
+                    Success = false,
+                    ErrorMessage = "Google did not return a valid sign-in token."
+                };
+        }
+
+        try
+        {
+            // The token comes directly from Google Identity Services in the browser.
+            // Keep the same backend authentication logic used by the signup page.
+            var success = await Auth.LoginWithGoogle(
+                idToken,
+                ApiConfig.ApiBaseUrl);
+
+            if (!success)
+            {
+                return new WorkspaceAccountResult
+                    {
+                        Success = false,
+                        ErrorMessage = "Google sign-in failed. Please try again."
+                    };
+            }
+
+            await SavePending.SavePendingIdeasAfterLogin(ApiConfig.ApiBaseUrl);
+            await SavePending.SavePendingCompanyInfoAfterLogin(ApiConfig.ApiBaseUrl);
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+
+            if (authState.User.Identity?.IsAuthenticated != true)
+            {
+                return new WorkspaceAccountResult
+                    {
+                        Success = false,
+                        ErrorMessage = "Google sign-in succeeded, but the authenticated session is not ready."
+                    };
+            }
+
+            var authenticatedEmail =
+                authState.User.FindFirst("email")?.Value
+                ?? authState.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? authState.User.Identity?.Name
+                ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(authenticatedEmail))
+            {
+                return new WorkspaceAccountResult
+                    {
+                        Success = false,
+                        ErrorMessage = "Google login succeeded, but we could not determine your account email."
+                    };
+            }
+
+            authenticatedEmail = authenticatedEmail.Trim();
+            _enteredEmail = authenticatedEmail;
+            await Analytics.TrackAsync("login", new { method = "google" });
+
+            return new WorkspaceAccountResult
+                {
+                    Success = true,
+                    Email = authenticatedEmail
+                };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Google workspace sign-in error: {ex}");
+
+            return new WorkspaceAccountResult
+                {
+                    Success = false,
+                    ErrorMessage = $"Google sign-in error: {ex.Message}"
+                };
+        }
+    }
+
+    private bool IsValidEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            return false;
+
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email.Trim());
+            return addr.Address.Equals(email.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool IsPasswordStrong(string password)
+    {
+        if (string.IsNullOrEmpty(password) || password.Length < 8)
+            return false;
+
+        if (!password.Any(char.IsUpper))
+            return false;
+
+        if (!password.Any(char.IsLower))
+            return false;
+
+        if (!password.Any(char.IsDigit))
+            return false;
+
+        if (!password.Any(ch => !char.IsLetterOrDigit(ch)))
+            return false;
+
+        return true;
+    }
+
+    [JSInvokable]
+    public async Task OnEmailModalClosed(string? email)
+    {
+        string? anonymousUserId =
+            await FunnelBrowserIdentity.ReadAsync(JSRuntime);
+
+        string currentPage =
+            NavigationManager.Uri;
+
+        var queryParams =
+            QueryHelpers.ParseQuery(
+                new Uri(currentPage).Query);
+
+        bool companyNameFound =
+            queryParams.TryGetValue(
+                "name",
+                out var idName);
+
+        bool companyIndustryFound =
+            queryParams.TryGetValue(
+                "industry",
+                out var idIndustry);
+
+        var uriParam =
+            NavigationManager.ToAbsoluteUri(
+                currentPage);
+
+        string queryString =
+            uriParam.Query;
+
+        var parsedQuery =
+            HttpUtility.ParseQueryString(
+                queryString);
+
+        if (parsedQuery["name"] != null)
+        {
+            Name =
+                parsedQuery["name"];
+        }
+
+        if (parsedQuery["industry"] != null)
+        {
+            Industry =
+                parsedQuery["industry"];
+        }
+
+        if (!_modalsResolvedEmail)
+        {
+            _modalsResolvedEmail =
+                true;
+
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                _enteredEmail =
+                    email;
+
+                // Signup/login and pending saves already completed before the modal closed.
+
+                SaveEmailResponse? result =
+                    await SaveEmailAsync(
+                        ApiConfig.ApiBaseUrl,
+                        email,
+                        anonymousUserId ?? string.Empty,
+                        currentPage);
+
+                if (result is null)
+                {
+                    _modalsResolvedEmail = false;
+                    await JSRuntime.InvokeVoidAsync("designerIntroGenerationFailed",
+                        "Your account is ready, but the project could not be saved. Please try again.");
+                    return;
+                }
+
+                _canonicalUserId = result?.UserId;
+                var identityBound = WebsiteFunnel
+                    ? await RestoreWebsiteLandingContextAsync()
+                    : await AttributionContext.BindAuthenticatedIdentityAsync(
+                        legacyCompanyIndustryId: result?.CompanyIndustryId,
+                        legacyInviteId: inviteId);
+
+                // Older social landing links can carry a browser project ID that no
+                // longer exists server-side. Resolve a fresh account-owned project from
+                // the saved legacy company/invite IDs, then verify it before generation.
+                if (!identityBound && !WebsiteFunnel && !string.IsNullOrWhiteSpace(result?.CompanyIndustryId))
+                {
+                    var recoveredContext = await AttributionContext.ResolveLegacyProjectAsync(new LegacyProjectResolutionRequest
+                    {
+                        LegacyCompanyIndustryId = result.CompanyIndustryId,
+                        LegacyInviteId = inviteId
+                    });
+                    if (recoveredContext is not null)
+                    {
+                        identityBound = await AttributionContext.BindOrVerifyOwnedProjectAsync(
+                            recoveredContext.ProjectId, recoveredContext.FunnelId,
+                            legacyCompanyIndustryId: result.CompanyIndustryId, legacyInviteId: inviteId);
+                        if (identityBound)
+                        {
+                            _canonicalProjectId = recoveredContext.ProjectId;
+                            _canonicalFunnelId = recoveredContext.FunnelId;
+                        }
+                    }
+                }
+
+                if (!identityBound)
+                {
+                    Console.Error.WriteLine("[ATTRIBUTION] identity binding did not complete; generation will not start");
+                    _modalsResolvedEmail = false;
+                    await JSRuntime.InvokeVoidAsync(
+                        "showModalError",
+                        "Your account is ready, but we could not connect this project. Please try again.");
+                    return;
+                }
+
+                var canonicalContext = await AttributionContext.GetContextAsync();
+                _canonicalProjectId ??= canonicalContext?.ProjectId;
+                _canonicalFunnelId ??= canonicalContext?.FunnelId;
+
+                // Account is now created and logged in.
+                // This is the ONLY point where the image URL / Runware generation pipeline starts.
+                await Analytics.TrackAsync("generation_started", new { generation_category = WebsiteFunnel ? "website" : "social", deliverable_type = "creative_directions" });
+                try { if (WebsiteFunnel) await LoadWebsiteConceptsAsync(); else await LoadInviteDataFromUrl(); }
+                finally
+                {
+                    await Analytics.TrackAsync(_allInviteSavesCompleted ? "generation_completed" : "generation_failed",
+                        new { generation_category = WebsiteFunnel ? "website" : "social", deliverable_type = "creative_directions", result_count = _allInviteSavesCompleted ? 3 : 0 });
+                }
+
+                if (!_allInviteSavesCompleted)
+                {
+                    IsLoadingInviteData = false;
+                    await JSRuntime.InvokeVoidAsync("designerIntroGenerationFailed",
+                        string.IsNullOrWhiteSpace(InviteErrorMessage)
+                            ? "Your workspace could not be completed. Please refresh and try again."
+                            : InviteErrorMessage);
+                }
+                StateHasChanged();
+            }
+
+            StateHasChanged();
+
+            if (!IsLoadingInviteData &&
+                _modalsResolvedEmail)
+            {
+                StateHasChanged();
+
+                await TryNavigateWhenReadyAsync();
+            }
+        }
+    }
+
+
+
+    public async Task<SaveEmailResponse?> SaveEmailAsync(
+        string url,
+        string email,
+        string local,
+        string currentPage)
+    {
+        var progressQuery = QueryHelpers.ParseQuery(new Uri(currentPage).Query);
+        progressQuery.TryGetValue("companyIndustryId", out var companyIndustryId);
+
+        var request =
+            new SaveEmailLocalRequest
+                {
+                    Email = email,
+                    Local = local,
+                    CurrentPage = currentPage,
+                    CompanyIndustryId = companyIndustryId.FirstOrDefault(),
+                    Name = Name,
+                    Industry = Industry
+                };
+
+        string functionUrl =
+            $"{url.TrimEnd('/')}/api/SaveEmail?code=REDACTED_FOR_GROOMING";
+
+        HttpResponseMessage response =
+            await Http.PostAsJsonAsync(
+                functionUrl,
+                request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            string error =
+                await response.Content.ReadAsStringAsync();
+
+            Console.WriteLine(
+                $"❌ Failed to save email, current page, and update CompanyIndustry: {error}");
+
+            return null;
+        }
+
+        SaveEmailResponse? result =
+            await response.Content.ReadFromJsonAsync<SaveEmailResponse>();
+
+        Console.WriteLine(
+            $"✅ Email and current page saved for Local: {local}. Page: {currentPage}");
+
+        return result;
+    }
+
+    public class SaveEmailLocalRequest
+    {
+        public string? CompanyIndustryId { get; set; }
+        public string? Name { get; set; }
+        public string? Industry { get; set; }
+
+        public string Email { get; set; } =
+            string.Empty;
+
+        public string Local { get; set; } =
+            string.Empty;
+
+        public string CurrentPage { get; set; } =
+            string.Empty;
+    }
+
+    public class SaveEmailResponse
+    {
+        public string Message { get; set; } =
+            string.Empty;
+
+        public string UserId { get; set; } =
+            string.Empty;
+
+        public string CompanyIndustryId { get; set; } =
+            string.Empty;
+
+        public string Email { get; set; } =
+            string.Empty;
+
+        public string Local { get; set; } =
+            string.Empty;
+
+        public string CurrentPage { get; set; } =
+            string.Empty;
+
+        public bool EmailSent { get; set; }
+
+        public string EmailMessageId { get; set; } =
+            string.Empty;
+    }
+
+
+    [JSInvokable]
+    public Task OnBrandModalClosed()
+    {
+        if (!_modalsResolvedBrand)
+        {
+            _modalsResolvedBrand = true;
+            StateHasChanged();
+        }
+        return Task.CompletedTask;
+    }
+
+    private bool _clientSequenceReady = false;
+    private bool _hasNavigated = false;
+    private bool _allInviteSavesCompleted = false;
+    private bool _inviteSaveFailed = false;
+
+    [JSInvokable]
+    public async Task OnModalsClosed()
+    {
+        _clientSequenceReady = true;
+        if (!IsLoadingInviteData && _modalsResolvedEmail)
+        {
+            StateHasChanged();
+            await TryNavigateWhenReadyAsync();
+        }
+    }
+
+    private async Task TryNavigateWhenReadyAsync()
+    {
+        if (_hasNavigated ||
+            !_clientSequenceReady ||
+            !_modalsResolvedEmail ||
+            !_modalsResolvedBrand ||
+            IsLoadingInviteData ||
+            !_allInviteSavesCompleted ||
+            _inviteSaveFailed)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(inviteId) || string.IsNullOrWhiteSpace(_enteredEmail))
+        {
+            return;
+        }
+
+        string encryptedEmail = EncryptEmail(_enteredEmail);
+        var url = $"/init/mainconcept?i=1&id={inviteId}&e={encryptedEmail}&eid={encryptedEmail}";
+
+        if (WebsiteFunnel) url = WebsiteSelectionUrl(encryptedEmail);
+        _hasNavigated = true;
+        NavigationManager.NavigateTo(url, forceLoad: true);
+    }
+
+    private static readonly byte[] Key =
+        Convert.FromBase64String("m4KcNw7xY8cFzP2GQ1R6sL9JdX3HkV5bTnEwUaMiO0Q=");
+
+    private static readonly byte[] IV =
+        Convert.FromBase64String("g2mQk5wPj8LrX1s9N4b6eA==");
+
+    private string EncryptEmail(string email)
+    {
+        if (string.IsNullOrEmpty(email))
+            return "";
+
+        try
+        {
+            // Simple encryption for demo - in production, use proper encryption
+            var bytes = Encoding.UTF8.GetBytes(email);
+            return Convert.ToBase64String(bytes);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    public static Guid CreateCompanyGuid(string name, string industry)
+    {
+        string input = $"{name?.Trim().ToLowerInvariant()}|{industry?.Trim().ToLowerInvariant()}";
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        byte[] guidBytes = new byte[16];
+        Array.Copy(hash, guidBytes, 16);
+        return new Guid(guidBytes);
+    }
+
+    private List<string> Deliverables = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetHelper = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("initDesignerIntro");
+            await JSRuntime.InvokeVoidAsync("setDotNetHelper", _dotNetHelper);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDesignerIntroContextAsync();
+    }
+
+    // Invite data properties
+    private InviteClientData InviteData { get; set; }
+    private bool IsLoadingInviteData { get; set; } = true;
+    private string InviteErrorMessage { get; set; } = "";
+    private string MainDeliverable { get; set; }
+    private string DisplayLocation { get; set; }
+
+    public async Task UpdatePendingCompanyUserIdAsync(
+        string url,
+        string anonymousUserId,
+        string newUserId,
+        string name)
+    {
+        var request = new UpdateCompanyIndustryUserIdLocalRequest
+            {
+                UserId = anonymousUserId,
+                NewUserId = newUserId,
+                Name = name
+            };
+
+        string functionUrl =
+            $"{url}api/UpdateCompanyIndustryUserIdLocal?code=REDACTED_FOR_GROOMING";
+
+        using HttpClient client = new HttpClient();
+
+        var response = await client.PostAsJsonAsync(functionUrl, request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"❌ Failed to update CompanyIndustry UserId: {error}");
+        }
+        else
+        {
+            Console.WriteLine($"✅ Successfully updated CompanyIndustry UserId with email: {name}");
+        }
+    }
+
+    public class UpdateCompanyIndustryUserIdLocalRequest
+    {
+        public string UserId { get; set; }
+        public string NewUserId { get; set; }
+        public string Name { get; set; }
+    }
+
+    private async Task LoadDesignerIntroContextAsync()
+    {
+        _allInviteSavesCompleted = false;
+        _inviteSaveFailed = false;
+        IsLoadingInviteData = false;
+        InviteErrorMessage = string.Empty;
+
+        try
+        {
+            var currentUri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+            var parsedQuery = HttpUtility.ParseQueryString(currentUri.Query);
+
+            Name = parsedQuery["name"] ?? string.Empty;
+            Industry = parsedQuery["industry"] ?? string.Empty;
+            Type = parsedQuery["type"] ?? "social";
+
+            // Intentionally stop here.
+            // Do not call Runware or generate image URLs until the account is created.
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            _inviteSaveFailed = true;
+            InviteErrorMessage = "We couldn't prepare this workspace. Please refresh and try again.";
+            Console.WriteLine($"❌ Error preparing designer intro context: {ex}");
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadInviteDataFromUrl()
+    {
+        _allInviteSavesCompleted = false;
+        _inviteSaveFailed = false;
+        IsLoadingInviteData = true;
+        InviteErrorMessage = string.Empty;
+
+        try
+        {
+            var uri = NavigationManager.Uri;
+            var queryParams = QueryHelpers.ParseQuery(new Uri(uri).Query);
+            var CompanyName = queryParams.TryGetValue("name", out var idName);
+            var CompanyIndustry = queryParams.TryGetValue("industry", out var idIndustry);
+
+            var uriParam = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+            var queryString = uriParam.Query;
+
+            var parsedQuery = HttpUtility.ParseQueryString(queryString);
+
+            if (parsedQuery["name"] != null)
+            {
+                Name = parsedQuery["name"];
+            }
+
+            if (parsedQuery["industry"] != null)
+            {
+                Industry = parsedQuery["industry"];
+            }
+
+            if (parsedQuery["type"] != null)
+            {
+                Type = parsedQuery["type"];
+            }
+
+            // Account creation/login has already completed before this method is called.
+            // All project and generated-image records are now created for that account.
+
+            //Items = await FetchDeliverableIdeaFromOpenAI(Name, Industry, "Social", ApiConfig.ApiBaseUrl);
+            ItemsMain = await FetchIdeaFromOpenAI(Name, Industry, ApiConfig.ApiBaseUrl);
+
+            ItemQuery = ItemsMain.FirstOrDefault(item =>
+            {
+                var type = item.Split(':')[0];
+                return type.Contains(Type, StringComparison.OrdinalIgnoreCase);
+            });
+            //string inviteId = CreateCompanyGuid(Name, Industry).ToString();
+            inviteId = await SaveInviteClientAsync("", Name, Industry, ItemQuery, _enteredEmail);
+
+            // Check for encrypted email parameter
+            if (!string.IsNullOrEmpty(Name) && !string.IsNullOrEmpty(Industry))
+            {
+                var timestampCompanyIdeaId = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+                var existingInfo = $"{Convert.ToBase64String(Encoding.UTF8.GetBytes(Name))}|~~|@@|^^|{Convert.ToBase64String(Encoding.UTF8.GetBytes(Industry))}|~~|@@|^^|{timestampCompanyIdeaId}";
+                var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+                var user = authState.User;
+                var isAuthorized = true; // user.Identity?.IsAuthenticated == true;
+                if (isAuthorized)
+                {
+                    var username = "sample";
+
+                    if (!string.IsNullOrWhiteSpace(username))
+                    {
+                        var CompanyIdeaId = existingInfo;
+
+                        // Get the prompt ID for this user and company idea
+                        string promptId = await FetchPromptIdInit(username, CompanyIdeaId);
+
+                        // Optionally: handle errors or empty response
+                        if (promptId.StartsWith("Error") || string.IsNullOrWhiteSpace(promptId))
+                        {
+                            // Handle error (log or display message)
+                            Console.WriteLine("Failed to fetch prompt ID.");
+                        }
+                        else
+                        {
+                            var promptIdfromCID = promptId;
+                        }
+
+                        string companyDescription = "";
+
+                        companyDescription = await FetchCompanyDescription(Name, Industry, ItemQuery);
+                        CompanyDetails = companyDescription;
+                        Console.WriteLine(companyDescription);
+
+                        List<string> deliverableDetails = new List<string>();
+
+                        if (string.Equals(Type, "social", StringComparison.OrdinalIgnoreCase))
+                        {
+                            deliverableDetails = new List<string>
+                            {
+                                "Instagram, Facebook, Twitter",
+                                "Social Media Content Description: Visual graphics and captions to be shared on social media platforms. Display: Instagram, Facebook, Twitter Format: JPEG Dimensions/Size: 1080x1080 pixels Quantity: 10 posts Technical Requirements: Include engaging captions and branded hashtags.",
+                                "Social Media Content"
+                            };
+                        }
+
+                        var displayLocation = deliverableDetails[0];
+                        var mainDeliverableDetailSize = deliverableDetails[1];
+                        var mainDeliverable = deliverableDetails[2];
+                        //var testScript = @"Social Media Content: Fruity Fun - Vibrant photos and engaging captions showcase orange blast's unique flavors.:";
+
+                        var promptText = $"{displayLocation}|{ItemQuery}|{Name}|{Industry}|{mainDeliverableDetailSize}|{mainDeliverable}|{companyDescription}";
+
+                        // Global visual styles that work across ALL deliverables
+                        var stylePrompts = new Dictionary<string, string>
+                        {
+                            {
+                                "Minimal|Swiss|ultra-clean",
+                                @"STYLE DIRECTIVE:
+                                Swiss modernist design.
+                                Minimalist composition.
+                                Large amounts of white space.
+                                Strict grid layout.
+                                Simple geometric forms.
+                                Black, white, and one accent color.
+                                Clean typography.
+                                Editorial design aesthetic.
+                                Avoid decoration.
+                                Focus on clarity and structure."
+                            },
+                            {
+                                "Bold|expressive|high contrast",
+                                @"STYLE DIRECTIVE:
+                                Bold expressive design.
+                                Extreme contrast.
+                                Oversized typography.
+                                Dynamic angles and asymmetrical layouts.
+                                Strong shadows.
+                                Vivid colors.
+                                High energy.
+                                Attention-grabbing visuals.
+                                Graphic poster aesthetic.
+                                Visually loud and dramatic."
+                            },
+                            {
+                                "Playful|illustration-driven|colorful",
+                                @"STYLE DIRECTIVE:
+                                Playful illustration-driven design.
+                                Hand-drawn elements.
+                                Bright colorful palette.
+                                Whimsical visual storytelling.
+                                Fun characters and icons.
+                                Creative shapes.
+                                Friendly and approachable.
+                                Childlike imagination.
+                                Highly colorful and cheerful."
+                            },
+                            {
+                                "Elegant|sophisticated|luxury",
+                                @"STYLE DIRECTIVE:
+                                Luxury brand aesthetic.
+                                Refined typography.
+                                Premium materials.
+                                Sophisticated composition.
+                                Rich textures.
+                                Gold accents.
+                                Editorial magazine quality.
+                                Upscale and exclusive.
+                                High-end luxury presentation."
+                            },
+                            {
+                                "Modern|futuristic|tech-forward",
+                                @"STYLE DIRECTIVE:
+                                Futuristic visual language.
+                                Technology-inspired design.
+                                Advanced interfaces.
+                                Glassmorphism.
+                                Subtle neon lighting.
+                                Modern gradients.
+                                Sleek surfaces.
+                                Innovation-focused aesthetic.
+                                High-tech premium feel."
+                            },
+                            {
+                                "Vintage|retro|nostalgic",
+                                @"STYLE DIRECTIVE:
+                                Retro vintage aesthetic.
+                                Aged textures.
+                                Classic typography.
+                                Mid-century design inspiration.
+                                Printed poster appearance.
+                                Muted nostalgic colors.
+                                Heritage branding.
+                                Old-world craftsmanship.
+                                Timeless visual character."
+                            },
+                            {
+                                "Organic|natural|earthy",
+                                @"STYLE DIRECTIVE:
+                                Organic natural design.
+                                Earth-tone palette.
+                                Handcrafted appearance.
+                                Natural textures.
+                                Botanical inspiration.
+                                Raw materials.
+                                Sustainable aesthetic.
+                                Warm lighting.
+                                Authentic and grounded."
+                            },
+                            {
+                                "Abstract|artistic|surreal",
+                                @"STYLE DIRECTIVE:
+                                Abstract artistic expression.
+                                Surreal imagery.
+                                Dreamlike atmosphere.
+                                Experimental composition.
+                                Conceptual storytelling.
+                                Unexpected visual metaphors.
+                                Gallery-quality artwork.
+                                Highly creative and imaginative."
+                            }
+                        };
+
+                        // Randomly select 3 unique styles
+                        var random = new Random();
+                        var selectedStyles = stylePrompts.Keys
+                            .OrderBy(x => random.Next())
+                            .Take(3)
+                            .ToList();
+
+                        string ToTitleCaseFirstChar(string input)
+                        {
+                            if (string.IsNullOrEmpty(input)) return input;
+                            return char.ToUpper(input[0]) + input.Substring(1);
+                        }
+
+                        var s0 = selectedStyles.ElementAtOrDefault(0)?.Split('|');
+                        var s1 = selectedStyles.ElementAtOrDefault(1)?.Split('|');
+                        var s2 = selectedStyles.ElementAtOrDefault(2)?.Split('|');
+
+                        style1 = s0?[0] + " and " + ToTitleCaseFirstChar(s0?[1]);
+                        style2 = s1?[0] + " and " + ToTitleCaseFirstChar(s1?[1]);
+                        style3 = s2?[0] + " and " + ToTitleCaseFirstChar(s2?[1]);
+
+                        string promptStyle1 = BuildPrompt(selectedStyles[0], promptText, stylePrompts);
+
+                        var generationJobId1 = Guid.NewGuid().ToString();
+                        imageUrl1 =
+    await CallRunwareImageFunction(
+        promptStyle1,
+        1344,
+        768,
+        1,
+        generationJobId1);
+
+                        if (!string.IsNullOrEmpty(imageUrl1))
+                        {
+                            string timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+                            imageId1 = await CallSaveImageIdeaFunction("Social Media Content", "Generic", promptStyle1, imageUrl1, promptId, timestamp, "1");
+                            var request = new OpenAIIdeaRequestQueue
+                                {
+                                    Name = Name,
+                                    Industry = Industry,
+                                    ImageId = imageId1,
+                                    ImageUrl = imageUrl1,
+                                    ConceptNumber = 1
+                                    ,JobId = generationJobId1, GenerationJobId = generationJobId1, UserId = _canonicalUserId, ProjectId = _canonicalProjectId, FunnelId = _canonicalFunnelId
+                                };
+
+                            string? jobId = await QueueIdeaGeneration(request);
+
+                            var status = "";
+                            @if (!string.IsNullOrWhiteSpace(StatusMessage))
+                            {
+                                status = @StatusMessage;
+                            }
+
+                            @if (CurrentJob?.Status == "Completed")
+                            {
+                                status = @CurrentJob.ImageDescription;
+                            }
+
+                            @if (CurrentJob?.Status == "Failed")
+                            {
+                                status = @CurrentJob.Error;
+                            }
+                            var importantText = @"
+                            IMPORTANT:
+                            The style directive above is the highest priority instruction.
+                            Strongly emphasize the specified style.
+                            Create a visually distinct interpretation.
+                            Do not use a generic corporate design aesthetic.
+                            ";
+
+                            var projectText = $@"
+                            PROJECT:
+    {promptText}
+                            ";
+
+                            var outputRequirementsText = @"
+                            OUTPUT REQUIREMENTS:
+                            Professional quality.
+                            Unique creative direction.
+                            Visually memorable.
+                            High detail.
+                            ";
+
+                            string? inviteImageId1 = await SaveInviteClientImageWithRetryAsync(
+                                inviteId,
+                                imageId1,
+                                imageUrl1,
+                                "1",
+                                style1,
+                                stylePrompts[selectedStyles[0]],
+                                importantText,
+                                projectText,
+                                outputRequirementsText);
+
+                            if (string.IsNullOrWhiteSpace(inviteImageId1))
+                            {
+                                _inviteSaveFailed = true;
+                                InviteErrorMessage = "Invite image 1 could not be saved. Please try again.";
+                                Console.WriteLine("❌ Invite image 1 save did not complete. Redirect cancelled.");
+                                await InvokeAsync(StateHasChanged);
+                                return;
+                            }
+
+                            Console.WriteLine($"✅ Invite image 1 save completed: {inviteImageId1}");
+                            await InvokeAsync(StateHasChanged);
+                        }
+                        else
+                        {
+                            _inviteSaveFailed = true;
+                            InviteErrorMessage = "Invite image 1 was not generated, so the invite could not be completed.";
+                            Console.WriteLine("❌ Invite image 1 URL is empty. Redirect cancelled.");
+                            await InvokeAsync(StateHasChanged);
+                            return;
+                        }
+
+                        string promptStyle2 = BuildPrompt(selectedStyles[1], promptText, stylePrompts);
+
+                        var generationJobId2 = Guid.NewGuid().ToString();
+                        imageUrl2 = await CallRunwareImageFunction(
+                            promptStyle2,
+                            1344,
+                            768,
+                            1,
+                            generationJobId2);
+                        //var script2 = await GenerateScript(imageUrl2, "2", Name, Industry);
+                        if (!string.IsNullOrEmpty(imageUrl2))
+                        {
+                            string timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+                            imageId2 = await CallSaveImageIdeaFunction("Social Media Content", "Generic", promptStyle2, imageUrl2, promptId, timestamp, "1");
+                            var request2 = new OpenAIIdeaRequestQueue
+                                {
+                                    Name = Name,
+                                    Industry = Industry,
+                                    ImageId = imageId2,
+                                    ImageUrl = imageUrl2,
+                                    ConceptNumber = 2
+                                    ,JobId = generationJobId2, GenerationJobId = generationJobId2, UserId = _canonicalUserId, ProjectId = _canonicalProjectId, FunnelId = _canonicalFunnelId
+                                };
+
+                            string? jobId2 = await QueueIdeaGeneration(request2);
+                            var importantText2 = @"
+                            IMPORTANT:
+                            The style directive above is the highest priority instruction.
+                            Strongly emphasize the specified style.
+                            Create a visually distinct interpretation.
+                            Do not use a generic corporate design aesthetic.
+                            ";
+
+                            var projectText2 = $@"
+                            PROJECT:
+    {promptText}
+                            ";
+
+                            var outputRequirementsText2 = @"
+                            OUTPUT REQUIREMENTS:
+                            Professional quality.
+                            Unique creative direction.
+                            Visually memorable.
+                            High detail.
+                            ";
+
+                            string? inviteImageId2 = await SaveInviteClientImageWithRetryAsync(
+                                inviteId,
+                                imageId2,
+                                imageUrl2,
+                                "2",
+                                style2,
+                                stylePrompts[selectedStyles[1]],
+                                importantText2,
+                                projectText2,
+                                outputRequirementsText2);
+
+                            if (string.IsNullOrWhiteSpace(inviteImageId2))
+                            {
+                                _inviteSaveFailed = true;
+                                InviteErrorMessage = "Invite image 2 could not be saved. Please try again.";
+                                Console.WriteLine("❌ Invite image 2 save did not complete. Redirect cancelled.");
+                                await InvokeAsync(StateHasChanged);
+                                return;
+                            }
+
+                            Console.WriteLine($"✅ Invite image 2 save completed: {inviteImageId2}");
+                            await InvokeAsync(StateHasChanged);
+                        }
+                        else
+                        {
+                            _inviteSaveFailed = true;
+                            InviteErrorMessage = "Invite image 2 was not generated, so the invite could not be completed.";
+                            Console.WriteLine("❌ Invite image 2 URL is empty. Redirect cancelled.");
+                            await InvokeAsync(StateHasChanged);
+                            return;
+                        }
+
+                        string promptStyle3 = BuildPrompt(selectedStyles[2], promptText, stylePrompts);
+
+                        var generationJobId3 = Guid.NewGuid().ToString();
+                        imageUrl3 = await CallRunwareImageFunction(
+                            promptStyle3,
+                            1344,
+                            768,
+                            1,
+                            generationJobId3);
+                        //var script3 = await GenerateScript(imageUrl3, "3", Name, Industry);
+                        if (!string.IsNullOrEmpty(imageUrl3))
+                        {
+                            string timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+                            imageId3 = await CallSaveImageIdeaFunction("Social Media Content", "Generic", promptStyle3, imageUrl3, promptId, timestamp, "1");
+                            var request3 = new OpenAIIdeaRequestQueue
+                                {
+                                    Name = Name,
+                                    Industry = Industry,
+                                    ImageId = imageId3,
+                                    ImageUrl = imageUrl3,
+                                    ConceptNumber = 2
+                                    ,JobId = generationJobId3, GenerationJobId = generationJobId3, UserId = _canonicalUserId, ProjectId = _canonicalProjectId, FunnelId = _canonicalFunnelId
+                                };
+
+                            string? jobId3 = await QueueIdeaGeneration(request3);
+                            var importantText3 = @"
+                            IMPORTANT:
+                            The style directive above is the highest priority instruction.
+                            Strongly emphasize the specified style.
+                            Create a visually distinct interpretation.
+                            Do not use a generic corporate design aesthetic.
+                            ";
+
+                            var projectText3 = $@"
+                            PROJECT:
+    {promptText}
+                            ";
+
+                            var outputRequirementsText3 = @"
+                            OUTPUT REQUIREMENTS:
+                            Professional quality.
+                            Unique creative direction.
+                            Visually memorable.
+                            High detail.
+                            ";
+
+                            string? finalInviteImageId = await SaveInviteClientImageWithRetryAsync(
+                                inviteId,
+                                imageId3,
+                                imageUrl3,
+                                "3",
+                                style3,
+                                stylePrompts[selectedStyles[2]],
+                                importantText3,
+                                projectText3,
+                                outputRequirementsText3);
+
+                            if (string.IsNullOrWhiteSpace(finalInviteImageId))
+                            {
+                                _inviteSaveFailed = true;
+                                InviteErrorMessage = "The final invite image could not be saved. Please try again.";
+                                Console.WriteLine("❌ Final invite image save did not complete. Redirect cancelled.");
+                                await InvokeAsync(StateHasChanged);
+                                return;
+                            }
+
+                            _allInviteSavesCompleted = true;
+                            _inviteSaveFailed = false;
+                            Console.WriteLine($"✅ All invite image saves completed. Final saved ID: {finalInviteImageId}");
+                            await InvokeAsync(StateHasChanged);
+
+                            // Tell the browser the real generation pipeline is complete.
+                            // This advances the progress bar from its 95% hold to 100%.
+                            await JSRuntime.InvokeVoidAsync("designerIntroGenerationComplete");
+                        }
+                        else
+                        {
+                            _inviteSaveFailed = true;
+                            InviteErrorMessage = "The final invite image was not generated, so the invite could not be completed.";
+                            Console.WriteLine("❌ Final invite image URL is empty. Redirect cancelled.");
+                            await InvokeAsync(StateHasChanged);
+                            return;
+                        }
+                    }
+                }
+
+                if (!_allInviteSavesCompleted)
+                {
+                    _inviteSaveFailed = true;
+                    InviteErrorMessage = "Not all invite image saves were completed. Redirect cancelled.";
+                    Console.WriteLine("❌ Not all invite image saves were completed. Redirect cancelled.");
+                    await InvokeAsync(StateHasChanged);
+                    return;
+                }
+
+                IsLoadingInviteData = false;
+                await InvokeAsync(StateHasChanged);
+                if (!IsLoadingInviteData && _modalsResolvedEmail)
+                {
+                    StateHasChanged();
+                    await TryNavigateWhenReadyAsync();
+                }
+
+                Console.WriteLine($"✅ Invite data loaded for: {Name}");
+            }
+        }
+        catch (System.Exception ex)
+        {
+            _inviteSaveFailed = true;
+            _allInviteSavesCompleted = false;
+            IsLoadingInviteData = false;
+            InviteErrorMessage = "We couldn't finish saving your invite images. Please try again.";
+            Console.WriteLine($"❌ Error loading or saving invite data: {ex}");
+            await InvokeAsync(StateHasChanged);
+
+            try
+            {
+                await JSRuntime.InvokeVoidAsync(
+                    "designerIntroGenerationFailed",
+                    InviteErrorMessage);
+            }
+            catch
+            {
+                // The page may already be navigating/disposed.
+            }
+        }
+    }
+
+    private string StatusMessage { get; set; } = string.Empty;
+    private async Task<List<string>> FetchIdeaFromOpenAI(string name, string industry, string url)
+    {
+        List<string> items = new List<string>();
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{url}api/GetAIIdeaResponse?code=REDACTED_FOR_GROOMING";
+
+        var generationJobId = Guid.NewGuid().ToString();
+        var token = await _localStorage.GetItemAsync<string>("authToken");
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        var response = await client.PostAsJsonAsync(functionUrl, new OpenAIIdeaRequest { Name = name, Industry = industry, GenerationJobId = generationJobId, ProjectId = _canonicalProjectId, FunnelId = _canonicalFunnelId });
+
+        if (response.IsSuccessStatusCode)
+        {
+            items = await response.Content.ReadFromJsonAsync<List<string>>();
+            return items;
+        }
+        else
+        {
+            return new List<string>();
+        }
+    }
+
+    private async Task<string?> QueueIdeaGeneration(
+        OpenAIIdeaRequestQueue request)
+    {
+        string functionUrl =
+            $"{ApiConfig.ApiBaseUrl}" +
+            "api/QueueApiCall" +
+            "?code=REDACTED_FOR_GROOMING";
+
+        var token = await _localStorage.GetItemAsync<string>("authToken");
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, functionUrl)
+        {
+            Content = JsonContent.Create(request)
+        };
+
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            httpRequest.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
+        using var response = await Http.SendAsync(httpRequest);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            string error =
+                await response.Content.ReadAsStringAsync();
+
+            Console.WriteLine(
+                $"Queue request failed: {error}");
+
+            return null;
+        }
+
+        QueueResponse? result =
+            await response.Content
+                .ReadFromJsonAsync<QueueResponse>();
+
+        return result?.JobId;
+    }
+
+    private DesignModeJobStatus? CurrentJob;
+    private CancellationTokenSource? jobPollingCancellation;
+    private async Task<DesignModeJobStatus?> GetJobStatus(
+    string jobId,
+    CancellationToken cancellationToken)
+    {
+        string functionUrl =
+            $"{ApiConfig.ApiBaseUrl}" +
+            $"api/GetJobStatus/{Uri.EscapeDataString(jobId)}" +
+            "?code=REDACTED_FOR_GROOMING";
+
+        using HttpResponseMessage response =
+            await Http.GetAsync(
+                functionUrl,
+                cancellationToken);
+
+        string responseBody =
+            await response.Content.ReadAsStringAsync(
+                cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine(
+                $"GetJobStatus failed: " +
+                $"{(int)response.StatusCode}. " +
+                $"Body: {responseBody}");
+
+            return null;
+        }
+
+        return System.Text.Json.JsonSerializer.Deserialize<DesignModeJobStatus>(
+            responseBody,
+            new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+    }
+    private async Task PollJobStatus(
+    string jobId,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                DesignModeJobStatus? job =
+                    await GetJobStatus(
+                        jobId,
+                        cancellationToken);
+
+                if (job is not null)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        CurrentJob = job;
+
+                        StatusMessage =
+                            job.Status switch
+                            {
+                                "Queued" =>
+                                    "Your request is queued.",
+
+                                "Processing" =>
+                                    "Generating your idea...",
+
+                                "Completed" =>
+                                    "Your idea is ready.",
+
+                                "Failed" =>
+                                    job.Error ??
+                                    "Idea generation failed.",
+
+                                _ =>
+                                    job.Status
+                            };
+
+                        StateHasChanged();
+                    });
+
+                    if (string.Equals(
+                            job.Status,
+                            "Completed",
+                            StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(
+                            job.Status,
+                            "Failed",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+                }
+
+                await Task.Delay(
+                    TimeSpan.FromSeconds(2),
+                    cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Normal when the component is disposed
+            // or a new job replaces the previous job.
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"Status polling failed: {ex}");
+
+            await InvokeAsync(() =>
+            {
+                StatusMessage =
+                    "Unable to retrieve the current job status.";
+
+                StateHasChanged();
+            });
+        }
+    }
+    public class QueueResponse
+    {
+        public string? JobId { get; set; }
+
+        public string? Status { get; set; }
+
+        public string? CurrentStep { get; set; }
+    }
+    public class RunwareResponse
+    {
+        public bool Success { get; set; }
+        public List<RunwareImageData> Data { get; set; }
+    }
+
+    public class RunwareImageData
+    {
+        public string ImageURL { get; set; }
+        public string ImageId { get; set; }
+    }
+
+    public class OpenAIIdeaRequestQueue
+    {
+        public string? LandingVariant { get; set; }
+        public string? Name { get; set; }
+
+        public string? Industry { get; set; }
+
+        public string? ImageId { get; set; }
+
+        public string? ImageUrl { get; set; }
+
+        public int ConceptNumber { get; set; }
+        public string? JobId { get; set; }
+        public string? GenerationJobId { get; set; }
+        public string? UserId { get; set; }
+        public string? ProjectId { get; set; }
+        public string? FunnelId { get; set; }
+    }
+    private string? _canonicalUserId;
+    private string? _canonicalProjectId;
+    private string? _canonicalFunnelId;
+    public List<string> ItemsMain { get; set; } = new List<string>();
+    public string ItemQuery { get; set; }
+    public string Name { get; set; }
+    public string Industry { get; set; }
+    public string Type { get; set; }
+
+    public class PrimaryImage
+    {
+        public string Id { get; set; }
+        public string ImageUrl { get; set; }
+    }
+
+    public class OpenAIIdeaRequest
+    {
+        public string Name { get; set; }
+        public string Industry { get; set; }
+        public string Prompt { get; set; }
+        public string? GenerationJobId { get; set; }
+        public string? ProjectId { get; set; }
+        public string? FunnelId { get; set; }
+    }
+    private async Task<string?> GenerateScript(string imageUrl, string conceptNumber, string name, string industry)
+    {
+        try
+        {
+            var imageDescription = await GetAIImageDescriptionAsync(imageUrl);
+            if (string.IsNullOrWhiteSpace(imageDescription))
+            {
+                Console.WriteLine($"❌ Failed to get image description for scene {conceptNumber}");
+                return String.Empty;
+            }
+
+            // Regenerate scene from image
+            var updatedSceneDescription = await RegenerateSceneFromImageAsync(
+                $"The prompt is for a company named {name} in the {industry} industry.",
+                Int32.Parse(conceptNumber),
+                imageDescription
+            );
+            return updatedSceneDescription;
+        }
+        catch (System.Exception ex)
+        {
+            return $"Failed with exception {ex.ToString()}";
+        }
+    }
+    private async Task<string?> RegenerateSceneFromImageAsync(
+    string fullVideoPrompt, int sceneNumber, string imageBase64)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url =
+                    $"{ApiConfig.ApiBaseUrl}api/RegenerateSceneFromImage" +
+                    "?code=REDACTED_FOR_GROOMING";
+
+                var payload = new
+                {
+                    FullVideoPrompt = fullVideoPrompt,
+                    SceneNumber = sceneNumber,
+                    ImageBase64 = imageBase64
+                };
+
+                var content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(payload),
+                    Encoding.UTF8,
+                    "application/json");
+
+                var response = await client.PostAsync(url, content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"❌ Failed to regenerate scene {sceneNumber}: {response.StatusCode}");
+                    return null;
+                }
+
+                var result = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"✅ Scene {sceneNumber} regenerated successfully.");
+                return result;
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception regenerating scene {sceneNumber}: {ex.Message}");
+            return null;
+        }
+    }
+    private async Task<string?> GetAIImageDescriptionAsync(string imageUrl)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url =
+                    $"{ApiConfig.ApiBaseUrl}api/GetAIImageDescription" +
+                    "?code=REDACTED_FOR_GROOMING";
+
+                var payload = new
+                {
+                    ImageUrl = imageUrl
+                };
+
+                var content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(payload),
+                    Encoding.UTF8,
+                    "application/json");
+
+                var response = await client.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine("✅ Image description generated.");
+                    return result;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to generate image description: {response.StatusCode}");
+                    return null;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception generating image description: {ex.Message}");
+            return null;
+        }
+    }
+    private async Task<string> CallRunwareImageFunction(string positivePrompt, int width, int height, int numberResults, string? generationJobId = null)
+    {
+        try
+        {
+            using HttpClient client = new HttpClient();
+            var token = await _localStorage.GetItemAsync<string>("authToken");
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            string functionUrl = $"{ApiConfig.ApiBaseUrl}api/CallRunwareAPIInit?code=REDACTED_FOR_GROOMING";
+
+            var requestBody = new
+            {
+                positivePrompt = positivePrompt,
+                width = width,
+                height = height,
+                numberResults = numberResults
+                ,generationJobId, userId = _canonicalUserId, projectId = _canonicalProjectId, funnelId = _canonicalFunnelId
+                ,landingVariant = WebsiteFunnel ? "website-funnel" : null
+                ,useModelsLabPrimary = true
+            };
+
+            Console.WriteLine($"🎨 Generating image with prompt: {positivePrompt.Substring(0, Math.Min(100, positivePrompt.Length))}...");
+
+            var response = await client.PostAsJsonAsync(functionUrl, requestBody);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<RunwareResponse>();
+
+                if (result != null && result.Data != null && result.Data.Any())
+                {
+                    var imageUrl = result.Data
+                        .Where(img => !string.IsNullOrWhiteSpace(img.ImageURL))
+                        .Select(img => img.ImageURL)
+                        .FirstOrDefault();
+
+                    if (!string.IsNullOrEmpty(imageUrl))
+                    {
+                        Console.WriteLine($"✅ Image generated successfully: {imageUrl.Substring(0, Math.Min(50, imageUrl.Length))}...");
+                        return imageUrl;
+                    }
+                }
+
+                Console.WriteLine($"⚠️ No image data in response");
+                return string.Empty;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"❌ Runware API call failed: {response.StatusCode}, Error: {errorContent}");
+                return string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception in CallRunwareImageFunction: {ex.Message}");
+            return string.Empty;
+        }
+    }
+
+    private string CompanyDetails { get; set; }
+    private PrimaryImage imagePri1 { get; set; }
+    private PrimaryImage imagePri2 { get; set; }
+    private PrimaryImage imagePri3 { get; set; }
+    private string imageUrl1 { get; set; }
+    private string imageUrl2 { get; set; }
+    private string imageUrl3 { get; set; }
+    private string style1 { get; set; }
+    private string style2 { get; set; }
+    private string style3 { get; set; }
+    private string imageId1 { get; set; }
+    private string imageId2 { get; set; }
+    private string imageId3 { get; set; }
+
+    public class SaveInviteClientImageResponse
+    {
+        public string Id { get; set; }
+        public string Message { get; set; }
+    }
+
+    private async Task<string?> SaveInviteClientImageWithRetryAsync(
+        string inviteId,
+        string imageId,
+        string imageUrl,
+        string countId,
+        string style,
+        string stylePrompt,
+        string important,
+        string project,
+        string outputRequirements,
+        int maxAttempts = 3)
+    {
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            Console.WriteLine(
+                $"💾 Saving invite image {countId}. Attempt {attempt} of {maxAttempts}...");
+
+            string? savedId = await SaveInviteClientImageAsync(
+                inviteId,
+                imageId,
+                imageUrl,
+                countId,
+                style,
+                stylePrompt,
+                important,
+                project,
+                outputRequirements);
+
+            if (!string.IsNullOrWhiteSpace(savedId))
+            {
+                Console.WriteLine(
+                    $"✅ Invite image {countId} saved on attempt {attempt}: {savedId}");
+                return savedId;
+            }
+
+            if (attempt < maxAttempts)
+            {
+                int delayMilliseconds = 1000 * attempt;
+                Console.WriteLine(
+                    $"⚠️ Invite image {countId} save attempt {attempt} failed. " +
+                    $"Retrying in {delayMilliseconds / 1000} second(s)...");
+
+                await Task.Delay(delayMilliseconds);
+            }
+        }
+
+        Console.WriteLine(
+            $"❌ Invite image {countId} could not be saved after {maxAttempts} attempts.");
+        return null;
+    }
+
+    private async Task<string?> SaveInviteClientImageAsync(
+        string inviteId,
+        string imageId,
+        string imageUrl,
+        string countId,
+        string style,
+        string stylePrompt,
+        string important,
+        string project,
+        string outputRequirements)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = "sample";
+
+            if (user != null)
+            {
+                var requestBody = new
+                {
+                    InviteId = inviteId,
+                    ImageId = imageId,
+                    ImageUrl = imageUrl,
+                    CountId = countId,
+                    TimeStamp = DateTime.UtcNow.ToString("o"),
+                    Style = style,
+                    StylePrompt = stylePrompt,
+                    Important = important,
+                    Project = project,
+                    OutputRequirements = outputRequirements
+                };
+
+                var response = await Http.PostAsJsonAsync(
+                    $"{ApiConfig.ApiBaseUrl}api/SaveInviteClientImage?code=REDACTED_FOR_GROOMING",
+                    requestBody);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    string errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine(
+                        $"❌ Failed to save invite client image. " +
+                        $"Status: {(int)response.StatusCode} {response.StatusCode}. " +
+                        $"Response: {errorContent}");
+                    return null;
+                }
+
+                var jsonResponse = await response.Content
+                    .ReadFromJsonAsync<SaveInviteClientImageResponse>();
+
+                if (string.IsNullOrWhiteSpace(jsonResponse?.Id))
+                {
+                    Console.WriteLine("❌ Invite client image save returned no saved ID.");
+                    return null;
+                }
+
+                Console.WriteLine($"✅ Invite client image saved successfully: {jsonResponse.Id}");
+
+                return jsonResponse.Id;
+            }
+
+            Console.WriteLine("⚠️ User not authenticated. Skipping invite client image save.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception in SaveInviteClientImageAsync: {ex.Message}");
+            return null;
+        }
+    }
+    // ✅ Updated to accept JSON array of image URLs and the image seed flag
+    private async Task<string?> SaveInviteClientAsync(string imageUrlsJson, string ClientName, string ClientIndustry, string InitialPrompt,
+    string ClientEmail)
+    {
+        try
+        {
+            var payload = new
+            {
+                Name = ClientName ?? "",
+                Industry = ClientIndustry ?? "",
+                Prompt = InitialPrompt ?? "",
+                Email = ClientEmail ?? "",
+                ImageUrls = "",
+                UseSameImageSeedForAll = false
+            };
+
+            var response = await Http.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/SaveInviteClient?code=REDACTED_FOR_GROOMING",
+                payload
+            );
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"❌ SaveInviteClient failed: {response.StatusCode}");
+                return null;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+
+            if (result != null && result.TryGetValue("id", out var idValue))
+            {
+                return idValue?.ToString();
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ SaveInviteClient exception: {ex.Message}");
+            return null;
+        }
+    }
+    private async Task<string> FetchCompanyDescription(string name, string industry, string prompt)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetCompanyDescription?code=REDACTED_FOR_GROOMING";
+
+        var payload = new
+        {
+            Name = name,
+            Industry = industry,
+            Prompt = prompt
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadAsStringAsync();
+
+            // Normalize newlines and collapse to one line
+            string singleLine = Regex.Replace(result, @"\s*\r?\n\s*", " ").Trim();
+            return singleLine;
+        }
+
+        return "Error: Unable to fetch company description.";
+    }
+
+    public List<string> Items { get; set; } = new List<string>();
+
+    public string inviteId { get; set; } = string.Empty;
+
+    public class SaveImageIdeaResponse
+    {
+        public string Message { get; set; }
+        public string Id { get; set; }
+    }
+
+    private async Task<string> CallSaveImageIdeaFunction(string deliverableType, string subCategory, string imagePrompt, string imageUrl, string promptId, string timeStamp, string countId)
+    {
+        HttpClient client = new HttpClient();
+
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/SaveImageIdea?code=REDACTED_FOR_GROOMING";
+
+        var requestBody = new
+        {
+            DeliverableType = deliverableType,
+            SubCategory = subCategory,
+            ImagePrompt = imagePrompt,
+            ImageUrl = imageUrl,
+            PromptId = promptId,
+            TimeStamp = timeStamp,
+            CountId = countId
+        };
+
+        var response = await client.PostAsJsonAsync(functionUrl, requestBody);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            // Deserialize the response to extract the ID
+            var responseObject = System.Text.Json.JsonSerializer.Deserialize<SaveImageIdeaResponse>(responseContent, new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+            Console.WriteLine($"ImageIdea saved successfully. Id: {responseObject?.Id}");
+
+            return responseObject?.Id;
+        }
+        else
+        {
+            Console.WriteLine($"SaveImageIdea call failed: {response.StatusCode}");
+            return null;
+        }
+    }
+
+    private async Task<string> FetchPromptIdInit(string userId, string companyIdeaId)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetPromptIdForCompanyIdea?code=REDACTED_FOR_GROOMING&userId={Uri.EscapeDataString(userId)}&companyIdeaId={Uri.EscapeDataString(companyIdeaId)}";
+
+        var response = await client.GetAsync(functionUrl);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var promptId = await response.Content.ReadAsStringAsync();
+            return promptId.Trim('"');
+        }
+
+        return "Error: Unable to fetch prompt ID.";
+    }
+
+    private string DecryptEmail(string encryptedEmail)
+    {
+        if (string.IsNullOrEmpty(encryptedEmail))
+            return "";
+
+        try
+        {
+            var decoded = Uri.UnescapeDataString(encryptedEmail);
+            var bytes = Convert.FromBase64String(decoded);
+            return Encoding.UTF8.GetString(bytes);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private async Task<string> FetchMainDeliverableCategory(string name, string industry, string prompt, string url)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{url}api/GetMainDeliverableCategory?code=REDACTED_FOR_GROOMING";
+
+        var request = new OpenAIIdeaRequest
+            {
+                Name = name,
+                Industry = industry,
+                Prompt = prompt
+            };
+
+        var response = await client.PostAsJsonAsync(functionUrl, request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var category = await response.Content.ReadAsStringAsync();
+            return category.Trim('"');
+        }
+        else
+        {
+            return "Error: Unable to fetch category";
+        }
+    }
+
+    private async Task<string> CallRunwareImageFunctionWithReference(
+        string positivePrompt,
+        string referenceImage,
+        int width,
+        int height,
+        int numberResults)
+    {
+        try
+        {
+            using HttpClient client = new HttpClient();
+
+            string functionUrl =
+                $"{ApiConfig.ApiBaseUrl}api/CallRunwareAPIWithReferenceImage?code=REDACTED_FOR_GROOMING";
+
+            var requestBody = new
+            {
+                positivePrompt = positivePrompt,
+                referenceImage = referenceImage,
+                width = width,
+                height = height,
+                numberResults = numberResults
+            };
+
+            Console.WriteLine(
+                $"🎨 Generating image with reference image. Prompt: " +
+                $"{positivePrompt.Substring(0, Math.Min(100, positivePrompt.Length))}...");
+
+            var response = await client.PostAsJsonAsync(functionUrl, requestBody);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result =
+                    await response.Content.ReadFromJsonAsync<RunwareResponse>();
+
+                if (result != null &&
+                    result.Data != null &&
+                    result.Data.Any())
+                {
+                    var imageUrl = result.Data
+                        .Where(img => !string.IsNullOrWhiteSpace(img.ImageURL))
+                        .Select(img => img.ImageURL)
+                        .FirstOrDefault();
+
+                    if (!string.IsNullOrEmpty(imageUrl))
+                    {
+                        Console.WriteLine(
+                            $"✅ Image generated successfully: " +
+                            $"{imageUrl.Substring(0, Math.Min(50, imageUrl.Length))}...");
+
+                        return imageUrl;
+                    }
+                }
+
+                Console.WriteLine("⚠️ No image data in response");
+                return string.Empty;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+
+                Console.WriteLine(
+                    $"❌ Runware API call failed: " +
+                    $"{response.StatusCode}, Error: {errorContent}");
+
+                return string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(
+                $"❌ Exception in CallRunwareImageFunctionWithReference: {ex.Message}");
+
+            return string.Empty;
+        }
+    }
+
+    private string BuildPrompt(string style, string promptText, Dictionary<string, string> stylePrompts)
+    {
+        return $@"
+    {stylePrompts[style]}
+
+        IMPORTANT:
+        The style directive above is the highest priority instruction.
+        Strongly emphasize the specified style.
+        Create a visually distinct interpretation.
+        Do not use a generic corporate design aesthetic.
+
+        PROJECT:
+    {promptText}
+
+        OUTPUT REQUIREMENTS:
+        Professional quality.
+        Unique creative direction.
+        Visually memorable.
+        High detail.
+        ";
+    }
+
+    private async Task<List<string>> FetchDeliverableIdeaFromOpenAI(
+        string name,
+        string industry,
+        string deliverable,
+        string url)
+    {
+        HttpClient client = new HttpClient();
+
+        string functionUrl =
+            $"{url}api/GetAIDeliverableIdeaResponse?code=REDACTED_FOR_GROOMING";
+
+        var response = await client.PostAsJsonAsync(
+            functionUrl,
+            new OpenAIDeliverableIdeaRequest
+                {
+                    Name = name,
+                    Industry = industry,
+                    Deliverable = deliverable
+                });
+
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<List<string>>() ?? new List<string>();
+        }
+
+        return new List<string>();
+    }
+
+    public class OpenAIDeliverableIdeaRequest
+    {
+        public string Name { get; set; }
+        public string Industry { get; set; }
+        public string Deliverable { get; set; }
+    }
+
+    private async Task<InviteClientData> GetInviteClientByEmail(string email, string inviteId)
+    {
+        try
+        {
+            var client = new HttpClient();
+
+            var requestBody = new
+            {
+                email = email,
+                id = inviteId
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(
+                $"{ApiConfig.ApiBaseUrl}api/GetInviteClientByEmail?code=REDACTED_FOR_GROOMING",
+                content
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Response content: {responseContent}");
+
+                using var document = System.Text.Json.JsonDocument.Parse(responseContent);
+
+                var root = document.RootElement;
+
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    var firstItem = root;
+
+                    string GetStringValue(System.Text.Json.JsonElement element, string propertyName)
+                    {
+                        if (element.TryGetProperty(propertyName, out var property))
+                            return ExtractSValue(property);
+
+                        foreach (var prop in element.EnumerateObject())
+                        {
+                            if (prop.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                                return ExtractSValue(prop.Value);
+                        }
+
+                        return null;
+                    }
+
+                    bool GetBoolValue(System.Text.Json.JsonElement element, string propertyName)
+                    {
+                        if (element.TryGetProperty(propertyName, out var property))
+                            return ExtractBoolValue(property);
+
+                        foreach (var prop in element.EnumerateObject())
+                        {
+                            if (prop.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                                return ExtractBoolValue(prop.Value);
+                        }
+
+                        return false;
+                    }
+
+                    bool ExtractBoolValue(System.Text.Json.JsonElement property)
+                    {
+                        if (property.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            if (property.TryGetProperty("BOOL", out var boolValue))
+                                return boolValue.GetBoolean();
+
+                            if (property.TryGetProperty("bool", out var boolValueLower))
+                                return boolValueLower.GetBoolean();
+
+                            if (property.TryGetProperty("S", out var stringValue))
+                                return bool.TryParse(stringValue.GetString(), out var parsed) && parsed;
+
+                            if (property.TryGetProperty("s", out var stringValueLower))
+                                return bool.TryParse(stringValueLower.GetString(), out var parsed) && parsed;
+                        }
+
+                        if (property.ValueKind is System.Text.Json.JsonValueKind.True
+                            or System.Text.Json.JsonValueKind.False)
+                            return property.GetBoolean();
+
+                        if (property.ValueKind == System.Text.Json.JsonValueKind.String)
+                            return bool.TryParse(property.GetString(), out var parsed) && parsed;
+
+                        return false;
+                    }
+
+                    string ExtractSValue(System.Text.Json.JsonElement property)
+                    {
+                        if (property.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            if (property.TryGetProperty("s", out var s))
+                                return s.GetString();
+
+                            if (property.TryGetProperty("S", out var S))
+                                return S.GetString();
+                        }
+
+                        if (property.ValueKind == System.Text.Json.JsonValueKind.String)
+                            return property.GetString();
+
+                        return null;
+                    }
+
+                    var inviteData = new InviteClientData
+                        {
+                            Id = GetStringValue(firstItem, "Id"),
+                            Name = GetStringValue(firstItem, "Name"),
+                            Industry = GetStringValue(firstItem, "Industry"),
+                            Prompt = GetStringValue(firstItem, "Prompt"),
+                            Email = GetStringValue(firstItem, "Email"),
+                            ImagePath = GetStringValue(firstItem, "ImagePath") ?? GetStringValue(firstItem, "Imagepath"),
+                            ImageId = GetStringValue(firstItem, "ImageId"),
+                            UseSameImageSeedForAll = GetBoolValue(firstItem, "UseSameImageSeedForAll"),
+                            TimeStamp = GetStringValue(firstItem, "Timestamp") ?? GetStringValue(firstItem, "TimeStamp")
+                        };
+
+                    Console.WriteLine($"✅ Retrieved invite data for email: {email}");
+                    return inviteData;
+                }
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                Console.WriteLine($"⚠️ No invite found for email: {email}");
+                return null;
+            }
+
+            var errorContent = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"❌ Failed: {response.StatusCode}, Error: {errorContent}");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task<string> FetchDeliverableDetail(string deliverable)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetDeliverableDetail?code=REDACTED_FOR_GROOMING";
+
+        var content = new StringContent($"\"{deliverable}\"", System.Text.Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var detail = await response.Content.ReadAsStringAsync();
+
+            // Normalize newlines and collapse to one line
+            string singleLine = Regex.Replace(detail, @"\s*\r?\n\s*", " ").Trim();
+            return singleLine;
+        }
+
+        return "Error: Unable to fetch deliverable detail.";
+    }
+
+    private List<string> ParseDeliverableList(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return new List<string>();
+
+        // Step 1: Clean up common enclosing characters
+        raw = raw.Trim('\'', '"', '.', ' ', '\n', '\r');
+
+        // Step 2: Replace known delimiters with newlines to standardize
+        raw = Regex.Replace(raw, @"\s*\d+\.\s*", "\n");
+        raw = raw.Replace(",", "\n");
+        raw = raw.Replace("•", "\n");
+
+        // Step 3: Split on newlines and trim each item
+        var items = raw
+            .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(i => i.Trim())
+            .Where(i => !string.IsNullOrWhiteSpace(i))
+            .ToList();
+
+        return items;
+    }
+
+    public class InviteClientData
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string Industry { get; set; }
+        public string Prompt { get; set; }
+        public string Email { get; set; }
+        public string ImagePath { get; set; }
+        public string ImageId { get; set; }
+        public bool UseSameImageSeedForAll { get; set; }
+        public string TimeStamp { get; set; }
+    }
+}

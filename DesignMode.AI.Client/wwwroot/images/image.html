@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <title>Check whether image is loaded or not</title>
+   <style>
+      body{
+         min-height: 90vh;
+         display: flex;
+         flex-direction: column;
+         place-content: center;
+         background-color: #0a0a0a;
+         color: white;
+         text-align: center;
+      }
+      img{
+         width: 50%;
+         height: 70%;
+         border-radius: 8px;
+         margin: auto auto ;
+         box-shadow: 0 0 8px white;
+      }
+   </style>
+</head>
+<body>
+    <img src="https://image.pollinations.ai/prompt/a%20child%20outside%20of%20mcdonalds%20at%20night%20back%20lid%20dangerous%20create%20a%20logo%20for%20a%20car%20company%20with%203000%20people%20watching%20outside%20with%20adoration%20for%20the%20LOrd%20Jesus%20555?nologo=true" id="sample" onload="checkLoad()" onerror="checkError()" alt="error" style="display:none;"><span id="output"><img src="tube-spinner.svg" /></span>
+    <img src="https://image.pollinations.ai/prompt/a%20child%20outside%20of%20mcdonalds%20at%20night%20back%20lid%20dangerous%20create%20a%20logo%20for%20a%20car%20company%20with%203000%20people%20watching%20outside%20with%20adoration%20for%20the%20LOrd%20Jesus%20666?nologo=true" id="sample1" onload="checkLoad()" onerror="checkError()" alt="error" style="display:none;"><span id="output1"><img src="tube-spinner.svg" /></span>
+
+    <script>
+        document.getElementById("sample").addEventListener("load", () => {
+            document.getElementById("output").innerHTML = '<img src="https://image.pollinations.ai/prompt/a%20child%20outside%20of%20mcdonalds%20at%20night%20back%20lid%20dangerous%20create%20a%20logo%20for%20a%20car%20company%20with%203000%20people%20watching%20outside%20with%20adoration%20for%20the%20LOrd%20Jesus%20555?nologo=true" />';
+        })
+        document.getElementById("sample").addEventListener("error", () => {
+            document.getElementById("output").innerHTML = "Error occured while loading image!";
+        })
+        document.getElementById("sample1").addEventListener("load", () => {
+            document.getElementById("output1").innerHTML = '<img src="https://image.pollinations.ai/prompt/a%20child%20outside%20of%20mcdonalds%20at%20night%20back%20lid%20dangerous%20create%20a%20logo%20for%20a%20car%20company%20with%203000%20people%20watching%20outside%20with%20adoration%20for%20the%20LOrd%20Jesus%20666?nologo=true" />';
+        })
+        document.getElementById("sample1").addEventListener("error", () => {
+            document.getElementById("output1").innerHTML = "Error occured while loading image!";
+        })
+    </script>
+</body>
+</html>

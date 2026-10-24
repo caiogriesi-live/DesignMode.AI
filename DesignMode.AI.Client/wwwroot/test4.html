@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DesignMode Unlock Page</title>
+  <style>
+    :root{
+      --ink:#0b123d;
+      --muted:#566184;
+      --line:#e7e9f4;
+      --soft:#f8f7ff;
+      --purple:#5b35f5;
+      --purple2:#8a3ffc;
+      --bg:#fff;
+      --shadow:0 24px 70px rgba(18,22,61,.12),0 4px 18px rgba(18,22,61,.06);
+      --radius:18px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color:var(--ink);
+      background:linear-gradient(180deg,#fff 0%,#fbfbff 100%);
+    }
+    .topbar{
+      position:sticky;top:0;z-index:50;height:76px;background:rgba(255,255,255,.92);
+      backdrop-filter:blur(16px);border-bottom:1px solid var(--line);
+      display:grid;grid-template-columns:220px 1fr 110px;align-items:center;padding:0 42px;gap:18px;
+    }
+    .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px}
+    .mark{width:31px;height:31px;border-radius:8px;background:linear-gradient(135deg,#8947ff,#2d7bff);position:relative;box-shadow:0 8px 22px rgba(91,53,245,.25)}
+    .mark:after{content:"";position:absolute;left:10px;top:7px;width:10px;height:16px;border-radius:0 10px 10px 0;background:#fff}
+    .steps{display:flex;justify-content:center;align-items:center;gap:34px;font-size:13px;font-weight:700;color:#20264d}
+    .step{display:flex;align-items:center;gap:9px;white-space:nowrap}
+    .num{display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#f0f0f7;color:#58607c;font-size:12px}
+    .active .num{background:var(--purple);color:white;box-shadow:0 8px 16px rgba(91,53,245,.25)}
+    .exit{justify-self:end;border:1px solid var(--line);background:white;border-radius:10px;padding:11px 22px;font-weight:800;color:var(--ink)}
+    main{display:grid;grid-template-columns:minmax(0,1fr) 500px;gap:42px;max-width:1720px;margin:0 auto;padding:42px 48px 80px}
+    .left{min-width:0}.section-title{display:flex;gap:16px;align-items:flex-start;margin-bottom:28px}
+    .badge-num{width:32px;height:32px;border-radius:50%;background:var(--purple);color:white;display:grid;place-items:center;font-weight:900;box-shadow:0 10px 26px rgba(91,53,245,.28);flex:0 0 auto}
+    h1{font-size:28px;line-height:1.1;margin:0 0 9px}.sub{margin:0;color:var(--muted);font-size:17px}.spark{display:inline-block;color:var(--purple);font-size:24px;margin-left:8px}.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px;margin-bottom:20px}.card,.system-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;min-height:212px;position:relative;box-shadow:0 1px 1px rgba(10,20,60,.02);transition:.18s ease}.card:hover{transform:translateY(-2px);box-shadow:0 16px 30px rgba(30,38,84,.08)}.lock{position:absolute;right:12px;top:12px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#f4f0ff;color:var(--purple);font-size:13px;font-weight:900}.thumb{height:96px;border-radius:11px;margin-bottom:18px;background:linear-gradient(135deg,#f7e8c4,#fff);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}.thumb.dark{background:linear-gradient(135deg,#101722,#224237)}.thumb.green{background:linear-gradient(135deg,#173a31,#fff2c7)}.device{width:86%;height:63%;border-radius:8px;background:#10211e;border:3px solid #222;box-shadow:0 12px 24px rgba(0,0,0,.18);position:relative}.device:after{content:"";position:absolute;right:-16px;bottom:-5px;width:34px;height:62px;border-radius:8px;background:#122520;border:3px solid #222}.package{width:54px;height:78px;border-radius:5px;background:#0a5047;color:#ffc15a;font-weight:900;font-size:10px;display:flex;align-items:center;text-align:center;justify-content:center;box-shadow:10px 10px 25px rgba(0,0,0,.12)}.mascot{font-size:55px;filter:drop-shadow(0 10px 10px rgba(0,0,0,.15))}.video-play{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.52);color:white;font-size:22px}.palette{display:flex;gap:7px}.sw{width:24px;height:24px;border-radius:6px}.card h3,.system-card h3{font-size:14px;margin:0 0 9px}.card p,.system-card p{font-size:13px;line-height:1.45;color:#29345f;margin:0}.more{display:flex;align-items:center;gap:16px;padding:18px 28px;border-radius:13px;background:linear-gradient(90deg,#f5efff,#fff);border:1px solid #eee8ff;color:#1c2352;font-size:14px;margin-bottom:38px}.more b{font-size:16px}.divider{border-top:1px solid var(--line);padding-top:28px}.system-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}.system-card{min-height:146px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center}.logo-circle{width:66px;height:66px;border-radius:50%;background:#f3f3f8;display:grid;place-items:center;font-size:38px}.type{font-size:38px;font-weight:900;color:#111}.voice{font-size:17px;line-height:1.45;color:#192355}.sticky-wrap{position:relative}.checkout{position:sticky;top:112px;background:white;border-radius:22px;box-shadow:var(--shadow);padding:28px;max-width:490px;margin:0 auto;border:1px solid rgba(228,229,241,.8)}.selected{color:var(--purple);font-weight:900;font-size:14px;display:flex;gap:10px;align-items:center;margin-bottom:18px}.check{width:24px;height:24px;border-radius:50%;background:var(--purple);color:white;display:grid;place-items:center}.hero-img{height:222px;border-radius:14px;background:radial-gradient(circle at 60% 30%,#f7b64d 0 8%,transparent 9%),linear-gradient(135deg,#0d463b,#f8c16a);display:flex;align-items:center;justify-content:center;margin-bottom:22px;overflow:hidden}.hero-scene{display:flex;align-items:flex-end;gap:18px}.hero-scene .package{width:92px;height:116px;font-size:15px}.hero-scene .mascot{font-size:95px}.label{font-size:13px;color:#4c5578;margin-bottom:6px}.checkout h2{font-size:28px;line-height:1.1;margin:0 0 12px}.checkout .desc{font-size:15px;color:#344069;line-height:1.55;margin:0 0 22px}.designer{display:flex;gap:14px;align-items:center;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:20px 0;margin:22px 0}.avatar{width:54px;height:54px;border-radius:50%;background:linear-gradient(#f7dcc8,#a85d47);position:relative}.avatar:after{content:"";position:absolute;right:1px;bottom:1px;width:12px;height:12px;border-radius:50%;background:#18bf63;border:3px solid white}.designer strong{display:block;font-size:15px}.designer span{display:block;color:var(--muted);font-size:13px;margin-top:3px}.unlock-box{display:flex;gap:14px;background:linear-gradient(135deg,#f5efff,#fff);border-radius:14px;padding:18px;margin-bottom:24px}.unlock-box .icon{width:42px;height:42px;border-radius:50%;background:#e9ddff;color:var(--purple);display:grid;place-items:center;font-size:22px}.unlock-box h3{margin:0 0 6px;font-size:17px}.unlock-box p{margin:0;color:#3d4770;line-height:1.45;font-size:14px}.features{display:grid;grid-template-columns:1fr 1fr;gap:13px 22px;margin:0 0 28px}.feature{display:flex;gap:9px;align-items:center;font-size:13px;color:#17204f}.feature:before{content:"✓";width:18px;height:18px;border-radius:50%;background:#eee8ff;color:var(--purple);display:grid;place-items:center;font-size:12px;font-weight:900}.price-row{display:grid;grid-template-columns:1fr 1.4fr;gap:22px;align-items:center}.price{font-size:39px;font-weight:900;letter-spacing:-1px}.price small{font-size:15px;font-weight:600}.billing{font-size:13px;color:var(--muted);margin-top:4px}.cta{border:0;background:linear-gradient(135deg,#5b35f5,#8f37ff);color:white;border-radius:11px;height:58px;font-weight:900;font-size:16px;box-shadow:0 14px 30px rgba(91,53,245,.25);width:100%;cursor:pointer}.safe{text-align:center;color:var(--muted);font-size:13px;margin:14px 0 0}.logos{border-top:1px solid var(--line);margin-top:24px;padding-top:22px;text-align:center;color:#8a90a5;font-size:13px}.logo-row{display:flex;justify-content:space-between;gap:10px;margin-top:18px;filter:grayscale(1);opacity:.82;font-weight:800}.bottom-cta{margin-top:32px;background:linear-gradient(135deg,#f4efff,#fff);border:1px solid #eee8ff;border-radius:16px;padding:24px 28px;display:flex;justify-content:space-between;align-items:center;gap:18px}.bottom-cta h2{margin:0 0 8px;font-size:24px}.bottom-cta p{margin:0;color:var(--muted)}.bottom-cta .cta{max-width:260px}
+    @media(max-width:1320px){main{grid-template-columns:minmax(0,1fr) 430px;padding:34px 32px}.grid{grid-template-columns:repeat(4,1fr)}.system-grid{grid-template-columns:repeat(3,1fr)}.checkout{padding:24px}.hero-img{height:190px}.features{grid-template-columns:1fr}.price-row{grid-template-columns:1fr}.topbar{grid-template-columns:180px 1fr 80px;padding:0 28px}.steps{gap:18px}}
+    @media(max-width:980px){.topbar{height:auto;grid-template-columns:1fr auto;padding:18px 20px}.steps{grid-column:1/-1;order:3;overflow:auto;justify-content:flex-start;padding-top:12px}.exit{grid-column:2}.step span:last-child{display:none}main{display:block;padding:28px 20px}.sticky-wrap{margin-top:30px}.checkout{position:relative;top:auto;max-width:none}.grid{grid-template-columns:repeat(3,1fr)}.bottom-cta{flex-direction:column;align-items:flex-start}.bottom-cta .cta{max-width:none}}
+    @media(max-width:640px){h1{font-size:24px}.sub{font-size:15px}.grid{grid-template-columns:repeat(2,1fr);gap:12px}.card{min-height:180px;padding:12px}.thumb{height:78px}.system-grid{grid-template-columns:repeat(2,1fr)}.checkout h2{font-size:25px}.hero-img{height:170px}.hero-scene .mascot{font-size:68px}.hero-scene .package{width:66px;height:86px;font-size:11px}.features{grid-template-columns:1fr}.topbar{padding:14px 16px}.brand{font-size:17px}.section-title{gap:12px}.more{padding:16px}.logo-row{flex-wrap:wrap;justify-content:center}.price{font-size:34px}}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><div class="mark"></div>DesignMode</div>
+    <nav class="steps" aria-label="Progress">
+      <div class="step"><div class="num">1</div><span>Brief</span></div>
+      <div class="step"><div class="num">2</div><span>Concepts</span></div>
+      <div class="step active"><div class="num">3</div><span>Select</span></div>
+      <div class="step"><div class="num">4</div><span>Customize</span></div>
+      <div class="step"><div class="num">5</div><span>Launch</span></div>
+    </nav>
+    <button class="exit">Exit</button>
+  </header>
+
+  <main>
+    <section class="left">
+      <div class="section-title">
+        <div class="badge-num">1</div>
+        <div><h1>Unlock this direction to create <span class="spark">✦</span></h1><p class="sub">Turn your concept into every asset your brand needs.</p></div>
+      </div>
+
+      <div class="grid">
+        <article class="card"><div class="lock">🔒</div><div class="thumb"><div class="device"></div></div><h3>Websites</h3><p>Modern, responsive<br>website concepts</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb green"><div class="mascot">🐻</div></div><h3>Social Posts</h3><p>On-brand content for<br>every platform</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb"><div class="package">TA RAKET<br>DE MARS</div></div><h3>Packaging</h3><p>Labels & packaging<br>that sell</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb dark"><div class="video-play">▶</div></div><h3>Video Concepts</h3><p>Short form videos<br>that engage</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb"><div><b style="font-size:22px">TA RAKET</b><div class="palette" style="margin-top:12px"><span class="sw" style="background:#f59621"></span><span class="sw" style="background:#0e5b52"></span><span class="sw" style="background:#ffcc68"></span></div></div></div><h3>Brand Identity</h3><p>Logos, colors, fonts,<br>and brand guidelines</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb green"><div class="device" style="width:70%"></div></div><h3>Digital Marketing</h3><p>Campaigns, email<br>& ad templates</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb"><div class="package"></div><div class="package" style="height:64px;margin-left:8px"></div></div><h3>Print Materials</h3><p>Brochures, flyers,<br>and more</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb dark"><div class="package"></div><div class="package" style="margin-left:8px"></div></div><h3>Event Branding</h3><p>Booth, signage,<br>and event assets</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb"><div style="font-size:68px">👕</div></div><h3>Merchandise</h3><p>Branded merch<br>& promotional items</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb"><div class="device" style="width:70%;height:54%"></div></div><h3>E-commerce Assets</h3><p>Product pages, banners,<br>and shop visuals</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb"><div style="background:#fff;border:1px solid #ddd;border-radius:8px;width:80%;height:58%;display:flex;align-items:center;padding:12px;font-weight:900">Fuel<br>Imagination.</div></div><h3>Presentation Decks</h3><p>Investor decks, pitch<br>& sales presentations</p></article>
+        <article class="card"><div class="lock">🔒</div><div class="thumb green"><div style="display:flex;gap:5px"><div class="device" style="width:38px;height:74px"></div><div class="device" style="width:38px;height:74px"></div><div class="device" style="width:38px;height:74px"></div></div></div><h3>App & UI Design</h3><p>Branded interfaces<br>& app experiences</p></article>
+      </div>
+
+      <div class="more"><span style="font-size:28px;color:var(--purple)">✦</span><span><b>And much more!</b> From email templates and ads to icon sets and custom illustrations — your brand system covers every touchpoint.</span></div>
+
+      <div class="divider">
+        <div class="section-title" style="margin-bottom:20px"><div class="badge-num">2</div><div><h1>Your Brand System</h1><p class="sub">Everything stays consistent. Everything is connected.</p></div></div>
+        <div class="system-grid">
+          <div class="system-card"><h3>Logo</h3><div class="logo-circle">🐻</div></div>
+          <div class="system-card"><h3>Color Palette</h3><div class="palette"><span class="sw" style="background:#00594c"></span><span class="sw" style="background:#f47b20"></span><span class="sw" style="background:#ffc14a"></span><span class="sw" style="background:#a9c4a8"></span></div></div>
+          <div class="system-card"><h3>Typography</h3><div class="type">Aa</div><p>Poppins<br>Bold / Regular</p></div>
+          <div class="system-card"><h3>Illustration Style</h3><div class="mascot">🐻</div></div>
+          <div class="system-card"><h3>Photography Style</h3><div class="thumb" style="height:74px;width:100%;margin:0;background:linear-gradient(135deg,#ffc369,#0b4a41)"></div></div>
+          <div class="system-card"><h3>Brand Voice</h3><div class="voice">Playful, friendly, optimistic and adventurous.</div></div>
+        </div>
+      </div>
+
+      <div class="bottom-cta">
+        <div><h2>Ready to unlock your complete brand system?</h2><p>Turn this direction into a powerful brand experience.</p></div>
+        <button class="cta">🔒 Unlock Brand System</button>
+      </div>
+    </section>
+
+    <aside class="sticky-wrap">
+      <div class="checkout">
+        <div class="selected"><span class="check">✓</span>You selected this direction</div>
+        <div class="hero-img"><div class="hero-scene"><div class="package">TA RAKET<br>DE MARS</div><div class="mascot">🐻</div><div class="package">TA RAKET<br>DE MARS</div></div></div>
+        <div class="label">Selected Direction</div>
+        <h2>Playful &<br>Illustration-Driven</h2>
+        <p class="desc">A fun, memorable direction designed to stand out and connect.</p>
+        <div class="designer"><div class="avatar"></div><div><strong>Sarah Johnson</strong><span>Senior Brand Designer</span><span>Assigned to your project</span></div></div>
+        <div class="unlock-box"><div class="icon">✦</div><div><h3>Unlock your complete brand system</h3><p>Turn this direction into a powerful brand system and access everything you need to launch and grow.</p></div></div>
+        <div class="features"><div class="feature">12+ Deliverables unlocked</div><div class="feature">Export high-res assets</div><div class="feature">Unlimited edits & customization</div><div class="feature">Save & reuse your brand system</div><div class="feature">Complete brand kit & guidelines</div><div class="feature">Priority support</div></div>
+        <div class="price-row"><div><div class="price">$49 <small>/month</small></div><div class="billing">Billed monthly</div></div><button class="cta">🔒 Unlock Brand System</button></div>
+        <div class="safe">Cancel anytime&nbsp;&nbsp;•&nbsp;&nbsp;100% secure</div>
+        <div class="logos">Trusted by founders and teams<div class="logo-row"><span>Vertika</span><span>Spherule</span><span>LUMEN</span><span>Cactus</span></div></div>
+      </div>
+    </aside>
+  </main>
+</body>
+</html>

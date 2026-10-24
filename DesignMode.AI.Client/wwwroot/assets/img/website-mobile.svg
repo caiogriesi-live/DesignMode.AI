@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 400">
+  <rect width="480" height="400" fill="#e4e8db"/><circle cx="240" cy="190" r="159" fill="#ccd7b9"/>
+  <rect x="143" y="14" width="194" height="374" rx="31" fill="#30473d" opacity=".15"/>
+  <rect x="139" y="9" width="194" height="374" rx="31" fill="#173e35"/><rect x="147" y="17" width="178" height="358" rx="24" fill="#fffdf4"/>
+  <rect x="204" y="22" width="64" height="13" rx="7" fill="#173e35"/>
+  <text x="161" y="61" font-family="Arial" font-size="11" font-weight="700" fill="#173e35">form / studio</text><path d="M297 52h13m-13 5h13m-13 5h13" stroke="#173e35"/>
+  <rect x="147" y="76" width="178" height="236" fill="#173e35"/>
+  <g font-family="Arial" fill="#ecf497"><text x="161" y="103" font-size="6" letter-spacing="1">ROOTED IN POSSIBILITY</text><text x="161" y="131" font-size="24" font-weight="700">Room to grow.</text></g>
+  <path d="M239 251Q231 185 284 155Q304 218 239 251" fill="#afc477"/><path d="M241 251Q178 215 191 163Q246 180 241 251" fill="#729754"/><path d="M240 252l35-80m-35 80l-39-69" stroke="#dce5b9" fill="none"/>
+  <rect x="161" y="271" width="150" height="26" rx="13" fill="#ecf497"/><text x="175" y="288" font-family="Arial" font-size="9" fill="#173e35">Explore the collection  ↗</text>
+  <text x="161" y="334" font-family="Arial" font-size="10" font-weight="700" fill="#173e35">A more natural everyday.</text><path d="M161 345h137m-137 7h105" stroke="#bec9b6" stroke-width="3"/>
+  <rect x="214" y="366" width="45" height="3" rx="2" fill="#173e35"/>
+</svg>

@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DesignMode Select</title>
+  <style>
+    :root {
+      --purple: #5b25f5;
+      --purple-2: #7c3cff;
+      --purple-dark: #170064;
+      --ink: #080742;
+      --muted: #4d4a82;
+      --border: #e7e7f2;
+      --bg: #fbfbff;
+      --card: #ffffff;
+      --soft: #f5f1ff;
+      --shadow: 0 24px 70px rgba(20, 16, 70, .14);
+      --radius: 18px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    body::after {
+      content: "";
+      display: none;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 120px;
+      pointer-events: none;
+      z-index: 45;
+      background: linear-gradient(to top, rgba(251,251,255,.98), rgba(251,251,255,0));
+    }
+
+    header {
+      height: 74px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 42px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,.86);
+      backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .logo-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #3512d8, #8b5cff);
+    }
+
+    .steps {
+      display: flex;
+      gap: 34px;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .step span {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #ececf5;
+      color: #5d5b83;
+      font-size: 12px;
+    }
+
+    .step.active { color: var(--ink); }
+
+    .step.active span {
+      background: var(--purple);
+      color: white;
+    }
+
+    .exit {
+      background: white;
+      border: 1px solid var(--border);
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 390px;
+      gap: 36px;
+      padding: 38px 42px 120px;
+      max-width: 1480px;
+      margin: 0 auto;
+    }
+
+    .section-title {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 28px;
+    }
+
+    .number {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--purple);
+      color: white;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      flex: 0 0 auto;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(24px, 3vw, 34px);
+      line-height: 1.05;
+      letter-spacing: -.04em;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin-top: 10px;
+      font-size: 15px;
+    }
+
+    .asset-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .asset-card,
+    .system-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      min-height: 210px;
+      position: relative;
+      box-shadow: 0 10px 28px rgba(12, 10, 60, .04);
+    }
+
+    .lock {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      color: var(--purple);
+      font-size: 14px;
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(255,255,255,.86);
+      border: 1px solid rgba(231,231,242,.9);
+      box-shadow: 0 6px 18px rgba(12,10,60,.08);
+      z-index: 2;
+    }
+
+    .thumb {
+      width: 100%;
+      height: 105px;
+      border-radius: 10px;
+      object-fit: cover;
+      background: #f4f1ec;
+      margin-bottom: 18px;
+    }
+
+    .asset-card h3,
+    .system-card h3 {
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+
+    .asset-card p,
+    .system-card p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .note {
+      margin: 18px 0;
+      border-radius: 12px;
+      background: linear-gradient(90deg, #f3edff, #fbf8ff);
+      padding: 18px 24px;
+      color: var(--muted);
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      font-size: 14px;
+    }
+
+    .brand-system {
+      border-top: 1px solid var(--border);
+      margin-top: 18px;
+      padding-top: 24px;
+    }
+
+    .system-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 16px;
+      margin-top: 22px;
+    }
+
+    .system-card {
+      min-height: 130px;
+      text-align: center;
+    }
+
+    .system-card .thumb {
+      height: 70px;
+      margin-bottom: 10px;
+    }
+
+    .side {
+      position: sticky;
+      top: 96px;
+      align-self: start;
+      background: white;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      max-height: calc(100dvh - 116px);
+      overflow: auto;
+    }
+
+    .selected {
+      color: var(--purple);
+      font-weight: 800;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .hero-img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      border-radius: 12px;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .side h2 {
+      font-size: 25px;
+      letter-spacing: -.04em;
+      margin-bottom: 10px;
+    }
+
+    .side p {
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .designer {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 18px;
+    }
+
+    .avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      padding: 6px 0 0;
+    }
+
+    .price {
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: -.04em;
+      white-space: nowrap;
+    }
+
+    .price small {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .btn {
+      border: 0;
+      background: linear-gradient(135deg, #6729ff, #4e16df);
+      color: white;
+      border-radius: 10px;
+      padding: 16px 26px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(91,37,245,.28);
+    }
+
+    .side .btn { flex: 1; }
+
+    .mobile-bar { display: none; }
+
+    @media (max-width: 1320px) {
+      .page {
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 28px;
+      }
+
+      .asset-grid { grid-template-columns: repeat(3, 1fr); }
+
+      .hero-img { height: 150px; }
+
+      .side {
+        padding: 20px;
+        top: 90px;
+      }
+
+      .side h2 { font-size: 22px; }
+
+      .price-row {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .side .btn { width: 100%; }
+    }
+
+    @media (max-width: 1100px) {
+      body::after { display: block; }
+
+      .page {
+        grid-template-columns: 1fr;
+        max-width: 760px;
+      }
+
+      .side { display: none; }
+
+      .asset-grid { grid-template-columns: repeat(2, 1fr); }
+
+      .system-grid { grid-template-columns: repeat(3, 1fr); }
+
+      .mobile-bar {
+        position: fixed;
+        left: 14px;
+        right: 14px;
+        bottom: calc(14px + var(--safe-bottom));
+        z-index: 50;
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 12px;
+        background: rgba(255,255,255,.94);
+        backdrop-filter: blur(18px);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 12px;
+        box-shadow: 0 18px 50px rgba(20,16,70,.22);
+      }
+
+      .mobile-bar img {
+        width: 52px;
+        height: 52px;
+        border-radius: 12px;
+        object-fit: cover;
+      }
+
+      .mobile-copy {
+        min-width: 0;
+      }
+
+      .mobile-bar h3 {
+        font-size: 14px;
+        margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .mobile-price {
+        font-size: 18px;
+        font-weight: 900;
+        letter-spacing: -.03em;
+        color: var(--ink);
+      }
+
+      .mobile-price small {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .mobile-bar .btn {
+        padding: 14px 18px;
+        white-space: nowrap;
+        min-width: 104px;
+      }
+    }
+
+    @media (max-width: 720px) {
+      header {
+        height: 68px;
+        padding: 0 18px;
+      }
+
+      .steps { display: none; }
+
+      .exit {
+        padding: 10px 18px;
+      }
+
+      .page {
+        padding: 28px 16px 120px;
+      }
+
+      .asset-grid,
+      .system-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .asset-card {
+        min-height: auto;
+        padding: 16px;
+      }
+
+      .thumb {
+        height: 126px;
+        margin-bottom: 14px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      .subtitle {
+        font-size: 15px;
+      }
+
+      .note {
+        padding: 16px;
+        align-items: flex-start;
+      }
+
+      .mobile-bar {
+        grid-template-columns: 48px minmax(0, 1fr) auto;
+        left: 12px;
+        right: 12px;
+        bottom: calc(12px + var(--safe-bottom));
+        padding: 10px;
+        border-radius: 18px;
+      }
+
+      .mobile-bar img {
+        width: 48px;
+        height: 48px;
+      }
+
+      .mobile-bar h3 {
+        font-size: 13px;
+      }
+
+      .mobile-price {
+        font-size: 17px;
+      }
+
+      .mobile-bar .btn {
+        padding: 13px 16px;
+        min-width: 92px;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .mobile-bar {
+        gap: 10px;
+      }
+
+      .mobile-bar img {
+        width: 44px;
+        height: 44px;
+      }
+
+      .mobile-bar h3 {
+        max-width: 160px;
+      }
+
+      .mobile-bar .btn {
+        min-width: 86px;
+        padding-inline: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark"></div>
+    DesignMode
+  </div>
+
+  <nav class="steps">
+    <div class="step"><span>1</span>Brief</div>
+    <div class="step"><span>2</span>Concepts</div>
+    <div class="step active"><span>3</span>Select</div>
+    <div class="step"><span>4</span>Customize</div>
+    <div class="step"><span>5</span>Launch</div>
+  </nav>
+
+  <button class="exit">Exit</button>
+</header>
+
+<main class="page">
+  <section>
+    <div class="section-title">
+      <div class="number">1</div>
+      <div>
+        <h1>Unlock this direction to create ✨</h1>
+        <p class="subtitle">Turn your concept into every asset your brand needs.</p>
+      </div>
+    </div>
+
+    <div class="asset-grid">
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/f7f3ea/111?text=Website" alt="">
+        <h3>Websites</h3>
+        <p>Modern, responsive website concepts</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/eaf1ea/111?text=Social+Posts" alt="">
+        <h3>Social Posts</h3>
+        <p>On-brand content for every platform</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/f4f0e5/111?text=Packaging" alt="">
+        <h3>Packaging</h3>
+        <p>Labels &amp; packaging that sell</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/e8ecdf/111?text=Video" alt="">
+        <h3>Video Concepts</h3>
+        <p>Short form videos that engage</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/f8f8f8/111?text=Brand+Kit" alt="">
+        <h3>Brand Kit</h3>
+        <p>Logos, colors, fonts, and brand guidelines</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/e7ece0/111?text=Marketing" alt="">
+        <h3>Digital Marketing</h3>
+        <p>Campaigns, email &amp; ad templates</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/f5f3ea/111?text=Print" alt="">
+        <h3>Print Materials</h3>
+        <p>Brochures, flyers, and more</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/e4e9de/111?text=Event" alt="">
+        <h3>Event Branding</h3>
+        <p>Booth, signage, and event assets</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/e8f0e4/111?text=Merch" alt="">
+        <h3>Merchandise</h3>
+        <p>Branded merch &amp; promotional items</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/f2f4f8/111?text=Ecommerce" alt="">
+        <h3>E-commerce Assets</h3>
+        <p>Product pages, banners, and shop visuals</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/f5efe2/111?text=Decks" alt="">
+        <h3>Presentation Decks</h3>
+        <p>Investor decks, pitch &amp; sales presentations</p>
+      </article>
+
+      <article class="asset-card">
+        <span class="lock">🔒</span>
+        <img class="thumb" src="https://placehold.co/500x320/ecf0f7/111?text=App+UI" alt="">
+        <h3>App &amp; UI Design</h3>
+        <p>Branded interfaces &amp; app experiences</p>
+      </article>
+    </div>
+
+    <div class="note">
+      🔒
+      <span>
+        <strong>And much more!</strong>
+        From email templates and ads to icon sets and custom illustrations —
+        your brand system covers every touchpoint.
+      </span>
+    </div>
+
+    <section class="brand-system">
+      <div class="section-title">
+        <div class="number">2</div>
+        <div>
+          <h1>Your Brand System</h1>
+          <p class="subtitle">Everything stays consistent. Everything is connected.</p>
+        </div>
+      </div>
+
+      <div class="system-grid">
+        <article class="system-card">
+          <img class="thumb" src="https://placehold.co/180x120/f2f2f2/111?text=Logo" alt="">
+          <h3>Logo</h3>
+        </article>
+        <article class="system-card">
+          <img class="thumb" src="https://placehold.co/180x120/fff/111?text=Palette" alt="">
+          <h3>Color Palette</h3>
+        </article>
+        <article class="system-card">
+          <img class="thumb" src="https://placehold.co/180x120/fff/111?text=Aa" alt="">
+          <h3>Typography</h3>
+        </article>
+        <article class="system-card">
+          <img class="thumb" src="https://placehold.co/180x120/f8efd9/111?text=Style" alt="">
+          <h3>Illustration Style</h3>
+        </article>
+        <article class="system-card">
+          <img class="thumb" src="https://placehold.co/180x120/e4b45c/111?text=Photo" alt="">
+          <h3>Photography Style</h3>
+        </article>
+        <article class="system-card">
+          <h3>Brand Voice</h3>
+          <p>Playful, friendly, optimistic and adventurous.</p>
+        </article>
+      </div>
+    </section>
+  </section>
+
+  <aside class="side">
+    <div class="selected">✓ You selected this direction</div>
+    <img class="hero-img" src="https://placehold.co/800x360/173232/fff?text=Selected+Concept" alt="Selected concept">
+
+    <div class="eyebrow">Selected Direction</div>
+    <h2>Playful & Illustration-Driven</h2>
+    <p>A fun, memorable direction designed to stand out and connect.</p>
+
+    <div class="designer">
+      <img class="avatar" src="https://placehold.co/100x100" alt="">
+      <div>
+        <strong>Sarah Johnson</strong>
+        <p>Senior Brand Designer<br>Assigned to your project</p>
+      </div>
+    </div>
+
+    <div class="price-row">
+      <div>
+        <div class="price">$49<small>/month</small></div>
+        <p>Billed monthly</p>
+      </div>
+      <button class="btn">🔒 Unlock Brand System</button>
+    </div>
+  </aside>
+</main>
+
+<div class="mobile-bar">
+  <img src="https://placehold.co/160x160/173232/fff?text=Concept" alt="">
+  <div class="mobile-copy">
+    <h3>Playful & Illustration-Driven</h3>
+    <div class="mobile-price">$49<small>/mo</small></div>
+  </div>
+  <button class="btn">🔒 Unlock</button>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,78 @@
+<div class="button-group">
+  <button class="upgrade-btn">
+    <span class="icon">💰</span>150 Upgrade
+  </button>
+  
+  <!-- New AI Recommendations button -->
+  <button class="ai-recommendations-btn">
+    <span class="badge">AI</span> Recommendations
+  </button>
+  
+  <button class="videos-btn">
+    <span class="icon">🎬</span>0 Videos
+  </button>
+  
+  <button class="brandkit-btn">
+    <span class="icon">✨</span>5 Brand Kit
+  </button>
+</div>
+
+<style>
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  border: none;
+  border-radius: 24px;
+  padding: 8px 16px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+/* Existing Buttons */
+.upgrade-btn {
+  background-color: #f9b233;
+  color: #fff;
+}
+
+.videos-btn, .brandkit-btn {
+  background-color: #f4f5f7;
+  color: #1a1a2e;
+}
+
+.brandkit-btn {
+  background-color: #2b3663;
+  color: #fff;
+}
+
+/* ✨ New AI Recommendations Button */
+.ai-recommendations-btn {
+  background-color: #fff8e1;
+  color: #1a1a2e;
+  border: 1px solid #f0e2b6;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.ai-recommendations-btn .badge {
+  background-color: #f6d76f;
+  color: #1a1a2e;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.ai-recommendations-btn:hover {
+  background-color: #fff3c0;
+}
+
+</style>

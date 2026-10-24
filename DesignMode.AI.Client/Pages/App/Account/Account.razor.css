@@ -1,0 +1,17 @@
+.account-page { position: fixed; inset: 0; z-index: 50; display: flex; height: 100dvh; overflow-x: hidden; overflow-y: auto; box-sizing: border-box; background: #f7f8fc; color: #0a1a2f; }
+.account-content { flex: 1; display: flex; flex-direction: column; min-width: 0; box-sizing: border-box; padding: 36px clamp(16px, 4vw, 48px); }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 24px; }
+header h1 { margin: 0; }
+.logout-link { margin-left: auto; text-decoration: none; }
+.profile-icon { font-size: 32px; }
+.account-card { flex: 1; background: white; border: 1px solid #edf2f7; border-radius: 24px; padding: 28px; overflow-wrap: anywhere; }
+.account-card h2 { font-size: 16px; margin-top: 20px; }
+.account-card h2:first-child { margin-top: 0; }
+.account-button { background: #f1f5f9; color: #0a1a2f; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 18px; min-height: 44px; cursor: pointer; }
+.cancel-button { background: #0a1a2f; color: white; }
+.account-button:disabled { opacity: .6; cursor: wait; }
+.account-error { padding: 16px; margin-bottom: 16px; background: #fff0f0; color: #9d2525; border-radius: 12px; }
+.modal-overlay { position: fixed; inset: 0; z-index: 11000; background: rgba(10, 26, 47, .5); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.account-modal { background: white; border-radius: 24px; padding: 28px; width: 100%; max-width: 540px; max-height: 90vh; overflow-y: auto; }
+.modal-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+@media (max-width: 1199px) { .account-content { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)); } }

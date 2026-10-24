@@ -1,0 +1,178 @@
+﻿@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public string ImageUrl { get; set; }
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+
+    private async Task CloseModal()
+    {
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+}
+
+@* @if (Show)
+{
+    <div class="modal-overlay" @onclick="() => OnClose.InvokeAsync(null)">
+        <div class="modal-wrapper" @onclick:stopPropagation>
+            <img src="@ImageUrl" alt="Modal Image" class="modal-image" />
+            <button class="close-button" @onclick="() => OnClose.InvokeAsync(null)">Close</button>
+        </div>
+    </div>
+} *@
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-wrapper" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+            <img src="@ImageUrl" alt="Full Size Image" class="modal-image" />
+@*             <div class="modal-bottom">
+                <button class="bottom-button" @onclick="CloseModal">Do Something</button>
+            </div> *@
+        </div>
+    </div>
+}
+
+
+<style>
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        animation: blurIn 0.2s ease-out forwards;
+        backdrop-filter: blur(5px); /* Ensures blur stays post-animation */
+        -webkit-backdrop-filter: blur(5px);
+        background-color: rgba(0, 0, 0, 0.7); /* Fallback background */
+    }
+
+
+    @@keyframes zoomFadeIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes blurIn {
+        0% {
+            backdrop-filter: blur(0px);
+            background-color: rgba(0, 0, 0, 0);
+        }
+
+        100% {
+            backdrop-filter: blur(5px);
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+    }
+
+
+    .modal-wrapper {
+        display: inline-block;
+        background: white;
+        border-radius: 8px;
+        padding: 0;
+        overflow: hidden;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        animation: zoomFadeIn 0.3s ease-out forwards;
+    }
+
+
+    .modal-image {
+        width: 100%;
+        /* height: auto; */
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+
+    .close-button {
+        width: 100%;
+        padding: 0.75rem;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-top: 1px solid #ccc;
+        cursor: pointer;
+        font-size: 1rem;
+        border-radius: 0 0 8px 8px;
+    }
+
+    /*     .modal-close {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 2rem;
+            color: #000;
+            cursor: pointer;
+            z-index: 10;
+        } */
+
+    .modal-close {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        width: 30px;
+        height: 30px;
+        background-color: rgba(255, 255, 255, 0.3);
+        border: none;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        color: #000;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        padding: 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(4px);
+        transition: background-color 0.2s ease;
+        padding-bottom: 6px;
+    }
+
+        .modal-close:hover {
+            background-color: rgba(255, 255, 255, 0.6);
+            color: #000;
+        }
+
+    .modal-bottom {
+        background-color: white;
+        height: 75px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-top: 1px solid #eee;
+        padding: 0; /* remove extra padding to preserve height */
+    }
+
+
+    .bottom-button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 0.6rem 1.2rem;
+        font-size: 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+        .bottom-button:hover {
+            background-color: #0056b3;
+        }
+
+</style>

@@ -1,0 +1,153 @@
+@page "/test123"
+@using DesignMode.AI.Shared.Models;
+@using DesignMode.AI.Shared.Interfaces.Business;
+@using DesignMode.AI.Common;
+@using DesignMode.AI.Shared.Requests;
+@using DesignMode.AI.Shared.Util;
+@using System.Net.Http.Json;
+@using DesignMode.AI.Services.OpenAI;
+@using DesignMode.AI.Services.OpenAI.Models;
+@using DesignMode.AI.Client.Services;
+@using RestSharp;
+@using Microsoft.AspNetCore.Authorization;
+@using DesignMode.AI.Shared.Security;
+@inject NavigationManager Nav
+
+@attribute [AllowAnonymous]
+
+<PageTitle>Home</PageTitle>
+
+@inject ApiConfigService ApiConfig
+
+<p>Current API URL: @ApiConfig.ApiBaseUrl</p>
+
+<h1>Hello, world!</h1>
+
+Welcome to your new app.
+
+@if (testModel == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <p>@testModel.TestText</p>
+}
+
+@if (!string.IsNullOrEmpty(aiResponse))
+{
+    <p>AI Response: @aiResponse</p>
+}
+
+<button @onclick="CallAzureFunction">Call Azure Function</button>
+<button @onclick="PostTestText">Post Test Text</button>
+<button @onclick="CallOpenAIFunction">Call AI Service</button>
+<button @onclick="CallBatchFunction">Call Batch Function</button>
+
+@code {
+    private TestModel testModel;
+    private string testText = "Sample test text";
+    private string aiResponse;
+
+    private async Task CallAzureFunction()
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            string functionUrl = $"{@ApiConfig.ApiBaseUrl}api/Function1?code=REDACTED_FOR_GROOMING";
+
+            var response = await client.GetFromJsonAsync<Response<TestModel>>(functionUrl);
+            if (response != null)
+            {
+                testModel = response.Item;
+            }
+        }
+        catch (Exception ex)
+        {
+            testModel = new TestModel { TestText = $"Error: {ex.Message}" };
+        }
+    }
+
+    private async Task PostTestText()
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            string functionUrl = $"{@ApiConfig.ApiBaseUrl}api/PostTestText?code=REDACTED_FOR_GROOMING";
+
+            var request = new TestTextRequest { SetTestText = testText };
+            var response = await client.PostAsJsonAsync(functionUrl, request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseData = await response.Content.ReadFromJsonAsync<Response<TestModel>>();
+                Console.WriteLine("Response: " + responseData);
+            }
+            else
+            {
+                Console.WriteLine("Error: " + response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Exception: " + ex.Message);
+        }
+    }
+
+    private async Task CallOpenAIFunction()
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            string functionUrl = $"{@ApiConfig.ApiBaseUrl}api/GetAIResponse?code=REDACTED_FOR_GROOMING";
+
+            var request = new { Prompt = "list 7 animals" };
+            var response = await client.PostAsJsonAsync(functionUrl, request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseData = await response.Content.ReadFromJsonAsync<Response<OpenAIResponse>>();
+                aiResponse = responseData?.Item?.Response ?? "No response from AI.";
+            }
+            else
+            {
+                aiResponse = $"Error: {response.StatusCode}";
+            }
+        }
+        catch (Exception ex)
+        {
+            aiResponse = $"Exception: {ex.Message}";
+        }
+    }
+
+    private async Task CallBatchFunction()
+    {
+        try
+        {
+            string original = "Hello World caio";
+            string obfuscated = Utilities.XorString(original);
+            string deobfuscated = Utilities.DecryptXorString(obfuscated);
+            HttpClient client = new HttpClient();
+            string functionUrl = $"{@ApiConfig.ApiBaseUrl}api/Batch?code=REDACTED_FOR_GROOMING"; // Update the URL to match your Batch function
+
+            // Pass the ID to the Batch function (e.g., ID = 1)
+            var request = new { FunctionGUID = Utilities.XorString("CAF6825C-C24F-442D-99C7-43D42E995EB2") };
+
+            var response = await client.PostAsJsonAsync(functionUrl, request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseData = await response.Content.ReadFromJsonAsync<Response<TestModel>>();
+                testModel = responseData?.Item;
+            }
+            else
+            {
+                testModel = new TestModel { TestText = $"Error: {response.StatusCode}" };
+            }
+        }
+        catch (Exception ex)
+        {
+            testModel = new TestModel { TestText = $"Exception: {ex.Message}" };
+        }
+    }
+}

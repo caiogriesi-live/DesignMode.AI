@@ -1,0 +1,23 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 245 245" width="245" height="245">
+	<title>blue-logo-single-menu</title>
+	<defs>
+		<radialGradient id="g1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(233.119,0,0,233.119,41.52,46.748)">
+			<stop offset=".115" stop-color="#6c7bde"/>
+			<stop offset=".12" stop-color="#6c7bde"/>
+			<stop offset=".71" stop-color="#4558d2"/>
+			<stop offset=".762" stop-color="#4558d2"/>
+		</radialGradient>
+		<linearGradient id="g2" x2="1" gradientUnits="userSpaceOnUse" gradientTransform="matrix(99.029,67.52,-79.978,117.301,70.493,39.766)">
+			<stop offset="0" stop-color="#1f2951"/>
+			<stop offset="1" stop-color="#1f2951"/>
+		</linearGradient>
+	</defs>
+	<style>
+		.s0 { fill: url(#g1) } 
+		.s1 { fill: #ffffff } 
+		.s2 { fill: url(#g2) } 
+	</style>
+	<path id="&lt;Path&gt; copy 13" class="s0" d="m243.9 122.9c0 67-54.3 121.4-121.4 121.4-67 0-121.4-54.4-121.4-121.4 0-67.1 54.4-121.4 121.4-121.4 67.1 0 121.4 54.3 121.4 121.4z"/>
+	<path id="&lt;Path&gt; copy 14" class="s1" d="m120 122c15.1 15.2 27.6 32.6 33.8 53.5 3.1 10.7 11.3 10.7 24.4 0 10.4-7.8 24.3-24.1 22.8-38.5-9.8-33.2-35.7-56.4-61.3-77.8-10.2-7.9-29.2-7.9-39.4 0-9.1 7.6-18.5 15.7-27.3 24.4 16 11.6 32.6 24 47 38.4z"/>
+	<path id="&lt;Path&gt; copy 15" class="s2" d="m61.9 175.5c13 10.7 21.3 10.7 24.3 0 5.9-19.8 17.4-36.4 31.4-51q-0.1 0-0.1-0.1c-14.1-14.1-30.7-26.5-46.5-38l-0.4-0.3c-14.2 14.6-26.2 31.1-31.6 50.9-1.5 14.4 12.4 30.7 22.9 38.5z"/>
+</svg>

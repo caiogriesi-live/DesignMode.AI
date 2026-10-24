@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.1.1" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DesignMode.AI.Business\DesignMode.AI.Business.csproj" />
+    <ProjectReference Include="..\DesignMode.AI.Data\DesignMode.AI.Data.csproj" />
+    <ProjectReference Include="..\DesignMode.AI.Shared\DesignMode.AI.Shared.csproj" />
+    <ProjectReference Include="..\DesignMode.AI.Server\DesignMode.AI.Server.csproj" />
+    <ProjectReference Include="..\DesignMode.AI.Client\DesignMode.AI.Client.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,1033 @@
+@page "/init/upgrade"
+@using Telerik.Blazor.Components
+@using Telerik.Blazor
+@using Telerik.SvgIcons
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using DesignMode.AI.Shared.Security
+@using Microsoft.AspNetCore.Authorization
+@inject NavigationManager NavigationManager
+@inject ApiConfigService ApiConfig
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="dashboard-container">
+    <div class="main-wrapper">
+        <div class="inner-content full-height">
+
+            <!-- TOP BAR -->
+            <div class="top-bar">
+                <div class="page-header">
+                    <span class="designer-badge"
+                          style="cursor:pointer;"
+                          @onclick="HandleClick">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256" style="margin-left: 2px;">
+                            <path d="M228,128a12,12,0,0,1-12,12H69l51.52,51.51a12,12,0,0,1-17,17l-72-72a12,12,0,0,1,0-17l72-72a12,12,0,0,1,17,17L69,116H216A12,12,0,0,1,228,128Z"></path>
+                        </svg>
+                    </span>
+
+                    <h1 class="page-title">Choose the right plan for you ✨</h1>
+                    <p class="page-subtitle">Turn your selected concept into fully unlocked brand systems.</p>
+                </div>
+
+                <!-- SECURE CHECKOUT BADGE - TOP RIGHT -->
+                <div class="secure-badge">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L4 6V12C4 16.97 7.84 21.74 12 22C16.16 21.74 20 16.97 20 12V6L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                        <path d="M12 11V15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                        <circle cx="12" cy="9" r="1" fill="currentColor" />
+                    </svg>
+                    <span>Secure Checkout</span>
+                    <span class="encryption-text">256-bit encryption</span>
+                </div>
+            </div>
+
+            <!-- PLAN TOGGLE - VISIBLE ONLY FOR SUBSCRIPTION PLANS (COLUMN 2 & 3) -->
+            <div class="plan-toggle-container">
+                <div class="plan-toggle" role="group">
+
+                    <button type="button"
+                            class="toggle-option @(billingInterval == "monthly" ? "active" : "")"
+                            @onclick='() => SetBillingInterval("monthly")'
+                            disabled="@isProcessing">
+                        Monthly billing
+                    </button>
+
+                    <button type="button"
+                            class="toggle-option @(billingInterval == "yearly" ? "active" : "")"
+                            @onclick='() => SetBillingInterval("yearly")'
+                            disabled="@isProcessing">
+                        Yearly billing
+                        <span class="save-badge">Save 20%</span>
+                    </button>
+
+                </div>
+            </div>
+
+            <!-- PRICING GRID -->
+            <div class="pricing-grid-wrapper">
+
+                <div class="pricing-grid">
+
+                    <!-- COLUMN 1: ONE-TIME PLAN - $99 -->
+                    <div class="pricing-card one-time-card">
+
+                        <div class="card-header">
+                            <h3 class="plan-name">Starter</h3>
+                            <p class="plan-description">Perfect for getting started.</p>
+                        </div>
+
+                        <div class="plan-price">
+                            <span class="currency">$</span>
+                            <span class="price">99</span>
+                            <span class="period">one-time</span>
+                        </div>
+
+                        <!-- MIDDLE BUTTON -->
+                        <div class="middle-action">
+                            <button class="btn-outline w-100"
+                                    @onclick='() => StartCheckout("starter", true)'
+                                    disabled="@isProcessing">
+
+                                @if (isProcessing && processingPlan == "starter")
+                                {
+                                    <span class="spinner"></span>
+                                    <span>Processing...</span>
+                                }
+                                else
+                                {
+                                    <span>Choose Starter</span>
+                                }
+
+                                <svg class="arrow-icon"
+                                     viewBox="0 0 24 24"
+                                     fill="none"
+                                     stroke="currentColor">
+
+                                    <path d="M5 12h14M13 5l7 7-7 7"
+                                          stroke-width="2"
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round" />
+                                </svg>
+                            </button>
+
+                            <div class="action-note">
+                                🔒 One-time payment
+                            </div>
+                        </div>
+
+                        <div class="card-divider"></div>
+
+                        <ul class="feature-list">
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>3 active projects</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Core AI design tools</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Email support (48h response)</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>50 AI credits</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Basic exports</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Automatic updates for 1 year</span>
+                            </li>
+
+                        </ul>
+
+                        <div class="card-footer">
+                            <button class="btn-primary-style w-100"
+                                    @onclick='() => StartCheckout("starter", true)'
+                                    disabled="@isProcessing">
+                                @if (isProcessing && processingPlan == "starter")
+                                {
+                                    <span class="spinner"></span>
+                                    <span>Processing...</span>
+                                }
+                                else
+                                {
+                                    <span>Upgrade To Starter</span>
+                                }
+                            </button>
+                        </div>
+
+                    </div>
+
+                    <!-- COLUMN 2: PLUS PLAN - MOST POPULAR (MIDDLE COLUMN) - $49/month -->
+                    <div class="pricing-card popular">
+
+                        <div class="popular-badge">🌟 Most Popular</div>
+
+                        <div class="card-header">
+                            <h3 class="plan-name">Plus</h3>
+                            <p class="plan-description">For professional design teams.</p>
+                        </div>
+
+                        <div class="plan-price">
+                            <span class="currency">$</span>
+                            <span class="price">@(billingInterval == "monthly" ? "49" : "39")</span>
+                            <span class="period">/ month</span>
+
+                            @if (billingInterval == "yearly")
+                            {
+                                <span class="billed-amount">Billed annually ($468)</span>
+                            }
+                        </div>
+
+                        <!-- MIDDLE BUTTON -->
+                        <div class="middle-action">
+                            <button class="btn-primary-style w-100"
+                                    @onclick='() => StartCheckout("plus", false)'
+                                    disabled="@isProcessing">
+                                @if (isProcessing && processingPlan == "plus")
+                                {
+                                    <span class="spinner"></span>
+                                    <span>Processing...</span>
+                                }
+                                else
+                                {
+                                    <span>Choose Plus</span>
+                                }
+
+                                <svg class="arrow-icon"
+                                     viewBox="0 0 24 24"
+                                     fill="none"
+                                     stroke="currentColor">
+
+                                    <path d="M5 12h14M13 5l7 7-7 7"
+                                          stroke-width="2"
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round" />
+                                </svg>
+                            </button>
+
+                            <div class="action-note">
+                                🔒 Start instantly · Cancel anytime
+                            </div>
+                        </div>
+
+                        <div class="card-divider"></div>
+
+                        <ul class="feature-list">
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>All Starter features, plus:</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>15 active projects</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Advanced AI tools & generations</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Team collaboration features</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Priority support (12h response)</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>500 AI credits per month</span>
+                            </li>
+
+                        </ul>
+
+                        <div class="card-footer">
+                            <button class="btn-primary-style w-100"
+                                    @onclick='() => StartCheckout("plus", false)'
+                                    disabled="@isProcessing">
+                                @if (isProcessing && processingPlan == "plus")
+                                {
+                                    <span class="spinner"></span>
+                                    <span>Processing...</span>
+                                }
+                                else
+                                {
+                                    <span>Upgrade To Plus</span>
+                                }
+                            </button>
+                        </div>
+
+                    </div>
+
+                    <!-- COLUMN 3: PRO PLAN - $129/month -->
+                    <div class="pricing-card">
+
+                        <div class="card-header">
+                            <h3 class="plan-name">Pro</h3>
+                            <p class="plan-description">For agencies & enterprises.</p>
+                        </div>
+
+                        <div class="plan-price">
+                            <span class="currency">$</span>
+                            <span class="price">@(billingInterval == "monthly" ? "129" : "103")</span>
+                            <span class="period">/ month</span>
+
+                            @if (billingInterval == "yearly")
+                            {
+                                <span class="billed-amount">Billed annually ($1236)</span>
+                            }
+                        </div>
+
+                        <!-- MIDDLE BUTTON -->
+                        <div class="middle-action">
+                            <button class="btn-outline w-100"
+                                    @onclick='() => StartCheckout("pro", false)'
+                                    disabled="@isProcessing">
+                                @if (isProcessing && processingPlan == "pro")
+                                {
+                                    <span class="spinner"></span>
+                                    <span>Processing...</span>
+                                }
+                                else
+                                {
+                                    <span>Choose Pro</span>
+                                }
+
+                                <svg class="arrow-icon"
+                                     viewBox="0 0 24 24"
+                                     fill="none"
+                                     stroke="currentColor">
+
+                                    <path d="M5 12h14M13 5l7 7-7 7"
+                                          stroke-width="2"
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round" />
+                                </svg>
+                            </button>
+
+                            <div class="action-note">
+                                🔒 Start instantly · Cancel anytime
+                            </div>
+                        </div>
+
+                        <div class="card-divider"></div>
+
+                        <ul class="feature-list">
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>All Plus features, plus:</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Unlimited projects & team seats</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Unlimited AI generations & credits</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Dedicated account manager</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>SAML SSO & advanced security</span>
+                            </li>
+
+                            <li>
+                                <svg class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                                <span>99.9% uptime SLA & priority support</span>
+                            </li>
+
+                        </ul>
+
+                        <div class="card-footer">
+                            <button class="btn-primary-style w-100"
+                                    @onclick='() => StartCheckout("pro", false)'
+                                    disabled="@isProcessing">
+                                @if (isProcessing && processingPlan == "pro")
+                                {
+                                    <span class="spinner"></span>
+                                    <span>Processing...</span>
+                                }
+                                else
+                                {
+                                    <span>Upgrade To Pro</span>
+                                }
+                            </button>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- SECURE PAYMENT FOOTER -->
+            <div class="secure-payment-footer">
+                <div class="footer-content">
+                    <div class="payment-badges">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L4 6V12C4 16.97 7.84 21.74 12 22C16.16 21.74 20 16.97 20 12V6L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M12 11V15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                            <circle cx="12" cy="9" r="1" fill="currentColor" />
+                        </svg>
+                        <span><strong>Secure Payment</strong> · 256-bit SSL encryption</span>
+                    </div>
+                    <div class="cancel-anytime">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20 12V8H4V12M20 12L4 12M20 12L20 18H4L4 12M4 12V18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M12 4V8M12 4H8M12 4H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                            <circle cx="12" cy="16" r="1" fill="currentColor" />
+                        </svg>
+                        <span>Cancel anytime · No hidden fees</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<style>
+    .page {
+        background-color: #fff !important;
+    }
+
+    .dashboard-container {
+        min-height: 100vh;
+        padding: 20px;
+        width: 100%;
+    }
+
+    .main-wrapper {
+        width: 100%;
+        max-width: 1600px;
+        margin: 0 auto;
+    }
+
+    .inner-content {
+        width: 100%;
+    }
+
+    .top-bar {
+        padding-bottom: 24px;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 32px;
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+
+    /* Secure Checkout Badge Styles */
+    .secure-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #f0fdf4;
+        padding: 8px 16px;
+        border-radius: 40px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+        white-space: nowrap;
+        flex-shrink: 0;
+        margin-left: 20px;
+    }
+
+        .secure-badge svg {
+            flex-shrink: 0;
+        }
+
+    .encryption-text {
+        background: #166534;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 30px;
+        font-size: 10px;
+        font-weight: 600;
+        margin-left: 2px;
+    }
+
+    /* One-time payment card styles */
+    .one-time-card {
+        background: linear-gradient(135deg, #ffffff 0%, #fefce8 100%);
+        border: 2px solid #eab308;
+    }
+
+    .one-time-badge {
+        display: inline-block;
+        background: #eab308;
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: 20px;
+        margin-top: 8px;
+        letter-spacing: 0.5px;
+    }
+
+    /* Outline button style for non-popular cards */
+    .btn-outline {
+        background: #ffffff;
+        border: 2px solid #2563eb;
+        color: #2563eb;
+        border-radius: 12px !important;
+        padding: 14px 20px;
+        font-weight: 600;
+        font-size: 15px;
+        width: 100%;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+
+        .btn-outline:hover:not(:disabled) {
+            background: #eff6ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        }
+
+        .btn-outline:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+    /* Primary button style for popular card */
+    .btn-primary-style {
+        background: linear-gradient(135deg, #1e3a8a, #2563eb);
+        color: white;
+        border: none;
+        border-radius: 12px !important;
+        padding: 14px 20px;
+        font-weight: 600;
+        font-size: 15px;
+        width: 100%;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+
+        .btn-primary-style:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(30,58,138,0.3);
+        }
+
+        .btn-primary-style:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+    /* Spinner animation */
+    .spinner {
+        width: 18px;
+        height: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 0.8s linear infinite;
+        display: inline-block;
+    }
+
+    .btn-outline .spinner {
+        border: 2px solid rgba(37, 99, 235, 0.3);
+        border-top-color: #2563eb;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Secure Payment Footer */
+    .secure-payment-footer {
+        margin-top: 48px;
+        padding-top: 32px;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .footer-content {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 32px;
+        flex-wrap: wrap;
+    }
+
+    .payment-badges, .cancel-anytime, .money-back {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #64748b;
+    }
+
+        .payment-badges svg, .cancel-anytime svg, .money-back svg {
+            color: #10b981;
+        }
+
+    @@media (max-width: 768px) {
+        .footer-content {
+            flex-direction: column;
+            gap: 16px;
+            text-align: center;
+        }
+    }
+
+    @@media (max-width: 640px) {
+        .top-bar {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .secure-badge {
+            margin-left: 0;
+            align-self: flex-start;
+        }
+    }
+
+    .page-title {
+        font-size: clamp(24px, 5vw, 36px);
+        font-weight: 700;
+        color: #0f172a;
+        margin-top: 16px;
+        margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+        color: #64748b;
+        font-size: 18px;
+        font-weight: 367;
+    }
+
+    .plan-toggle-container {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 40px;
+    }
+
+    .plan-toggle {
+        background: #f1f5f9;
+        border-radius: 60px;
+        padding: 6px;
+        display: inline-flex;
+        gap: 4px;
+    }
+
+    .toggle-option {
+        background: transparent;
+        border: none;
+        padding: 10px 28px;
+        border-radius: 60px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #64748b;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .toggle-option.active {
+            background: #ffffff;
+            color: #1e3a8a;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .toggle-option:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+    .save-badge {
+        background: #dcfce7;
+        color: #166534;
+        padding: 2px 8px;
+        border-radius: 40px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-left: 8px;
+    }
+
+    .pricing-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 28px;
+    }
+
+    @@media (max-width: 900px) {
+        .pricing-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .pricing-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 28px;
+        padding: 32px 28px;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        transition: all .3s ease;
+    }
+
+        .pricing-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 35px -12px rgba(0,0,0,0.08);
+        }
+
+        /* Popular plan styling - Plus (middle column) */
+        .pricing-card.popular {
+            border: 2px solid #1e3a8a;
+            box-shadow: 0 12px 30px -8px rgba(30,58,138,0.15);
+        }
+
+    .popular-badge {
+        position: absolute;
+        top: -12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1e3a8a;
+        color: white;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 5px 18px;
+        border-radius: 40px;
+        white-space: nowrap;
+    }
+
+    .card-header {
+        margin-bottom: 24px;
+    }
+
+    .plan-name {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: #0f172a;
+    }
+
+    .plan-description {
+        font-size: 17px;
+        color: #64748b;
+        font-weight: 367;
+    }
+
+    .plan-price {
+        margin-bottom: 24px;
+    }
+
+        .plan-price .currency {
+            font-size: 20px;
+            font-weight: 600;
+            color: #0f172a;
+            vertical-align: top;
+        }
+
+        .plan-price .price {
+            font-size: 52px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+
+        .plan-price .period {
+            font-size: 14px;
+            color: #64748b;
+        }
+
+    .billed-amount {
+        display: block;
+        font-size: 14px;
+        color: #94a3b8;
+        margin-top: 6px;
+        font-weight: 600;
+    }
+
+    .middle-action {
+        margin-bottom: 24px;
+    }
+
+    .arrow-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    .action-note {
+        text-align: center;
+        margin-top: 10px;
+        font-size: 13px;
+        color: #94a3b8;
+    }
+
+    .card-divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+        margin: 24px 0;
+    }
+
+    .feature-list {
+        list-style: none;
+        margin: 0 0 28px 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1;
+    }
+
+        .feature-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 6px 0;
+            font-size: 14px;
+            color: #475569;
+        }
+
+    .check-icon {
+        width: 18px;
+        height: 18px;
+        color: #10b981;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .card-footer {
+        margin-top: auto;
+    }
+
+    .w-100 {
+        width: 100%;
+    }
+
+    @@media (max-width: 767px) {
+
+        .pricing-card {
+            padding: 24px 20px;
+        }
+
+        .plan-price .price {
+            font-size: 40px;
+        }
+    }
+
+    .back-btn {
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+    }
+
+        .back-btn:hover {
+            opacity: 0.7;
+        }
+</style>
+
+@code {
+    private string billingInterval = "monthly";
+    private string? returnUrl;
+    private bool isProcessing = false;
+    private string? processingPlan = null;
+
+    protected override void OnInitialized()
+    {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+
+        if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query)
+            .TryGetValue("b", out var b))
+        {
+            returnUrl = Uri.UnescapeDataString(b!);
+        }
+    }
+
+    private void SetBillingInterval(string interval)
+    {
+        if (isProcessing) return;
+        billingInterval = interval;
+        StateHasChanged();
+    }
+    private async Task HandleClick()
+    {
+        if (isProcessing)
+            return;
+
+        GoBack();
+    }
+    private readonly Dictionary<string, string> CheckoutLinks = new()
+{
+    // One-time
+    { "starter-one-time", "https://buy.stripe.com/test_00w28r0Md5mBgS13Fk5Rm01" },
+
+    // Monthly
+    { "plus-monthly", "https://buy.stripe.com/test_00weVd52t3eteJT0t85Rm00" },
+    { "pro-monthly", "https://buy.stripe.com/test_8x28wP0Md7uJbxH4Jo5Rm02" },
+
+    // Yearly
+    { "plus-yearly", "https://buy.stripe.com/test_5kQ14n1Qh3etatDejY5Rm03" },
+    { "pro-yearly", "https://buy.stripe.com/test_7sY28r0MdbKZatD1xc5Rm04" }
+};
+
+    private async Task StartCheckout(string plan, bool isOneTime)
+    {
+        if (isProcessing) return;
+
+        try
+        {
+            isProcessing = true;
+            processingPlan = plan;
+            StateHasChanged();
+
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            var username = user.Identity?.Name;
+
+            if (string.IsNullOrWhiteSpace(username))
+                throw new Exception("User is not authenticated.");
+
+            using HttpClient client = new HttpClient();
+
+            // 1. Get UserId
+            var userIdResponse = await client.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/GetUserIdByUsername?code=REDACTED_FOR_GROOMING",
+                new { username });
+
+            userIdResponse.EnsureSuccessStatusCode();
+
+            var userIdResult = await userIdResponse.Content
+                .ReadFromJsonAsync<GetUserIdResponse>();
+
+            var userId = userIdResult?.UserId;
+
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new Exception("UserId could not be resolved.");
+
+            // 2. Extract id from returnUrl safely
+            var uri = new Uri(returnUrl);
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+            var id = query["id"];
+
+            if (string.IsNullOrWhiteSpace(id))
+                throw new Exception("Missing id in returnUrl.");
+
+            // 3. Call checkout session
+            var response = await client.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/CreateCheckoutSession?code=REDACTED_FOR_GROOMING",
+                new
+                {
+                    plan,
+                    billingInterval,
+                    isOneTime,
+                    returnUrl,
+                    userId,
+                    id
+                });
+
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content
+                .ReadFromJsonAsync<CheckoutResponse>();
+
+            NavigationManager.NavigateTo(result.Url, forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Checkout error: {ex.Message}");
+            isProcessing = false;
+            processingPlan = null;
+            StateHasChanged();
+        }
+    }
+
+    public class GetUserIdResponse
+    {
+        public bool Success { get; set; }
+        public string UserId { get; set; }
+    }
+
+    public class CheckoutResponse
+    {
+        public string Url { get; set; }
+        public string SessionId { get; set; }
+    }
+
+    private void GoBack()
+    {
+        if (isProcessing) return;
+
+        if (!string.IsNullOrEmpty(returnUrl))
+        {
+            NavigationManager.NavigateTo(returnUrl, true);
+        }
+        else
+        {
+            NavigationManager.NavigateTo("/", true); // fallback
+        }
+    }
+}

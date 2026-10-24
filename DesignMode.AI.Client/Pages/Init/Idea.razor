@@ -1,0 +1,524 @@
+﻿@page "/init/idea"
+
+@using Telerik.Blazor.Components
+@using Telerik.Blazor
+@using Telerik.SvgIcons
+@inject IJSRuntime JSRuntime
+@inject IJSRuntime JS
+
+<link href="assets/css/brief-landing.css" rel="stylesheet" />
+<div class="wrapper" style="overflow-x: auto; width: 100%;">
+    <div class="page-header" style="background: url('images/header-bg.png') center calc(100% + 350px) no-repeat, linear-gradient(180deg, #Fff 2%, #CDE8EE 60%); background-size: cover; background-color: #f2f3f8; width: 100%; height: 100vh; overflow: hidden; position: relative; overflow-y: auto;">
+        @* animation: fadeInImage 1s ease-in forwards; *@
+        <div class="container shape-container d-flex align-items-start py-lg" style="min-width: 1200px;">
+            <div class="col-12 text-left">
+                <div class="row justify-content-start">
+                    <div class="col-lg-12" style="margin-bottom: 58px;margin-left: -25px;margin-top: -77px;">
+                        <span class="hide-in-firefox" style="position: relative; left: 28px; top: 10px;">
+                            <img src="assets/img/logo-left.png" width="26px" height="26px" class="navbar-brand-img h-100" alt="main_logo"
+                                 style="width: 20px; height: 20px; margin-top: -9px; object-fit: contain;">
+                            <span style="font-family: 'SF Pro Display','Arial'; font-weight: 650; font-size: 24px; color: #1f2951; text-transform: none;">
+                                design<span style="color: #ffa900; font-weight: 650;">
+                                    <img src="images/logo-m3.svg" style="
+                            width: 30px;
+                            margin-left: 3px;
+                            margin-right: 3px;
+                            margin-bottom: 3px;
+                        ">
+                                </span>ode.ai
+                            </span>
+                        </span>
+                    </div>
+                </div>
+                <div class="row justify-content-start" style="opacity:0; animation: moveupleft 0.5s ease-out 0.2s forwards;">
+                    <!-- Left Column -->
+                    <div class="col-lg-5">
+                        <div class="row justify-content-start top-text">
+                            <div class="col-lg-12" style="margin-bottom: 15px;">
+                                <h1 class="text-dark display-1 h1font" tabindex="-1" style="font-size: 24px;color: #1f2951;margin-top: -34px;">
+                                    Tell us what design work you need to have done.
+                                </h1>
+                                <span style="font-size: 18px;">We'll handle all of the AI prompts.  Here are some examples:</span>
+                            </div>
+                        </div>
+                        <div class="row justify-content-start">
+                            <div class="col-lg-12">
+                                <div class="feature-buttons">
+                                    @code {
+                                        private string textareaText = ""; // Added for the textarea content
+                                        private string textareaMinText = ""; // Added for the textarea content
+
+                                        private void UpdateTextareaText(string minText, string newText)
+                                        {
+                                            textareaText = newText;
+                                            textareaMinText = minText;
+                                            IsNextButtonDisabled = true;
+                                        }
+
+                                        private void enablebutton()
+                                        {
+                                            IsNextButtonDisabled = true;
+                                        }
+
+                                        private void UpdatePlaceholder(string newText)
+                                        {
+                                            placeholderText = newText;
+                                        }
+
+                                        private void UpdateTextareaMinText(string newText)
+                                        {
+                                            textareaMinText = newText;
+                                        }
+
+                                        bool IsNextButtonDisabled { get; set; } = true;
+                                    }
+                                    @* <div class="feature-button-pul pulsating"></div>
+                                    <div class="feature-button-pul pulsating"></div>
+                                    <div class="feature-button-pul pulsating"></div>
+                                    <div class="feature-button-pul pulsating"></div>
+                                    <div class="feature-button-pul pulsating"></div>
+                                    <div class="feature-button-pul pulsating"></div> *@
+                                    @if (isLoading)
+                                    {
+                                        <div class="feature-button-pul pulsating"></div>
+                                        <div class="feature-button-pul pulsating"></div>
+                                        <div class="feature-button-pul pulsating"></div>
+                                        <div class="feature-button-pul pulsating"></div>
+                                        <div class="feature-button-pul pulsating"></div>
+                                        <div class="feature-button-pul pulsating"></div>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var button in renderedButtons)
+                                        {
+                                            @button
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row justify-content-start">
+                            <div class="col-lg-12" style="margin-bottom: 15px;">
+                                <br />
+                                <textarea maxlength="2000" class="custom-textarea-min" style="display: none;" placeholder="@placeholderText" @bind="textareaMinText"></textarea>
+                                <textarea maxlength="2000" class="custom-textarea" placeholder="@placeholderText" @bind="textareaText" @oninput="enablebutton"></textarea>
+                            </div>
+                        </div>
+                        @*<div class="row justify-content-start">
+                            <div class="col-lg-12" style="margin-bottom: 15px;">
+                                <h4 class="text-dark display-1 h1font" tabindex="-1" style="font-size: 20px; color: #1f2951;">
+                                    and/or Add Your Data
+                                </h4>
+                            </div>
+                        </div>
+                        <div class="row justify-content-start">
+                             <div class="col-lg-5 feature-import text-center" style="margin-left: 8px;">
+                                <style>
+                                    .container-doc {
+                                        text-align: center;
+                                        padding: 10px;
+                                        cursor: pointer;
+                                    }
+
+                                        .container-doc img {
+                                            max-width: 100%;
+                                            height: auto;
+                                            margin-top: -9px;
+                                        }
+
+                                    /* Hide file input */
+                                    .hidden-file-input {
+                                        display: none;
+                                    }
+                                </style>
+
+                                <label for="fileUpload" class="container-doc">
+                                    <p>Import Spreadsheets</p>
+                                    <img src="images/excel.png" width="30">
+                                </label>
+                                 <input type="file" id="fileUpload" class="hidden-file-input" accept=".xls,.xlsx,.csv" @@@onchange="FileUploaded"> 
+                            </div> 
+                            <div class="col-lg-1 text-center">
+                            </div>
+                            <div class="col-lg-5 feature-import text-center" style="margin-right: 8px;">
+                                <div class="container-doc">
+                                    <p>Import Documents</p>
+                                    <img src="images/word.png" width="30">
+                                </div>
+                            </div>
+                        </div>*@
+
+                        <div class="btn-wrapper mt-4"></div>
+                        <div class="row justify-content-start">
+                            <!-- Spacer Column (optional) -->
+                            <div class="col-lg-10" style="margin-top: -6px;"></div>
+                            <!-- Next Button Column -->
+                            <div class="col-lg-2 next" style="margin-top: -6px;margin-left: 440px;">
+                                <TelerikButton OnClick="@Next" Class="secondary blue-button" Enabled="@IsNextButtonDisabled">Next</TelerikButton>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Column -->
+                    <div class="col-lg-1">
+                    </div>
+                    <!-- Right Column -->
+                    <div class="col-lg-6 dash">
+                        <div class="container-dash" style="opacity:0; animation: moverightleft 0.4s ease-out 0.5s forwards;">
+                            <div class="sidebar-dash">
+@*                                 <span style="font-family: 'SF Pro Display', 'Arial';font-weight: 650;font-size: 18px;color: white;text-transform: none;margin-left: 15px;">
+                                    <span style="color: #ffa900; font-weight: 650;">B</span>rief
+                                </span> *@
+                                <div class="menu-dash" style="margin-top:5px;">
+                                    <div></div>
+                                    <div></div>
+                                    <div></div>
+                                </div>
+                                <div class="bottom-icons-dash">
+                                    <div></div>
+                                    <div></div>
+                                </div>
+                            </div>
+                            <div class="main-content-dash">
+                                <div class="top-bar-dash"></div>
+                                <div class="content-dash"></div>
+                                <div class="content-box-dash">
+                                    <div></div>
+                                    <div></div>
+                                    <div></div>
+                                    <div></div>
+                                    <div></div>
+                                    <div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+
+    function adjustInputWidth(input) {
+        const maxChars = 76;
+
+        // Enforce the character limit
+        if (input.value.length > maxChars) {
+            input.value = input.value.substring(0, maxChars);
+        }
+
+        const span = document.createElement('span');
+        span.style.visibility = 'hidden';
+        span.style.position = 'absolute';
+        span.style.whiteSpace = 'pre';
+        span.style.font = window.getComputedStyle(input).font;
+
+        span.textContent = input.value || input.placeholder;
+        document.body.appendChild(span);
+
+        // Add some padding and ensure it doesn't exceed the maximum width
+        const newWidth = Math.min(span.offsetWidth + 20, 1200); // 1200px = approx. 76 chars in large font
+        input.style.width = newWidth + 'px';
+
+        document.body.removeChild(span);
+    }
+
+    function handleKeyDown(event) {
+        if (event.key === "Enter") {
+            // Trigger the click event on the 'Next' button when Enter is pressed
+            document.getElementById('nextButton').click();
+        }
+    }
+</script>
+
+
+<style>
+    .dash {
+        display: block !important;
+    }
+    @@media (max-width: 768px) {
+    .feature-buttons{
+            width: 32%;
+        }
+
+        .top-text {
+            width: 34%;
+        }
+        .custom-textarea{
+            width: 31% !important;
+        }
+
+        .dash{
+            display:none !important;
+        }
+        .shape-container{
+            margin-left: 9px !important;
+        }
+        .next{
+            margin-left: 275px !important;
+        }
+    }
+
+
+    @@keyframes pulse {
+        0% {
+            transform: scale(1);
+            opacity: 0.7;
+        }
+
+        50% {
+            transform: scale(1.05);
+            opacity: 1;
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 0.7;
+        }
+    }
+
+    .pulsating {
+        animation: pulse 1.5s infinite;
+    }
+
+    .feature-button-pul {
+        background-color: #cce5ff;
+        padding: 16px;
+        border-radius: 40px;
+        border: 1px solid #66b0ff;
+        box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+        cursor: pointer;
+        transition: all 0.3s ease-in-out;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        background-color: #e0eaf5;
+        width: 153px;
+        margin-right: 11px;
+        height: 42px;
+    }
+
+    .feature-button:hover {
+        white-space: normal;
+        overflow: visible;
+    }
+
+    .custom-textarea {
+        color: black; /* Make the text color black */
+    }
+
+    .container-dash {
+        display: flex;
+        width: 90%;
+        height: 90%;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .sidebar-dash {
+        width: 20%;
+        background: #244d88;
+        padding: 20px;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+        .sidebar-dash h2 {
+            margin: 0 0 20px;
+        }
+
+    .menu-dash {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+        .menu-dash div {
+            background: rgba(255, 255, 255, 0.2);
+            height: 10px;
+            border-radius: 5px;
+            width: 80%;
+        }
+
+    .bottom-icons-dash {
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .main-content-dash {
+        flex: 1;
+        padding: 24px;
+    }
+
+    .top-bar-dash, .content-dash {
+        background: #eee;
+        height: 10px;
+        border-radius: 5px;
+        width: 50%;
+        margin-bottom: 20px;
+    }
+
+    .content-box-dash {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+
+        .content-box-dash div {
+            background: #ddd;
+            height: 10px;
+            border-radius: 5px;
+            width: 30%;
+        }
+
+    .feature-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 10px 0;
+    }
+
+    .feature-button {
+        background-color: #e0eaf5;
+        color: #244d88;
+        padding: 12px 22px;
+        border-radius: 50px;
+        cursor: pointer;
+        transition: background-color 0.3s, transform 0.2s;
+        border: 1px solid #244d88;
+        font-size: 15px;
+    }
+
+    .feature-import {
+        width: 44%;
+        height: 150px;
+        background-color: #f4f6fb;
+        color: #1f2951;
+        border: 1px solid grey;
+        border-radius: 8px;
+        padding: 12px 15px;
+        font-size: 16px;
+        font-family: 'SF Pro Display', Arial, sans-serif;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        outline: none;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+    }
+
+    .feature-button:hover {
+        background-color: #cddff0;
+        transform: translateY(-2px);
+    }
+
+    /* Apply a shadow and blue background to the button */
+    .blue-button {
+        background-color: #244d88; /* Set the background to blue */
+        color: white; /* Set the text color to white */
+        border-radius: 5px; /* Optional: round corners */
+        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2); /* Add a shadow */
+        padding: 10px 20px; /* Optional: adjust padding */
+        font-size: 16px; /* Optional: adjust font size */
+        transition: box-shadow 0.3s ease-in-out; /* Optional: smooth transition */
+    }
+
+        .blue-button:hover {
+            box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.5); /* Stronger shadow on hover */
+            background-color: #244d88; /* Set the background to blue */
+        }
+
+    /* Apply a shadow and blue background to the button */
+    .grey-button {
+        background-color: white; /* Set the background to blue */
+        color: black; /* Set the text color to white */
+        border-radius: 5px; /* Optional: round corners */
+        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2); /* Add a shadow */
+        padding: 10px 20px; /* Optional: adjust padding */
+        font-size: 16px; /* Optional: adjust font size */
+        transition: box-shadow 0.3s ease-in-out; /* Optional: smooth transition */
+    }
+
+        .grey-button:hover {
+            box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.5); /* Stronger shadow on hover */
+            background-color: white; /* Set the background to blue */
+        }
+
+    .transparent-input {
+        border: none;
+        border-bottom: 2px solid #ffa900;
+        background: transparent;
+        outline: none;
+        font-size: 74px;
+        padding: 5px;
+        width: 441px;
+        border-radius: 0;
+        color: #244d88;
+        font-family: 'SF Pro Display','Arial';
+        font-weight: 650;
+        max-width: 1040px;
+    }
+
+    .transparent-input-industry {
+        border: none;
+        border-bottom: 2px solid #ffa900;
+        background: transparent;
+        outline: none;
+        font-size: 74px;
+        padding: 5px;
+        width: 455px;
+        border-radius: 0;
+        color: #244d88;
+        font-family: 'SF Pro Display','Arial';
+        font-weight: 650;
+        max-width: 654px;
+    }
+
+    .transparent-input::placeholder {
+        color: #838082;
+        font-family: 'SF Pro Display','Arial';
+        font-weight: 650;
+        font-size: 74px;
+    }
+
+    .transparent-input-industry::placeholder {
+        color: #838082;
+        font-family: 'SF Pro Display','Arial';
+        font-weight: 650;
+        font-size: 74px;
+    }
+
+
+    .transparent-input:focus {
+        border-bottom: 2px solid #000;
+    }
+
+    .custom-textarea {
+        width: 100%;
+        height: 150px; /* Adjust as needed */
+        background-color: #f4f6fb; /* Light background for contrast */
+        color: #1f2951; /* Dark text for readability */
+        border: 2px solid #53679e; /* Matches your background color */
+        border-radius: 8px; /* Smooth rounded corners */
+        padding: 12px 15px;
+        font-size: 16px;
+        font-family: 'SF Pro Display', Arial, sans-serif;
+        resize: vertical; /* Allows vertical resizing only */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+        transition: all 0.3s ease; /* Smooth transition */
+        outline: none;
+    }
+
+        .custom-textarea:focus {
+            border-color: #ffa900; /* Accent color for focus */
+            box-shadow: 0 4px 12px rgba(83, 103, 158, 0.4); /* Enhanced focus shadow */
+            background-color: #ffffff; /* Slightly brighter when focused */
+        }
+
+</style>

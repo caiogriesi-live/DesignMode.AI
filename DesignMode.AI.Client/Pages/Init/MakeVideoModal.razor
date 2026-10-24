@@ -1,0 +1,1187 @@
+@inherits DesignMode.AI.Client.Components.GenerationAwareComponent
+@using System.Collections.Generic
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.AspNetCore.Components.Authorization;
+
+@if (IsBusy)
+{
+    <div class="new-video-generation-busy-overlay">
+        <div class="loader"></div>
+    </div>
+}
+
+@if (Show)
+{
+    <div class="new-video-generation-overlay generation-workspace-overlay" disabled="@IsGeneratingCommercial" @onclick="OnOverlayClick">
+        <div class="new-video-generation-modal generation-workspace" style="        position: relative !important;
+        width: min(820px, calc(100vw - 40px)) !important;
+        height: min(650px, calc(100vh - 40px)) !important;
+        max-height: calc(100vh - 40px) !important;
+        padding: 16px 22px 26px !important;
+        box-sizing: border-box !important;
+        background: white !important;
+        border-radius: 12px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2) !important;
+        animation: newVideoZoomFadeIn 0.3s ease-out forwards !important;" @onclick:stopPropagation>
+            <button class="new-video-generation-close" @onclick="CloseModal">×</button>
+
+            <div class="new-video-generation-content">
+                <div class="modal-header">
+                    <h2>Generate New Video@* fire emoji 🔥 *@</h2>
+                </div>
+                @* <div style="margin-bottom: 30px;">
+            Choose how you'd like to create your video using AI.
+            </div> *@
+                <div class="image-grid" style="margin-bottom: 8px;">
+                    <!-- Options -->
+                    <div class="modal-options">
+
+                        <!-- Commercial Generator -->
+                        <div class="option-card recommended" style="cursor: pointer;" @onclick="OpenMakeVideoSelectImages">
+                            <span class="badge">AI Recommendation</span>
+                            <h3>Commercial Generation</h3>
+                            <span style="color: black;font-size: 16px;margin-bottom: 10px;margin-top: -7px;">AI-generated script - multiple shots - audio - text.  Pick images for each section</span>
+                            @if (@RandomImage2 != null)
+                            {
+                                <img src="@RandomImage2" alt="Preview" class="generate-video" />
+                            }
+                            <button class="btn-primary"
+                                    style="padding-top: 8px; position: relative;"
+                                    disabled="@IsGeneratingCommercial"
+                                    @onclick="OpenMakeVideoSelectImages">
+
+                                @if (!IsGeneratingCommercial)
+                                {
+                                    <span>Generate Commercial</span>
+                                }
+                                else
+                                {
+                                    <div class="spinner"></div>
+                                }
+                            </button>
+
+                        </div>
+                        <!-- Quick Video -->
+                        <div class="option-card">
+                            <h3 style="font-size:16px;">Quick Video (coming soon)</h3>
+                            <span style="color: black;font-size: 17px;margin-bottom: 15px;margin-top: -8px;">Generate a single short video from your selected design. Generate a single short video from your selected design.</span>
+                            @if (@RandomImage1 != null)
+                            {
+                                <img src="@RandomImage1" alt="Preview" class="generate-video" />
+                            }
+                            <button class="btn-secondary" disabled="true" style="padding-top: 8px;">Generate 1 Video</button>
+                        </div>
+                    </div>
+                    @functions {
+                    RenderFragment ImageCard(DesignMode.AI.Client.Pages.Init.Gen.ConceptImageWithIdeaDto image) => __builder =>
+                    {
+                        var isMarkedForRemoval = RemovedImages.Contains(image.ImageId);
+                        <div class="image-card @(isMarkedForRemoval ? "marked-for-removal" : "")"
+                             @onclick="() => ToggleSelection(image.ImageUrl, image.ImageId)">
+                            <img src="@image.ImageUrl" alt="Concept image" class="image-thumb" />
+                            <div class="image-controls">
+                                <button class="icon-btn"
+                                        @onclick="() => ToggleSelection(image.ImageUrl, image.ImageId)"
+                                        alt="Remove from Concept"
+                                @onclick:stopPropagation>
+                                    @if (isMarkedForRemoval)
+                                    {
+                                        <span style="color: red;font-weight: bold;">✕</span>
+                                    }
+                                    else
+                                    {
+                                        <text>🗑️</text>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    };
+                }
+            </div>
+        </div>
+
+
+    </div>
+</div>
+}
+
+@code {
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; }
+    [Inject] private HttpClient Http { get; set; }
+    [Inject] private NavigationManager NavigationManager { get; set; }
+
+    private bool ShowMakeVideoSelectImages { get; set; } = false;
+    private bool ShowNewVideoGenerationModal { get; set; } = false;
+    private bool IsBusy = false;
+
+    private async Task OnOverlayClick(MouseEventArgs e)
+    {
+        if (IsGeneratingCommercial)
+            return; // ⛔ ignore outside click
+
+        await CloseModal();
+    }
+
+
+    // Parameters
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public List<string> RunwareImageIds { get; set; } = new List<string>();
+    [Parameter] public List<string> SecondaryRunwareImageIds { get; set; } = new List<string>();
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> SelectedImages { get; set; }
+    [Parameter] public EventCallback<List<string>> OnImagesRemoved { get; set; }
+    [Parameter] public EventCallback<bool> OnConfirm { get; set; }
+    [Parameter] public string Main { get; set; }
+    [Parameter] public string VideoId { get; set; }
+    [Parameter] public EventCallback OnAIUsageRecorded { get; set; }
+
+    // State variables
+    private HashSet<string> SelectedImageUrls = new();
+    private HashSet<string> SelectedImageIds = new();
+    private List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> OriginalImages = new();
+    private List<string> RemovedImages = new();
+    private bool HasChanges => RemovedImages.Count > 0;
+    private bool IsConceptPopoverVisible = false;
+    private ImageIdeaCountResult allIdeas { get; set; }
+    private bool isAuthorized = false;
+
+    // Loading state flags to prevent repeated calls
+    private bool _randomImagesLoaded = false;
+    private bool _dataLoaded = false;
+    private bool _isLoadingData = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Handle random images
+        if (Show && !_randomImagesLoaded)
+        {
+            SelectTwoDistinctRandomImages();
+            _randomImagesLoaded = true;
+            StateHasChanged();
+        }
+
+        // Handle data loading - only when modal is shown and data not loaded
+        if (Show && !_dataLoaded && !_isLoadingData && SelectedImages?.Any() == true)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoadingData = true;
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            isAuthorized = user.Identity?.IsAuthenticated == true;
+
+            var uri = NavigationManager.Uri;
+            var queryString = new Uri(uri).Query;
+            string cid = GetQueryParameter(queryString, "cid", null);
+
+            if (!string.IsNullOrEmpty(cid))
+            {
+                allIdeas = await GetImageIdeaCountsAsync(cid);
+                await ProcessImageIdeasData();
+            }
+
+            // Store the original list of images
+            OriginalImages = new List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel>(SelectedImages);
+            SelectedImageUrls = new HashSet<string>(SelectedImages.Select(x => x.ImageUrl));
+            SelectedImageIds = new HashSet<string>(SelectedImages.Select(x => x.Id));
+            RemovedImages.Clear();
+
+            _dataLoaded = true;
+            StateHasChanged();
+        }
+        finally
+        {
+            _isLoadingData = false;
+        }
+    }
+
+    private async Task ProcessImageIdeasData()
+    {
+        if (allIdeas != null && allIdeas.Ideas != null)
+        {
+            allIdeas.IdeaPromptMatches = new List<bool>();
+            string promptTextNormalized = allIdeas.PromptText.TrimStart(':').Trim().ToLower();
+
+            foreach (var idea in allIdeas.Ideas)
+            {
+                string formattedIdea = $"{idea.Title}: {idea.Description}"
+                    .Trim()
+                    .ToLower();
+                bool matches = formattedIdea == promptTextNormalized;
+                allIdeas.IdeaPromptMatches.Add(matches);
+            }
+
+            // Check if PromptText matches any idea
+            bool anyPromptMatchesIdea = allIdeas.IdeaPromptMatches.Any(m => m);
+            allIdeas.AnyPromptMatchesIdea = anyPromptMatchesIdea;
+
+            // Filter ImageIdeas for video/photo content
+            var filteredImageIdeas = allIdeas.ImageIdeas
+                .Where(ii => (ii.DeliverableType?.ToLower().Contains("video") == true
+                           || ii.DeliverableType?.ToLower().Contains("photo") == true
+                           || ii.SubCategory?.ToLower().Contains("video") == true
+                           || ii.SubCategory?.ToLower().Contains("photo") == true))
+                .ToList();
+
+            allIdeas.ImageIdeasFiltered = filteredImageIdeas;
+
+            // Count how many filtered ImageIdeas match the PromptText
+            int filteredPromptMatchCount = filteredImageIdeas
+                .Count(ii => ii.ExtractedText?.TrimStart(':').Trim().ToLower() == promptTextNormalized);
+
+            allIdeas.FilteredPromptMatchCount = filteredPromptMatchCount;
+
+            // Determine video generation requirements
+            await CalculateVideoRequirementsBefore(filteredImageIdeas);
+        }
+    }
+
+    private async Task CalculateVideoRequirements(List<ImageIdeaItem> filteredImageIdeas)
+    {
+        // If there are no filtered ideas at all, require 1
+        if (filteredImageIdeas == null || filteredImageIdeas.Count == 0)
+        {
+            HowMuchMore = 1;
+            return;
+        }
+
+        // Look for ANY filtered idea that has a matching SelectedImage with a NON-empty imageUrl
+        bool anyValidMatch = filteredImageIdeas.Any(filtered =>
+            SelectedImages.Any(sel =>
+                sel.Id == filtered.Id &&
+                !string.IsNullOrWhiteSpace(sel.ImageUrl)
+            )
+        );
+
+        // If none of the filtered ideas have a matching image with an URL → require 1
+        HowMuchMore = anyValidMatch ? 0 : 1;
+
+        // await InvokeAsync(StateHasChanged);  // optional
+    }
+
+    private async Task CalculateVideoRequirementsBefore(List<ImageIdeaItem> filteredImageIdeas)
+    {
+        // If there are no filtered ideas at all, require 1
+        if (filteredImageIdeas == null || filteredImageIdeas.Count == 0)
+        {
+            HowMuchMore = 1;
+            return;
+        }
+
+        // Look for ANY filtered idea that has a matching SelectedImage with a NON-empty imageUrl
+        bool anyValidMatch = filteredImageIdeas.Any(filtered =>
+            SelectedImages.Any(sel =>
+                sel.Id == filtered.Id &&
+                !string.IsNullOrWhiteSpace(sel.ImageUrl)
+            )
+        );
+
+        // If none of the filtered ideas have a matching image with an URL → require 1
+        HowMuchMore = anyValidMatch ? 0 : 1;
+
+        // await InvokeAsync(StateHasChanged);  // optional
+    }
+
+    private bool IsGeneratingCommercial { get; set; } = false;
+
+    private async Task OpenMakeVideoSelectImages()
+    {
+        await using var generationOperation = await BeginGenerationAsync();
+        IsGeneratingCommercial = true;
+        StateHasChanged();  // ensure spinner appears immediately
+
+        try
+        {
+            if (!_dataLoaded)
+                await LoadDataAsync();
+
+            await ProcessImageIdeasData();
+            await CalculateVideoRequirementsBefore(allIdeas.ImageIdeasFiltered);
+
+            Show = false;
+
+            if (HowMuchMore > 0)
+                ShowNewVideoGenerationModal = true;
+            else
+                ShowMakeVideoSelectImages = true;
+
+            await ShowChanged.InvokeAsync(false);
+        }
+        finally
+        {
+            IsGeneratingCommercial = false;
+        }
+    }
+
+    private async Task CloseMakeVideoSelectImages()
+    {
+        ShowMakeVideoSelectImages = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+
+    // Random image selection
+    private string RandomImage1;
+    private string RandomImage2;
+    private static readonly Random _rand = new();
+    private int HowMuchMore { get; set; }
+
+    // Data models
+    public class ImageIdeaCountResult
+    {
+        public List<IdeaItem> Ideas { get; set; } = new();
+        public string PromptId { get; set; } = string.Empty;
+        public string PromptText { get; set; } = string.Empty;
+        public int VideoMatchCount { get; set; }
+        public int VideoNoMatchCount { get; set; }
+        public List<string> ExtractedTexts { get; set; } = new();
+        public List<ImageIdeaItem> ImageIdeas { get; set; } = new();
+        public List<bool> IdeaPromptMatches { get; set; } = new();
+        public List<ImageIdeaItem> ImageIdeasFiltered { get; set; } = new();
+        public List<bool> ImageIdeasMatches { get; set; } = new();
+        public int FilteredPromptMatchCount { get; set; }
+        public bool AnyPromptMatchesIdea { get; set; }
+    }
+
+    public class IdeaItem
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+
+    public class ImageIdeaItem
+    {
+        public string Id { get; set; } = string.Empty;       // NEW
+        public string CountId { get; set; } = string.Empty;  // NEW
+        public string DeliverableType { get; set; } = string.Empty;
+        public string SubCategory { get; set; } = string.Empty;
+        public string ExtractedText { get; set; } = string.Empty;
+        public string RawPrompt { get; set; } = string.Empty;
+    }
+    [Parameter] public EventCallback OnSecondaryModalClosed { get; set; }
+
+    private async Task HandleSecondaryModalClosed()
+    {
+        // you can do internal stuff here...
+
+        // 🔥 bubble upward to parent page
+        await OnSecondaryModalClosed.InvokeAsync();
+    }
+
+
+    private void SelectTwoDistinctRandomImages()
+    {
+        if (SelectedImages == null || SelectedImages.Count == 0)
+        {
+            RandomImage1 = RandomImage2 = "https://placehold.co/600x400?text=No+Images";
+            return;
+        }
+
+        string[] keys = { "Video", "Social", "Event", "Animation" };
+
+        // Pool of images matching these categories
+        var pool = SelectedImages
+            .Where(x =>
+                (x.DeliverableType != null &&
+                 keys.Any(k => x.DeliverableType.Contains(k, StringComparison.OrdinalIgnoreCase))) ||
+                (x.SubCategory != null &&
+                 keys.Any(k => x.SubCategory.Contains(k, StringComparison.OrdinalIgnoreCase))))
+            .ToList();
+
+        // Fallback to ANY images if no matches
+        if (pool.Count == 0)
+        {
+            if (SelectedImages.Count == 1)
+            {
+                RandomImage1 = SelectedImages[0].ImageUrl;
+                RandomImage2 = SelectedImages[0].ImageUrl;
+                return;
+            }
+
+            var shuffled = SelectedImages.OrderBy(_ => _rand.Next()).ToList();
+            RandomImage1 = shuffled[0].ImageUrl;
+            RandomImage2 = shuffled[1].ImageUrl;
+            return;
+        }
+
+        // If only one valid image exists
+        if (pool.Count == 1)
+        {
+            RandomImage1 = pool[0].ImageUrl;
+            var fallback = SelectedImages.FirstOrDefault(x => x.Id != pool[0].Id);
+            RandomImage2 = fallback?.ImageUrl ?? pool[0].ImageUrl;
+            return;
+        }
+
+        // Normal behavior: two distinct images from the pool
+        var first = pool[_rand.Next(pool.Count)];
+        var secondPool = pool.Where(x => x.Id != first.Id).ToList();
+        var second = secondPool[_rand.Next(secondPool.Count)];
+
+        bool IsVideo(dynamic x) =>
+            (x.DeliverableType?.Contains("Video", StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (x.SubCategory?.Contains("Video", StringComparison.OrdinalIgnoreCase) ?? false);
+
+        // Ensure video is second image if only one is video
+        if (IsVideo(first) && !IsVideo(second))
+        {
+            var temp = first;
+            first = second;
+            second = temp;
+        }
+
+        RandomImage1 = first.ImageUrl;
+        RandomImage2 = second.ImageUrl;
+    }
+
+    private string GetQueryParameter(string queryString, string key, string defaultValue)
+    {
+        var parameters = System.Web.HttpUtility.ParseQueryString(queryString);
+        return parameters[key] ?? defaultValue;
+    }
+
+    private void ToggleSelection(string url, string id)
+    {
+        if (SelectedImageUrls.Contains(url))
+        {
+            SelectedImageUrls.Remove(url);
+            SelectedImageIds.Remove(id);
+            RemovedImages.Add(id);
+        }
+        else
+        {
+            SelectedImageUrls.Add(url);
+            SelectedImageIds.Add(id);
+            RemovedImages.Remove(id);
+        }
+    }
+
+    private async Task SaveChanges()
+    {
+        IsBusy = true;
+
+        bool confirmed = false;
+
+        foreach (var imageId in RemovedImages)
+        {
+            confirmed = await DeleteConceptImageFromDatabaseAsync(imageId);
+        }
+
+        IsBusy = false;
+
+        if (confirmed)
+        {
+            // Success: hide balloon, close modal
+            IsConceptPopoverVisible = false;
+
+            // Notify parent of removed images
+            if (OnImagesRemoved.HasDelegate)
+            {
+                await OnImagesRemoved.InvokeAsync(RemovedImages.ToList());
+            }
+
+            if (OnConfirm.HasDelegate)
+            {
+                await OnConfirm.InvokeAsync(true);
+            }
+
+            await CloseModal();
+        }
+        else
+        {
+            // Failure: show balloon again
+            IsConceptPopoverVisible = true;
+        }
+    }
+
+    private async Task<ImageIdeaCountResult?> GetImageIdeaCountsAsync(string companyIdeaId)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url =
+                    $"{ApiConfig.ApiBaseUrl}api/GetImageIdeaCountsByCompanyId?companyIdeaId={companyIdeaId}" +
+                    "&code=REDACTED_FOR_GROOMING";
+
+                var response = await client.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<ImageIdeaCountResult>();
+                    if (result == null)
+                        return null;
+
+                    Console.WriteLine("✅ Retrieved image idea counts + idea info + deliverable types.");
+                    return result;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to retrieve image idea counts: {response.StatusCode}");
+                    return null;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception retrieving image idea counts: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task<bool> DeleteConceptImageFromDatabaseAsync(string imageId)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var requestBody = new { ImageId = imageId };
+
+                var response = await Http.PostAsJsonAsync(
+                    $"{ApiConfig.ApiBaseUrl}api/DeleteConceptImage?code=REDACTED_FOR_GROOMING",
+                    requestBody);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("✅ Deleted concept image successfully.");
+                    return true;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to delete concept image: {response.StatusCode}");
+                    return false;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception deleting concept image: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        if (GenerationGuard is null && (IsBusy)) return;
+        if (!await ConfirmGenerationCloseAsync()) return;
+
+        // Reset the state when closing
+        RemovedImages.Clear();
+        Show = false;
+        _randomImagesLoaded = false;
+        _dataLoaded = false; // Reset so data reloads next time modal opens
+        await ShowChanged.InvokeAsync(false);
+    }
+}
+
+<style>
+    /* Unique modal styles: scoped so other modals are not affected. */
+    .new-video-generation-overlay {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+        box-sizing: border-box;
+        z-index: 1000;
+        overflow: hidden;
+        backdrop-filter: blur(5px);
+        background-color: rgba(0, 0, 0, 0.7);
+        animation: newVideoBlurIn 0.3s ease-out forwards;
+    }
+
+    .new-video-generation-modal {
+        position: relative;
+        width: min(820px, calc(100vw - 40px));
+        height: min(650px, calc(100vh - 40px));
+        max-height: calc(100vh - 40px);
+        padding: 16px 22px 26px;
+        box-sizing: border-box;
+        background: white;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+        animation: newVideoZoomFadeIn 0.3s ease-out forwards;
+    }
+
+    .new-video-generation-content {
+        width: 100%;
+        height: 100%;
+        padding: 8px 10px 8px;
+        margin: 0;
+        box-sizing: border-box;
+        overflow: hidden;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .new-video-generation-modal .modal-header {
+        text-align: left;
+        margin: 0 0 10px 0 !important;
+        padding-right: 42px;
+    }
+
+        .new-video-generation-modal .modal-header h2 {
+            font-size: 1.5rem;
+            line-height: 1.2;
+            margin: 0;
+        }
+
+        .new-video-generation-modal .modal-header p {
+            color: #666;
+            margin: 0;
+        }
+
+    .new-video-generation-modal .image-grid {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        flex: 1;
+        min-height: 0;
+        gap: 12px;
+        margin-bottom: 0 !important;
+    }
+
+    .new-video-generation-modal .modal-options {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+        margin: 0;
+        align-items: stretch;
+    }
+
+    .new-video-generation-modal .option-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        padding: 0.85rem;
+        text-align: center;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        height: min(500px, calc(100vh - 150px));
+        min-height: 0;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+        .new-video-generation-modal .option-card.recommended {
+            border-color: #facc15;
+            background: #fffbeb;
+        }
+
+        .new-video-generation-modal .option-card h3 {
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .new-video-generation-modal .option-card > span:not(.badge) {
+            line-height: 1.2;
+        }
+
+    .new-video-generation-modal .badge {
+        background: #fde68a;
+        color: #92400e;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 0.2rem 0.45rem;
+        border-radius: 6px;
+        align-self: center;
+        flex-shrink: 0;
+    }
+
+    .new-video-generation-modal .option-card img,
+    .new-video-generation-modal .modal-options .option-card img,
+    .new-video-generation-modal .generate-video {
+        width: 100%;
+        height: clamp(220px, 36vh, 310px) !important;
+        object-fit: cover !important;
+        display: block;
+        border-radius: 10px !important;
+        margin: 0 !important;
+        flex-shrink: 1;
+    }
+
+    .new-video-generation-modal .option-card button,
+    .new-video-generation-modal .option-card .btn-primary,
+    .new-video-generation-modal .option-card .btn-secondary {
+        margin-top: auto;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        flex-shrink: 0;
+    }
+
+    .new-video-generation-close {
+        position: absolute;
+        top: 12px;
+        right: 14px;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        background: rgba(255, 255, 255, 0.8);
+        border: none;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        line-height: 1;
+        color: #000;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+    }
+
+        .new-video-generation-close:hover {
+            background-color: rgba(240, 240, 240, 0.95);
+        }
+
+    .new-video-generation-busy-overlay {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(255, 255, 255, 0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+        .new-video-generation-busy-overlay .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: newVideoSpin 1s linear infinite;
+        }
+
+    .new-video-generation-modal .spinner {
+        border: 3px solid #ffffff;
+        border-top: 3px solid transparent;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        animation: newVideoSpin 0.8s linear infinite;
+        margin: 0 auto;
+    }
+
+    .new-video-generation-modal .image-item {
+        position: relative;
+        border-radius: 8px;
+        overflow: hidden;
+        aspect-ratio: 1 / 1;
+    }
+
+        .new-video-generation-modal .image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+    .new-video-generation-modal .empty-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 24px 0;
+        color: #666;
+    }
+
+    .new-video-generation-modal .footer-actions,
+    .new-video-generation-modal .fixed-footer {
+        background: white;
+        border-top: 1px solid #eee;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 20px;
+        box-sizing: border-box;
+    }
+
+    .new-video-generation-modal .discard-button,
+    .new-video-generation-modal .save-button {
+        font-size: 1rem;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+    }
+
+    .new-video-generation-modal .discard-button {
+        background-color: transparent;
+        border: 2px solid #ddd;
+        color: #333;
+    }
+
+    .new-video-generation-modal .save-button {
+        background-color: #244d88;
+        color: white;
+    }
+
+        .new-video-generation-modal .save-button:disabled {
+            background-color: #eee;
+            color: #ababab;
+            cursor: not-allowed;
+        }
+
+    .new-video-generation-modal .deliverable-section {
+        padding-bottom: 16px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .new-video-generation-modal .image-col {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        overflow: hidden;
+        padding-bottom: 8px;
+    }
+
+    .new-video-generation-modal .image-card {
+        position: relative;
+        width: 180px;
+        height: 180px;
+        border-radius: 16px;
+        overflow: hidden;
+        background-color: #fff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #eee;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+        .new-video-generation-modal .image-card.marked-for-removal {
+            border: 5px solid #ff4d4d;
+        }
+
+    .new-video-generation-modal .image-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        flex-grow: 1;
+    }
+
+    .new-video-generation-modal .image-controls {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+    }
+
+    .new-video-generation-modal .icon-btn {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #ddd;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        cursor: pointer;
+    }
+
+    .new-video-generation-modal .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #222;
+        margin-bottom: 12px;
+    }
+
+    @@keyframes newVideoZoomFadeIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes newVideoBlurIn {
+        0% {
+            backdrop-filter: blur(0);
+            background-color: rgba(0, 0, 0, 0);
+        }
+
+        100% {
+            backdrop-filter: blur(5px);
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+    }
+
+    @@keyframes newVideoSpin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Responsive sizing: preserve bottom breathing room and avoid modal scrollbars. */
+    @@media (max-height: 760px) and (min-width: 769px) {
+        .new-video-generation-overlay {
+            padding: 12px;
+        }
+
+        .new-video-generation-modal {
+            height: calc(100vh - 24px);
+            max-height: calc(100vh - 24px);
+            padding: 10px 18px 20px;
+        }
+
+        .new-video-generation-content {
+            padding: 6px 8px 6px;
+        }
+
+        .new-video-generation-modal .modal-header {
+            margin-bottom: 6px !important;
+        }
+
+            .new-video-generation-modal .modal-header h2 {
+                font-size: 1.3rem;
+            }
+
+        .new-video-generation-modal .option-card {
+            height: min(455px, calc(100vh - 130px));
+            padding: 0.65rem;
+            gap: 0.3rem;
+        }
+
+            .new-video-generation-modal .option-card img,
+            .new-video-generation-modal .modal-options .option-card img,
+            .new-video-generation-modal .generate-video {
+                height: clamp(190px, 35vh, 255px) !important;
+            }
+
+            .new-video-generation-modal .option-card > span:not(.badge) {
+                font-size: 14px !important;
+            }
+    }
+
+    /* Tablet / mobile: stack cards vertically and allow the modal body to scroll. */
+    @@media (max-width: 768px) {
+        .new-video-generation-overlay {
+            padding: 10px;
+        }
+
+        .new-video-generation-modal {
+            width: calc(100vw - 20px);
+            height: calc(100vh - 20px);
+            max-height: calc(100vh - 20px);
+            padding: 12px 12px 18px;
+        }
+
+        .new-video-generation-content {
+            padding: 6px 2px 6px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .new-video-generation-modal .image-grid {
+            flex: none;
+            min-height: auto;
+            justify-content: flex-start;
+        }
+
+        .new-video-generation-modal .modal-options {
+            grid-template-columns: 1fr;
+            gap: 0.8rem;
+        }
+
+        .new-video-generation-modal .option-card {
+            width: 100%;
+            height: auto;
+            min-height: 0;
+            padding: 0.75rem;
+            gap: 0.4rem;
+            overflow: visible;
+        }
+
+            .new-video-generation-modal .option-card h3 {
+                font-size: 14px !important;
+            }
+
+            .new-video-generation-modal .option-card > span:not(.badge) {
+                font-size: 12px !important;
+            }
+
+        .new-video-generation-modal .badge {
+            font-size: 10px;
+        }
+
+        .new-video-generation-modal .option-card img,
+        .new-video-generation-modal .modal-options .option-card img,
+        .new-video-generation-modal .generate-video {
+            height: clamp(170px, 32vh, 235px) !important;
+        }
+
+        .new-video-generation-modal .modal-header h2 {
+            font-size: 1.25rem !important;
+        }
+    }
+
+    /* Phones: keep the cards stacked and size each card for a single-column layout. */
+    @@media (max-width: 480px) {
+        .new-video-generation-overlay {
+            padding: 6px;
+        }
+
+        .new-video-generation-modal {
+            width: calc(100vw - 12px);
+            height: calc(100vh - 12px);
+            max-height: calc(100vh - 12px);
+            padding: 10px 8px 16px;
+            border-radius: 10px;
+        }
+
+        .new-video-generation-content {
+            padding: 4px 0 6px;
+        }
+
+        .new-video-generation-modal .modal-header {
+            margin-bottom: 5px !important;
+        }
+
+            .new-video-generation-modal .modal-header h2 {
+                font-size: 1.1rem !important;
+            }
+
+        .new-video-generation-modal .modal-options {
+            grid-template-columns: 1fr;
+            gap: 0.65rem;
+        }
+
+        .new-video-generation-modal .option-card {
+            width: 100%;
+            height: auto;
+            padding: 0.65rem;
+            gap: 0.3rem;
+            border-radius: 10px;
+            overflow: visible;
+        }
+
+            .new-video-generation-modal .option-card h3 {
+                font-size: 12px !important;
+            }
+
+            .new-video-generation-modal .option-card > span:not(.badge) {
+                font-size: 10px !important;
+                line-height: 1.12;
+            }
+
+        .new-video-generation-modal .badge {
+            font-size: 9px;
+            padding: 0.15rem 0.3rem;
+        }
+
+        .new-video-generation-modal .option-card img,
+        .new-video-generation-modal .modal-options .option-card img,
+        .new-video-generation-modal .generate-video {
+            height: clamp(180px, 38vh, 280px) !important;
+        }
+
+        .new-video-generation-modal .option-card button {
+            font-size: 11px;
+            padding: 6px 3px;
+        }
+
+        .new-video-generation-close {
+            top: 7px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+        }
+    }
+
+    /* Very short screens: prioritize fitting everything without a scrollbar. */
+    @@media (max-height: 560px) and (min-width: 769px) {
+        .new-video-generation-modal {
+            padding-bottom: 14px;
+        }
+
+        .new-video-generation-content {
+            padding-bottom: 4px;
+        }
+
+        .new-video-generation-modal .modal-header h2 {
+            font-size: 1.05rem !important;
+        }
+
+        .new-video-generation-modal .option-card {
+            height: calc(100vh - 96px);
+            padding: 0.4rem;
+        }
+
+            .new-video-generation-modal .option-card img,
+            .new-video-generation-modal .modal-options .option-card img,
+            .new-video-generation-modal .generate-video {
+                height: clamp(120px, 27vh, 175px) !important;
+            }
+
+            .new-video-generation-modal .option-card > span:not(.badge) {
+                font-size: 10px !important;
+                line-height: 1.08;
+            }
+    }
+}
+
+</style>
+
+<EnhancementRecommendationModal Show="@ShowNewVideoGenerationModal"
+                                ShowChanged="(v => ShowNewVideoGenerationModal = v)"
+                                SelectedImages="@SelectedImages"
+                                HowMuchMore="@HowMuchMore"
+                                AllIdeas="@allIdeas"
+                                MainDeliverable="@Main"
+                                VideoId="@VideoId"
+                                OnAIUsageRecorded="@OnAIUsageRecorded" />
+
+<MakeVideoSelectImages Show="@ShowMakeVideoSelectImages"
+                       ShowChanged="CloseMakeVideoSelectImages"
+                       SelectedImages="@SelectedImages"
+                       RunwareImageIds="@RunwareImageIds"
+                       SecondaryRunwareImageIds="@SecondaryRunwareImageIds"
+                       OnImagesRemoved="@OnImagesRemoved"
+                       AllIdeas="@allIdeas"
+                       OnConfirm="@OnConfirm"
+                       GenerateNew=true
+                       OnClose="HandleSecondaryModalClosed"
+                       VideoId="@VideoId" />

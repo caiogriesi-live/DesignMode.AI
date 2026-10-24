@@ -1,0 +1,995 @@
+@using Microsoft.AspNetCore.Components
+@using System.Collections.Generic
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Text.RegularExpressions
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Net.Http.Headers
+@using System.Security.Cryptography
+@using System.Text
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="invite-modal" @onclick:stopPropagation>
+
+            <!-- Close -->
+            <button class="modal-close" @onclick="CloseModal">×</button>
+
+            <!-- Header -->
+            <div class="invite-header">
+                <h2>Invite a Client</h2>
+                <p>
+                    Share an invite link with your client so they can view your brand concepts
+                    and sign up to get started.
+                </p>
+            </div>
+
+            <!-- Scrollable Form Container -->
+            <div class="invite-form-container">
+                <!-- Form -->
+                <div class="invite-form">
+
+                    <div class="form-group">
+                        <label>Client's Name</label>
+                        <input @bind="ClientName" @bind:event="oninput" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Client's Industry</label>
+                        <input @bind="ClientIndustry" @bind:event="oninput" />
+                    </div>
+
+                    <div class="form-group">
+                        <label>Initial Prompt</label>
+                        <textarea @bind="InitialPrompt" @bind:event="oninput"
+                                  placeholder="Describe the project, goals, style, or anything the client should start with..."
+                                  rows="4"
+                                  style="resize: vertical;"></textarea>
+                    </div>
+
+                    <!-- ✅ FILE UPLOAD - 2 IMAGES -->
+                    <div class="form-group">
+                        <label>Upload Images (up to 2 files)</label>
+
+                        <div class="file-upload-area">
+                            <InputFile OnChange="HandleFilesSelected" multiple class="file-input" accept="image/*" />
+
+                            @if (UploadedFiles.Any())
+                            {
+                                <div class="file-list">
+                                    @for (int i = 0; i < UploadedFiles.Count; i++)
+                                    {
+                                        var file = UploadedFiles[i];
+                                        <div class="file-item">
+                                            <span class="file-number">Image @(i + 1):</span>
+                                            <span class="file-name">@file.Name</span>
+                                            <span class="file-size">(@(file.Size / 1024) KB)</span>
+                                            <button type="button" class="remove-file-btn" @onclick="() => RemoveFile(i)">✕</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <p class="upload-hint">Supported formats: JPG, PNG, GIF. Max 10MB per file.</p>
+                    </div>
+
+                    <!-- ✅ NEW CHECKBOX: Use same image seed for all concepts -->
+                    <div class="form-group checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" @bind="UseSameImageSeedForAll" />
+                            <span class="checkbox-text">Use uploaded image seed for all concepts</span>
+                        </label>
+                        <p class="checkbox-hint">When enabled, the same image seed will be applied across all generated concepts for consistency.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Client's Email</label>
+                        <input @bind="ClientEmail" @bind:event="oninput" placeholder="jessica@example.com" />
+                    </div>
+
+                    <!-- Invite link -->
+@*                     <div class="invite-link-box">
+                        <input value="@InviteLink" readonly id="inviteLinkInput" />
+
+                        <button class="copy-btn" @onclick="CopyLink">
+                            Copy Invite Link
+                        </button>
+                    </div> *@
+
+                    <!-- CTA -->
+                    <button class="send-invite-btn" @onclick="SendInvite" disabled="@IsUploading">
+                        @(IsUploading ? "Uploading Images..." : "Send Invite")
+                    </button>
+
+                    <!-- Helper -->
+                    <p class="invite-helper">
+                        @($"{ClientName ?? "Your client"} will be able to review your initial brand concepts and provide feedback.")
+                    </p>
+
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string DeliverableName { get; set; } = "";
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; }
+    [Inject] private HttpClient Http { get; set; }
+    [Inject] private IJSRuntime JS { get; set; }
+    [Inject] private NavigationManager Navigation { get; set; }
+
+    private string _clientName;
+    private string _clientIndustry;
+    private string _initialPrompt;
+    private string _clientEmail;
+    private string _inviteLink;
+    private bool _isUploading;
+    private bool _useSameImageSeedForAll;
+
+    private string ClientName
+    {
+        get => _clientName;
+        set
+        {
+            if (_clientName != value)
+            {
+                _clientName = value;
+                UpdateInviteLink();
+            }
+        }
+    }
+
+    private string ClientIndustry
+    {
+        get => _clientIndustry;
+        set
+        {
+            if (_clientIndustry != value)
+            {
+                _clientIndustry = value;
+                UpdateInviteLink();
+            }
+        }
+    }
+
+    private string InitialPrompt
+    {
+        get => _initialPrompt;
+        set
+        {
+            if (_initialPrompt != value)
+            {
+                _initialPrompt = value;
+                UpdateInviteLink();
+            }
+        }
+    }
+
+    private string ClientEmail
+    {
+        get => _clientEmail;
+        set
+        {
+            if (_clientEmail != value)
+            {
+                _clientEmail = value;
+                UpdateInviteLink();
+            }
+        }
+    }
+
+    private bool UseSameImageSeedForAll
+    {
+        get => _useSameImageSeedForAll;
+        set
+        {
+            if (_useSameImageSeedForAll != value)
+            {
+                _useSameImageSeedForAll = value;
+                UpdateInviteLink();
+            }
+        }
+    }
+
+    private string InviteLink => _inviteLink;
+    private bool IsUploading => _isUploading;
+
+    // ✅ File upload state - now supports multiple files
+    private List<IBrowserFile> UploadedFiles = new List<IBrowserFile>();
+    private List<string> UploadedFileUrls = new List<string>();
+    private string _inviteId;
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        UpdateInviteLink();
+    }
+
+    private void UpdateInviteLink()
+    {
+        var encryptedEmail = EncryptEmail(ClientEmail ?? "");
+        var baseUrl = GetBaseUrl();
+
+        _inviteLink =
+            $"{baseUrl}/init/geninit?i=1&id={Uri.EscapeDataString(_inviteId ?? "")}&e={Uri.EscapeDataString(encryptedEmail)}";
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetBaseUrl()
+    {
+        var currentUri = new Uri(Navigation.BaseUri);
+
+        // Check if running locally (localhost)
+        if (currentUri.Host == "localhost" || currentUri.Host == "127.0.0.1")
+        {
+            return "https://localhost:7178";
+        }
+
+        return "https://designmode.ai";
+    }
+
+    private string EncryptEmail(string email)
+    {
+        if (string.IsNullOrEmpty(email))
+            return "";
+
+        try
+        {
+            // Simple encryption for demo - in production, use proper encryption
+            var bytes = Encoding.UTF8.GetBytes(email);
+            return Convert.ToBase64String(bytes);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private string DecryptEmail(string encryptedEmail)
+    {
+        if (string.IsNullOrEmpty(encryptedEmail))
+            return "";
+
+        try
+        {
+            var decoded = Uri.UnescapeDataString(encryptedEmail);
+            var bytes = Convert.FromBase64String(decoded);
+            return Encoding.UTF8.GetString(bytes);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+
+    // ✅ Handle multiple file selection
+    private async Task HandleFilesSelected(InputFileChangeEventArgs e)
+    {
+        var newFiles = e.GetMultipleFiles(2); // Max 2 files
+
+        if (UploadedFiles.Count + newFiles.Count > 2)
+        {
+            await JS.InvokeVoidAsync("alert", "You can only upload up to 2 images. Please remove some files first.");
+            return;
+        }
+
+        foreach (var file in newFiles)
+        {
+            if (!IsValidImageFile(file))
+            {
+                await JS.InvokeVoidAsync("alert", $"File '{file.Name}' is not a valid image. Only JPG, PNG, and GIF are allowed.");
+                continue;
+            }
+
+            if (file.Size > 10 * 1024 * 1024)
+            {
+                await JS.InvokeVoidAsync("alert", $"File '{file.Name}' exceeds the 10MB limit.");
+                continue;
+            }
+
+            UploadedFiles.Add(file);
+        }
+
+        UpdateInviteLink();
+        StateHasChanged();
+    }
+
+    private bool IsValidImageFile(IBrowserFile file)
+    {
+        var contentType = file.ContentType.ToLower();
+        return contentType == "image/jpeg" ||
+               contentType == "image/jpg" ||
+               contentType == "image/png" ||
+               contentType == "image/gif";
+    }
+
+    private void RemoveFile(int index)
+    {
+        if (index >= 0 && index < UploadedFiles.Count)
+        {
+            UploadedFiles.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    // ✅ Updated to handle multiple file uploads
+    private async Task<bool> SendInvite()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                _isUploading = true;
+                StateHasChanged();
+
+                // ✅ STEP 1: Upload all files
+                UploadedFileUrls.Clear();
+                var allUploadsSuccessful = true;
+
+                foreach (var file in UploadedFiles)
+                {
+                    var fileUrl = await SaveInviteFileAsync(file);
+                    if (fileUrl != null)
+                    {
+                        UploadedFileUrls.Add(fileUrl);
+                    }
+                    else
+                    {
+                        allUploadsSuccessful = false;
+                        Console.WriteLine($"❌ Failed to upload file: {file.Name}");
+                    }
+                }
+
+                if (!allUploadsSuccessful && UploadedFiles.Any())
+                {
+                    Console.WriteLine("⚠️ Some files failed to upload.");
+                }
+
+                // ✅ STEP 2: Save invite to DB with multiple image URLs and image seed flag
+                var imageUrlsJson = System.Text.Json.JsonSerializer.Serialize(
+    UploadedFileUrls,
+    new System.Text.Json.JsonSerializerOptions
+        {
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        });
+                var inviteId = await SaveInviteClientAsync(imageUrlsJson);
+
+                if (string.IsNullOrEmpty(inviteId))
+                {
+                    Console.WriteLine("❌ Failed to save invite to DB.");
+                    return false;
+                }
+
+                // ✅ Store invite ID
+                _inviteId = inviteId;
+
+                // ✅ Rebuild invite link with ID
+                UpdateInviteLink();
+
+                // ✅ You can now use inviteId
+                Console.WriteLine($"✅ Invite saved with ID: {inviteId}");
+
+                // ✅ STEP 3: Send email
+                var content = new MultipartFormDataContent();
+
+                content.Add(new StringContent(ClientName ?? ""), "ClientName");
+                content.Add(new StringContent(ClientIndustry ?? ""), "ClientIndustry");
+                content.Add(new StringContent(ClientEmail ?? ""), "ClientEmail");
+                content.Add(new StringContent(InitialPrompt ?? ""), "InitialPrompt");
+                content.Add(new StringContent(InviteLink ?? ""), "InviteLink");
+                content.Add(new StringContent(imageUrlsJson ?? "[]"), "ImageUrls");
+                content.Add(new StringContent(UseSameImageSeedForAll.ToString()), "UseSameImageSeedForAll");
+
+                var response = await Http.PostAsync(
+                    $"{ApiConfig.ApiBaseUrl}api/SendInviteEmail?code=REDACTED_FOR_GROOMING",
+                    content
+                );
+
+                _isUploading = false;
+                StateHasChanged();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("✅ Invite email sent successfully.");
+                    await CloseModal();
+                    return true;
+                }
+
+                Console.WriteLine($"❌ Failed to send invite email: {response.StatusCode}");
+                return false;
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception sending invite: {ex.Message}");
+            _isUploading = false;
+            StateHasChanged();
+            return false;
+        }
+    }
+
+    // ✅ Modified to accept a specific file
+    private async Task<string> SaveInviteFileAsync(IBrowserFile file)
+    {
+        try
+        {
+            if (file == null)
+            {
+                Console.WriteLine("⚠️ No file to upload.");
+                return null;
+            }
+
+            var content = new MultipartFormDataContent();
+
+            // Required fields (must match Azure Function)
+            content.Add(new StringContent(ClientName ?? ""), "ClientName");
+            content.Add(new StringContent(ClientEmail ?? ""), "ClientEmail");
+
+            // File
+            var stream = file.OpenReadStream(10 * 1024 * 1024);
+            var fileContent = new StreamContent(stream);
+            fileContent.Headers.ContentType = new MediaTypeHeaderValue(file.ContentType);
+
+            content.Add(fileContent, "File", file.Name);
+
+            var response = await Http.PostAsync(
+                $"{ApiConfig.ApiBaseUrl}api/SaveInviteFile?code=REDACTED_FOR_GROOMING",
+                content
+            );
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"❌ File upload failed for {file.Name}: {response.StatusCode}");
+                return null;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<SaveFileResponse>();
+
+            Console.WriteLine($"✅ File uploaded: {result?.WebUrl}");
+
+            return result?.WebUrl;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Upload exception for {file?.Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    // ✅ Updated to accept JSON array of image URLs and the image seed flag
+    private async Task<string?> SaveInviteClientAsync(string imageUrlsJson)
+    {
+        try
+        {
+            var payload = new
+            {
+                Name = ClientName ?? "",
+                Industry = ClientIndustry ?? "",
+                Prompt = InitialPrompt ?? "",
+                Email = ClientEmail ?? "",
+                ImageUrls = imageUrlsJson,
+                UseSameImageSeedForAll = UseSameImageSeedForAll
+            };
+
+            var response = await Http.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/SaveInviteClient?code=REDACTED_FOR_GROOMING",
+                payload
+            );
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"❌ SaveInviteClient failed: {response.StatusCode}");
+                return null;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
+
+            if (result != null && result.TryGetValue("id", out var idValue))
+            {
+                return idValue?.ToString();
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ SaveInviteClient exception: {ex.Message}");
+            return null;
+        }
+    }
+    public class SaveFileResponse
+    {
+        public string Message { get; set; }
+        public string FilePath { get; set; }
+        public string WebUrl { get; set; }
+        public string ContentType { get; set; }
+        public string Mode { get; set; }
+    }
+
+    private async Task CopyLink()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", InviteLink);
+    }
+}
+
+<style>
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(10, 26, 47, 0.65);
+        backdrop-filter: blur(6px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        padding: 20px;
+    }
+
+    .invite-modal {
+        width: 100%;
+        max-width: 520px;
+        max-height: 90vh;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 30px 80px rgba(0,0,0,0.25);
+        position: relative;
+        animation: fadeInScale 0.2s ease;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Scrollable container */
+    .invite-form-container {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 0 28px 24px 28px;
+    }
+
+        /* Custom scrollbar styling */
+        .invite-form-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .invite-form-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+
+        .invite-form-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+            .invite-form-container::-webkit-scrollbar-thumb:hover {
+                background: #94a3b8;
+            }
+
+    /* Firefox scrollbar */
+    .invite-form-container {
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 #f1f5f9;
+    }
+
+    .modal-close {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: none;
+        background: #f1f5f9;
+        font-size: 18px;
+        cursor: pointer;
+        z-index: 1;
+        transition: background 0.2s;
+    }
+
+        .modal-close:hover {
+            background: #e2e8f0;
+        }
+
+    .invite-header {
+        padding: 24px 28px 0 28px;
+        flex-shrink: 0;
+    }
+
+        .invite-header h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #0a1a2f;
+            margin-bottom: 6px;
+        }
+
+        .invite-header p {
+            font-size: 14px;
+            color: #5e7487;
+            margin-bottom: 20px;
+        }
+
+    .invite-form {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .form-group input {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        font-size: 14px;
+        transition: border-color 0.2s;
+    }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+
+    textarea {
+        width: 100%;
+        min-height: 100px;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        font-family: inherit;
+        transition: border-color 0.2s;
+    }
+
+        textarea:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+
+    .file-upload-area {
+        border: 2px dashed #e2e8f0;
+        border-radius: 12px;
+        padding: 16px;
+        background: #f8fafc;
+        transition: border-color 0.2s;
+    }
+
+        .file-upload-area:hover {
+            border-color: #4f46e5;
+        }
+
+    .file-list {
+        margin-top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+
+        .file-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .file-list::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+
+        .file-list::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+    .file-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        font-size: 13px;
+        flex-wrap: wrap;
+    }
+
+    .file-number {
+        font-weight: 600;
+        color: #4f46e5;
+        min-width: 60px;
+    }
+
+    .file-name {
+        flex: 1;
+        color: #1e293b;
+        word-break: break-all;
+        min-width: 100px;
+    }
+
+    .file-size {
+        color: #64748b;
+        font-size: 11px;
+    }
+
+    .remove-file-btn {
+        background: #fee2e2;
+        border: none;
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #dc2626;
+        font-weight: bold;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+    }
+
+        .remove-file-btn:hover {
+            background: #fecaca;
+        }
+
+    .upload-hint {
+        font-size: 11px;
+        color: #64748b;
+        margin-top: 6px;
+    }
+
+    /* ✅ Checkbox styles */
+    .checkbox-group {
+        margin: 8px 0;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        font-weight: 500;
+    }
+
+        .checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            margin: 0;
+        }
+
+    .checkbox-text {
+        color: #1e293b;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .checkbox-hint {
+        font-size: 12px;
+        color: #64748b;
+        margin-top: 6px;
+        margin-left: 28px;
+    }
+
+    .invite-link-box {
+        display: flex;
+        align-items: center;
+        background: #fff4df;
+        border-radius: 10px;
+        padding: 8px;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+        .invite-link-box input {
+            border: none;
+            background: transparent;
+            flex: 1;
+            font-size: 13px;
+            min-width: 150px;
+        }
+
+    .copy-btn {
+        background: #5b4df5;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.2s;
+        white-space: nowrap;
+    }
+
+        .copy-btn:hover {
+            opacity: 0.9;
+        }
+
+    .send-invite-btn {
+        margin-top: 8px;
+        background: linear-gradient(135deg, #6d5dfc, #4f46e5);
+        color: white;
+        border: none;
+        padding: 14px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 15px;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+
+        .send-invite-btn:hover:not(:disabled) {
+            opacity: 0.95;
+        }
+
+        .send-invite-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+    .invite-helper {
+        font-size: 13px;
+        color: #6b7f91;
+        text-align: center;
+    }
+
+    @@keyframes fadeInScale {
+        from {
+            opacity: 0;
+            transform: scale(0.96);
+        }
+
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    .file-input {
+        width: 100%;
+        padding: 6px;
+        border-radius: 10px;
+        font-size: 14px;
+        background: white;
+    }
+
+        .file-input::file-selector-button {
+            background: linear-gradient(135deg, #6d5dfc, #4f46e5);
+            color: white;
+            border: none;
+            padding: 10px 14px;
+            margin-right: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+            .file-input::file-selector-button:hover {
+                opacity: 0.95;
+            }
+
+    /* Responsive design for smaller screens */
+    @@media (max-width: 640px) {
+        .modal-overlay {
+            padding: 10px;
+        }
+
+        .invite-modal {
+            max-width: 100%;
+            max-height: 95vh;
+        }
+
+        .invite-header {
+            padding: 20px 20px 0 20px;
+        }
+
+            .invite-header h2 {
+                font-size: 20px;
+            }
+
+            .invite-header p {
+                font-size: 13px;
+            }
+
+        .invite-form-container {
+            padding: 0 20px 20px 20px;
+        }
+
+        .invite-form {
+            gap: 12px;
+        }
+
+        .form-group input,
+        textarea {
+            font-size: 13px;
+            padding: 10px 12px;
+        }
+
+        .invite-link-box {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+            .invite-link-box input {
+                text-align: center;
+            }
+
+        .copy-btn {
+            justify-content: center;
+        }
+
+        .file-item {
+            flex-wrap: wrap;
+        }
+
+        .file-name {
+            min-width: auto;
+        }
+    }
+
+    /* Extra small devices */
+    @@media (max-width: 480px) {
+        .invite-modal {
+            border-radius: 16px;
+        }
+
+        .invite-header h2 {
+            font-size: 18px;
+        }
+
+        .invite-header p {
+            font-size: 12px;
+        }
+
+        .form-group label {
+            font-size: 12px;
+        }
+
+        .checkbox-text {
+            font-size: 13px;
+        }
+
+        .checkbox-hint {
+            font-size: 11px;
+            margin-left: 28px;
+        }
+
+        .send-invite-btn {
+            padding: 12px;
+            font-size: 14px;
+        }
+
+        .invite-helper {
+            font-size: 12px;
+        }
+    }
+</style>

@@ -1,0 +1,228 @@
+﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@using DesignMode.AI.Shared.Security
+@using Microsoft.AspNetCore.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
+@inject AuthService Auth
+
+@using Telerik.Blazor.Components
+@using Telerik.Blazor
+@using Telerik.SvgIcons
+<style>
+    .page {
+        background-color: #f2f3f8;
+    }
+</style>
+@if (GetLastPathSegment(Nav.Uri) == "")
+{
+    <style>
+        .page {
+            background-color: #f2f3f8;
+        }
+
+    </style>
+}
+else
+{
+    <style>
+        .page {
+            background-color: #f2f3f8;
+        }
+
+        @@media (min-width: 1200px) {
+            .sidenav:hover {
+                max-width: 15.625rem;
+            }
+
+            .sidenav .sidenav-toggler {
+                padding: 1.5rem;
+            }
+
+            .main-content {
+                margin-left: 19.125rem !important;
+            }
+
+            .sidenav.fixed-end + .main-content {
+                margin-right: 17.125rem;
+            }
+        }
+    </style>
+}
+<div class="page">
+    @{
+        var path = GetPathAfterDomain(Nav.Uri);
+    }
+    @if (path.Contains("init") || path.Contains("login") || path.Contains("signup") ||
+    path == "")
+    {
+        <NavMenu MainLayoutVariable="" />
+        @Body
+    }
+    else
+    {
+        <link id="pagestyle" href="assets/css/argon-dashboard.css?v=2.1.0" rel="stylesheet" />
+@*         <div class="min-height-300 position-absolute w-100" style="background-color: #f2f3f8"></div> *@
+        <NavMenu />
+@*         <main class="main-content position-relative border-radius-lg main-left">
+            <div class="parent-container" style="width: 99%; background-color: white; border-radius: 30px; padding: 0; overflow: hidden;margin-top:16px;">
+                <div class="container-fluid" style="background-color: #fff; width: 100%; margin: 0; padding: 1rem;">
+                    <div class="row" style="color: white;margin-top: 78px;border-bottom: 1px solid #eee;">
+                    </div>
+                </div> *@
+                @* <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">@username test 123</a> *@
+                @Body
+@*             </div>
+        </main> *@
+        <script>
+            function toggleSidenav() {
+                if (body.classList.contains(className)) {
+                    body.classList.remove(className);
+                    setTimeout(function () {
+                        sidenav.classList.remove('bg-white');
+                    }, 100);
+                    sidenav.classList.remove('bg-transparent');
+
+                } else {
+                    body.classList.add(className);
+                    sidenav.classList.add('bg-white');
+                    sidenav.classList.remove('bg-transparent');
+                    iconSidenav.classList.remove('d-none');
+                }
+            }
+        </script>
+    }
+</div>
+
+@code {
+    private bool isAuthorized = false;
+    private bool hasRedirected = false;
+    private string username = "";
+
+    private string GetLastPathSegment(string uri)
+    {
+        // Get the absolute path, excluding the domain
+        string absolutePath = new Uri(uri).AbsolutePath;
+
+        // Check if the URI contains a query string
+        int queryStringIndex = absolutePath.IndexOf('?');
+
+        if (queryStringIndex != -1)
+        {
+            // Extract the substring before the query string
+            return absolutePath.Substring(1, queryStringIndex - 1); // Skip the leading slash
+        }
+
+        // If no query string, return the last segment after the last slash
+        string[] pathSegments = absolutePath.Split('/');
+        return pathSegments.Length > 0 ? pathSegments[1] : absolutePath;
+    }
+
+    private string GetPathAfterDomain(string uri)
+    {
+        // Get the absolute path, excluding the domain
+        string absolutePath = new Uri(uri).AbsolutePath.TrimStart('/');
+
+        // Extract the portion after the domain and the initial "/"
+        return absolutePath;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var currentUrl = Nav.Uri;  // Get the current URI
+        var uri = new Uri(currentUrl);
+        var pathAfterDomain = uri.AbsolutePath;  // This gives you the path after the domain
+
+        var isAllowAnonymous = CheckIfAllowAnonymous(pathAfterDomain);
+
+        // If the page has [AllowAnonymous], don't check for authentication
+        if (isAllowAnonymous)
+        {
+            return;
+        }
+
+        // Check for authentication state
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity is not { IsAuthenticated: true })
+        {
+            // User is not authenticated, redirect to the login page
+            if (!hasRedirected)
+            {
+                Nav.NavigateTo("/login", forceLoad: true);
+                hasRedirected = true;
+            }
+        }
+        else
+        {
+            // User is authenticated, continue to the requested page
+            isAuthorized = true;
+
+            // Try to get username from claims
+            username = user.Identity?.Name;
+
+            // Or fallback to claim manually if needed
+            if (string.IsNullOrEmpty(username))
+            {
+                username = user.Claims.FirstOrDefault(c =>
+                    c.Type == "name" || c.Type == "unique_name" || c.Type == "sub")?.Value ?? "Unknown";
+            }
+
+            var isExpired = await Auth.IsTokenExpired();
+            if (isExpired)
+            {
+                // Token is expired, log out and redirect to login
+                await Auth.Logout();
+                if (!hasRedirected)
+                {
+                    Nav.NavigateTo("/login", forceLoad: true);
+                    hasRedirected = true;
+                }
+            }
+        }
+
+        StateHasChanged();
+    }
+
+    private bool CheckIfAllowAnonymous(string url)
+    {
+        // Allow this specific page
+        if (url.Contains("/init/mainconcept") || url.Contains("/init/funnelend"))
+        {
+            return true;
+        }
+
+        // Block other /app and /init pages
+        if (url.Contains("/app") || url.Contains("/init"))
+        {
+            return false;
+        }
+
+        return true;
+    }
+}
+<script>
+    console.log("width: " + window.innerWidth);
+    console.log("height: " + window.innerHeight);
+</script>
+<script>
+    window.scrollToLockedFeatures = () => {
+        const el = document.getElementById("lockedFeatures");
+
+        if (!el) return;
+
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        // OBSERVER triggers animation when visible
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    el.classList.add("visible");
+                }
+            });
+        }, { threshold: 0.3 });
+
+        observer.observe(el);
+    };
+</script>

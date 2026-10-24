@@ -1,0 +1,62 @@
+.ai-usage-meter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .35rem .6rem;
+    min-width: 0;
+    padding: .35rem .6rem;
+    border: 1px solid #e5e7eb;
+    border-radius: .65rem;
+    background: #fff;
+    color: #1f2951;
+    font-size: .75rem;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.ai-usage-primary {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .35rem;
+    white-space: nowrap;
+}
+
+.ai-usage-exhausted {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    text-decoration: underline;
+    flex-basis: 100%;
+    color: #b91c1c;
+    font-weight: 600;
+    white-space: normal;
+}
+
+.ai-usage-count::before,
+.ai-usage-remaining::before {
+    content: "\00b7";
+    margin-right: .35rem;
+    color: #9ca3af;
+}
+
+@media (max-width: 767px) {
+    .ai-usage-meter {
+        align-items: flex-start;
+        flex-direction: column;
+        width: 100%;
+        max-width: 100%;
+        white-space: normal;
+    }
+
+    .ai-usage-primary {
+        white-space: normal;
+    }
+
+    .ai-usage-count::before,
+    .ai-usage-remaining::before {
+        content: none;
+    }
+}

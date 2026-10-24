@@ -1,0 +1,655 @@
+﻿@page "/init/designerdashboard"
+@using Telerik.Blazor.Components
+@using Telerik.Blazor
+@using Telerik.SvgIcons
+
+<!--
+    ==========================================================
+    DESIGNER DASHBOARD – FULLY RESPONSIVE (MOBILE-FIRST)
+    ==========================================================
+    - Responsive design for all screen sizes (320px to 4K)
+    - Mobile: Stacked layout with collapsible navigation
+    - Tablet: Sidebar collapses to icons
+    - Desktop: Full experience with left navigation
+    - Touch-friendly tap targets (min 44px)
+-->
+
+<div class="dashboard-container" style="
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+    margin: 0 auto;
+    background: #f1f5f9;
+    padding: 12px;">
+
+    <!-- CENTERED CONTAINER – FULLY RESPONSIVE -->
+    <div class="main-wrapper" style="
+        width: 100%;
+        max-width: 1600px;
+        display: flex;
+        flex-direction: column;
+        background: transparent;
+        gap: 12px;">
+
+        <!-- ===== MOBILE TOP BAR (HIDDEN ON DESKTOP) ===== -->
+        <div class="mobile-top-bar d-flex d-lg-none align-items-center justify-content-between" style="
+            background: white;
+            border-radius: 20px;
+            padding: 12px 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
+
+            <!-- Studio logo (mobile) -->
+            <div class="d-flex align-items-center gap-2">
+                <span style="background: #0a1a2f; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 20px;">D</span>
+                <span style="font-size: 20px; font-weight: 700; color: #0a1a2f;">design⚡ode</span>
+            </div>
+
+            <!-- Mobile menu toggle -->
+            <button class="mobile-menu-toggle btn p-2" style="background: #f1f5f9; border: none; border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;"
+                    @onclick="ToggleMobileMenu">
+                <span style="font-size: 24px;">☰</span>
+            </button>
+        </div>
+
+        <!-- ===== FLEXIBLE LAYOUT: LEFT NAV + MAIN CONTENT ===== -->
+        <div class="desktop-layout" style="
+            display: flex;
+            flex-direction: row;
+            gap: 0;
+            width: 100%;">
+
+            <!-- ===== LEFT NAVIGATION – RESPONSIVE SIDEBAR ===== -->
+            <DesignerLeftNav IsMobileMenuOpen="@isMobileMenuOpen"
+                 OnToggleMobileMenu="@ToggleMobileMenu"
+                 UserName="Sarah Chen"
+                 UserRole="Design lead" />
+
+            <!-- ===== MAIN CONTENT – RESPONSIVE ===== -->
+            <div class="main-content" style="
+                flex: 1;
+                background: white;
+                border-radius: 0 28px 28px 0;
+                padding: clamp(16px, 4vw, 36px);
+                box-shadow: 0 12px 30px rgba(0,0,0,0.02);
+    margin-left: 0px !important;">
+
+                <!-- INNER CENTERED CONTENT -->
+                <div class="inner-content" style="
+                    max-width: 1200px;
+                    width: 100%;
+                    margin: 0 auto;">
+
+                    <!-- ===== TOP BAR ===== -->
+                    <div class="top-bar" style="
+                        display: flex;
+                        flex-direction: column;
+                        gap: 16px;
+                        padding-bottom: 16px;
+                        border-bottom: 1px solid rgba(0,0,0,0.04);
+                        margin-bottom: 24px;">
+
+                        <!-- Page title + welcome -->
+                        <div class="w-100">
+                            <span style="font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #ff8c1a; background: #fff1e0; padding: 4px 14px; border-radius: 40px; display: inline-block;">DESIGNER DASHBOARD</span>
+                            <h1 style="font-size: clamp(24px, 5vw, 32px); font-weight: 700; color: #0a1a2f; margin-top: 12px; margin-bottom: 4px;">Welcome, Sarah ✨</h1>
+                            <p style="color: #4b5c6e; font-size: clamp(14px, 3vw, 16px);">2 active projects · 1 pending invite</p>
+                        </div>
+
+                        <!-- Search + Invite (responsive) -->
+                        <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-3">
+                            <div style="background: white; border-radius: 40px; padding: 8px 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; width: 100%; max-width: 300px;">
+                                <span style="color: #7c889b; margin-right: 8px;">🔍</span>
+                                <input type="text" placeholder="Search projects..." style="border: none; outline: none; background: transparent; width: 100%; font-size: 14px;" />
+                            </div>
+                            <button class="btn d-flex align-items-center justify-content-center gap-2"
+                                    style="background: #0a1a2f; color: white; border-radius: 40px; padding: 10px 22px; font-weight: 600; font-size: 14px; border: none; min-height: 44px; white-space: nowrap;"
+                                    @onclick="OpenInviteClient">
+                                <span>✉️</span> Invite
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ===== DASHBOARD ACTION GRID – RESPONSIVE ===== -->
+                    <div class="row g-3 mb-5">
+                        <div class="col-6 col-md-4 col-lg">
+                            <div style="background: white; border-radius: 20px; padding: 16px; border: 1px solid #f0f4fa; display: flex; align-items: center; gap: 12px; height: 100%;">
+                                <span style="font-size: 24px; background: #eef6ff; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 16px; flex-shrink: 0;">📁</span>
+                                <div style="min-width: 0;">
+                                    <div style="font-size: 16px; font-weight: 700; color: #0a1a2f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Projects</div>
+                                    <div style="color: #5f7182; font-size: 13px;">3 active</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg">
+                            <div style="background: white; border-radius: 20px; padding: 16px; border: 1px solid #f0f4fa; display: flex; align-items: center; gap: 12px; height: 100%;">
+                                <span style="font-size: 24px; background: #f3f1fe; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 16px; flex-shrink: 0;">👥</span>
+                                <div style="min-width: 0;">
+                                    <div style="font-size: 16px; font-weight: 700; color: #0a1a2f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Clients</div>
+                                    <div style="color: #5f7182; font-size: 13px;">8 total</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg">
+                            <div style="background: white; border-radius: 20px; padding: 16px; border: 1px solid #f0f4fa; display: flex; align-items: center; gap: 12px; height: 100%;">
+                                <span style="font-size: 24px; background: #ecfdf3; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 16px; flex-shrink: 0;">➕</span>
+                                <div style="min-width: 0;">
+                                    <div style="font-size: 16px; font-weight: 700; color: #0a1a2f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Create</div>
+                                    <div style="color: #5f7182; font-size: 13px;">New project</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg">
+                            <div style="background: white; border-radius: 20px; padding: 16px; border: 1px solid #f0f4fa; display: flex; align-items: center; gap: 12px; height: 100%;">
+                                <span style="font-size: 24px; background: #fff1e6; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 16px; flex-shrink: 0;">💰</span>
+                                <div style="min-width: 0;">
+                                    <div style="font-size: 16px; font-weight: 700; color: #0a1a2f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Earnings</div>
+                                    <div style="color: #5f7182; font-size: 13px;">$4.2k</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-lg">
+                            <div style="background: white; border-radius: 20px; padding: 16px; border: 1px solid #f0f4fa; display: flex; align-items: center; gap: 12px; height: 100%;">
+                                <span style="font-size: 24px; background: #fffaec; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 16px; flex-shrink: 0;">💡</span>
+                                <div style="min-width: 0;">
+                                    <div style="font-size: 16px; font-weight: 700; color: #0a1a2f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Tips</div>
+                                    <div style="color: #5f7182; font-size: 13px;">& Ideas</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== MAIN EMPTY STATE – RESPONSIVE ===== -->
+                    <div style="background: linear-gradient(135deg, #ffffff 0%, #fbfdff 100%); border-radius: clamp(24px, 4vw, 36px); padding: clamp(24px, 6vw, 48px) clamp(16px, 4vw, 32px); border: 1px solid rgba(255,191,53,0.2); margin-bottom: 32px;">
+                        <div class="text-center" style="max-width: 600px; margin: 0 auto;">
+                            <div style="background: #ffe7b6; width: clamp(64px, 12vw, 88px); height: clamp(64px, 12vw, 88px); border-radius: clamp(20px, 4vw, 28px); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: clamp(32px, 6vw, 44px);">
+                                📬
+                            </div>
+                            <h2 style="font-size: clamp(24px, 5vw, 36px); font-weight: 750; color: #0a1a2f; margin-bottom: 12px;">No projects yet</h2>
+                            <p style="font-size: clamp(14px, 3vw, 18px); color: #3e5364; margin-bottom: 24px;">
+                                Invite your first client to get started — then collaborate on designs, share feedback, and deliver beautiful work.
+                            </p>
+
+                            <div class="d-flex flex-column align-items-center gap-3">
+                                <button class="btn d-inline-flex align-items-center justify-content-center gap-2"
+                                        style="background: #0a1a2f; color: white; border-radius: 60px; padding: clamp(12px, 3vw, 16px) clamp(24px, 6vw, 48px); font-weight: 650; font-size: clamp(14px, 3vw, 18px); border: none; width: 100%; max-width: 300px;"
+                                        @onclick="OpenInviteClient">
+                                    <span style="font-size: 20px;">✉️</span> Invite Client
+                                </button>
+
+                                <div class="d-flex flex-column flex-sm-row align-items-center gap-2" style="background: #f6f9fc; padding: 12px 20px; border-radius: 60px; border: 1px solid #e4ecf5; width: 100%;">
+                                    <span style="background: #0a1a2f; color: white; border-radius: 40px; padding: 5px 16px; font-size: 12px; font-weight: 700; white-space: nowrap;">✨ GET STARTED TIPS</span>
+                                    <span style="color: #1e3a5f; font-weight: 500; font-size: 14px; text-align: center;">Learn how to onboard clients effectively.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== GET STARTED TIPS – RESPONSIVE GRID ===== -->
+                    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3">
+                        <h3 style="font-size: clamp(20px, 4vw, 24px); font-weight: 700; color: #0a1a2f; margin-bottom: 8px;">📘 Client success resources</h3>
+                        <span style="color: #5b6f82; font-size: 13px;">designMode.ai/onboard</span>
+                    </div>
+
+                    <div class="row g-3 g-md-4 mb-5">
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div style="background: white; border-radius: 24px; padding: 24px; border: 1px solid #f0f5fa; height: 100%;">
+                                <div style="background: #eaf3ff; width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 20px;">🧭</div>
+                                <h4 style="font-size: 18px; font-weight: 700; color: #0a1a2f; margin-bottom: 8px;">Onboarding Guide</h4>
+                                <p style="color: #4f6376; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">
+                                    Creative brief templates, kickoff meeting agendas, and timeline planners.
+                                </p>
+                                <a href="#" style="color: #0a1a2f; font-weight: 650; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-bottom: 2px solid #ffb347; padding-bottom: 4px;">
+                                    Explore guide <span style="font-size: 16px;">→</span>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div style="background: white; border-radius: 24px; padding: 24px; border: 1px solid #f0f5fa; height: 100%;">
+                                <div style="background: #fef0e6; width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 20px;">🎬</div>
+                                <h4 style="font-size: 18px; font-weight: 700; color: #0a1a2f; margin-bottom: 8px;">Video Tutorials</h4>
+                                <p style="color: #4f6376; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">
+                                    Presenting concepts, collecting client feedback, and closing approvals.
+                                </p>
+                                <a href="#" style="color: #0a1a2f; font-weight: 650; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-bottom: 2px solid #ffb347; padding-bottom: 4px;">
+                                    Watch series <span style="font-size: 16px;">→</span>
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div style="background: white; border-radius: 24px; padding: 24px; border: 1px solid #f0f5fa; height: 100%;">
+                                <div style="background: #edfcf6; width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 20px;">🎨</div>
+                                <h4 style="font-size: 18px; font-weight: 700; color: #0a1a2f; margin-bottom: 8px;">Design Resources</h4>
+                                <p style="color: #4f6376; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">
+                                    Client-ready presentation decks, mood board kits, case study templates.
+                                </p>
+                                <a href="#" style="color: #0a1a2f; font-weight: 650; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-bottom: 2px solid #ffb347; padding-bottom: 4px;">
+                                    Browse library <span style="font-size: 16px;">→</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== BOTTOM STATUS / SETTINGS – RESPONSIVE ===== -->
+                    <div class="footer-section" style="
+                        border-top: 1px solid rgba(10,26,47,0.06);
+                        margin-top: 24px;
+                        padding-top: 24px;">
+
+                        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-4">
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <span style="font-size: 20px;">⚙️</span>
+                                <span style="font-weight: 600; color: #0a1a2f; font-size: 15px;">Settings</span>
+                                <span style="color: #98a9b9; font-size: 14px;">· Billing · Team</span>
+                            </div>
+
+                            <div style="color: #5e7487; font-size: 14px; display: flex; gap: 20px; flex-wrap: wrap;">
+                                <span>📋 Dashboard</span>
+                                <span>👜 Projects</span>
+                                <span>👤 Clients</span>
+                            </div>
+
+                            <div style="color: #6b7f91; font-size: 14px;">
+                                © 2026 DesignMode
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-start justify-content-lg-end mt-3">
+                            <span style="background: #f4f9ff; padding: 8px 20px; border-radius: 40px; font-size: 13px; display: inline-flex; gap: 8px; color: #1e3a5f; border: 1px solid #e1ecf5; flex-wrap: wrap;">
+                                <span>⏱️</span> Last invite sent 2 days ago · <span style="font-weight: 600; color: #0a1a2f; cursor: pointer;">Resend</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* ===== RESPONSIVE DASHBOARD STYLES ===== */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        background: #f1f5f9;
+    }
+
+    /* Mobile menu styles */
+    .sidebar-nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        transform: translateX(-100%);
+        z-index: 1050;
+        border-radius: 0 28px 28px 0 !important;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+        .sidebar-nav.mobile-visible {
+            transform: translateX(0);
+            box-shadow: 10px 0 30px rgba(0,0,0,0.15);
+        }
+
+    .mobile-close-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1060;
+    }
+
+    /* Desktop styles */
+    @@media (min-width: 992px) {
+        .sidebar-nav {
+            position: static;
+            transform: none;
+            border-radius: 28px 0 0 28px !important;
+            overflow-y: visible;
+        }
+
+        .mobile-close-btn {
+            display: none !important;
+        }
+    }
+
+    /* Tablet styles */
+    @@media (min-width: 768px) and (max-width: 991px) {
+        .sidebar-nav {
+            width: 100px !important;
+            min-width: 100px !important;
+            padding: 24px 12px !important;
+        }
+
+        .nav-label {
+            display: none;
+        }
+
+        .nav-item {
+            justify-content: center;
+            padding: 16px 0 !important;
+        }
+
+            .nav-item span:first-child {
+                font-size: 28px !important;
+                margin: 0 !important;
+            }
+
+        .d-flex.align-items-center.gap-2.mb-4 {
+            justify-content: center;
+            padding-left: 0 !important;
+        }
+
+            .d-flex.align-items-center.gap-2.mb-4 span:last-child {
+                display: none;
+            }
+
+        .main-content {
+            border-radius: 28px !important;
+        }
+    }
+
+    /* Mobile adjustments */
+    @@media (max-width: 767px) {
+        .main-content {
+            border-radius: 20px !important;
+            padding: 16px !important;
+        }
+
+        .row.g-3 > [class*="col-"] {
+            padding: 6px;
+        }
+
+        .btn, button {
+            min-height: 44px;
+            min-width: 44px;
+        }
+
+        input, select, textarea {
+            font-size: 16px !important; /* Prevents zoom on iOS */
+        }
+    }
+
+    /* Small phones */
+    @@media (max-width: 375px) {
+        .row.g-3 > [class*="col-"] {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+
+        .d-flex.flex-column.flex-sm-row {
+            flex-direction: column !important;
+        }
+
+            .d-flex.flex-column.flex-sm-row > div {
+                max-width: 100% !important;
+            }
+    }
+
+    /* Touch-friendly hover states */
+    .nav-item, .btn, [role="button"] {
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+        .nav-item:active {
+            background: #e5eef9 !important;
+            transform: scale(0.98);
+        }
+
+        .btn:active {
+            transform: scale(0.96);
+        }
+
+    /* Prevent text overflow */
+    .nav-label, h1, h2, h3, h4, p, div {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    /* Smooth scrolling */
+    html {
+        scroll-behavior: smooth;
+    }
+
+    /* Card hover effects - disabled on mobile */
+    @@media (min-width: 768px) {
+        [class*="col-"] > div:hover {
+            border-color: #ffe19f !important;
+            box-shadow: 0 12px 24px -12px rgba(0,0,0,0.08) !important;
+            transform: translateY(-2px);
+        }
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #e9eef3;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #b1c2d1;
+        border-radius: 10px;
+    }
+
+    .sidebar-nav {
+    width: 260px;
+    min-width: 260px;
+    background: white;
+    border-right: 1px solid rgba(0,0,0,0.04);
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.02);
+    border-radius: 28px 0 0 28px;
+    transition: transform 0.3s ease;
+    z-index: 1050;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    overflow-y: auto;
+}
+
+.sidebar-nav.mobile-visible {
+    transform: translateX(0);
+    box-shadow: 10px 0 30px rgba(0,0,0,0.15);
+}
+
+.mobile-close-btn {
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    background: #f1f5f9;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+}
+
+.logo-wrap {
+    padding-left: 8px;
+}
+
+.logo-icon {
+    background: #0a1a2f;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 18px;
+}
+
+.logo-text {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #0a1a2f;
+}
+
+.nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+}
+
+.nav-item {
+    padding: 14px 12px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: #435c73;
+    border-radius: 16px;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.nav-item.active {
+    background: #f1f7fe;
+    color: #0a1a2f;
+    font-weight: 600;
+    border-left: 5px solid #ff9f1c;
+}
+
+.nav-icon {
+    font-size: 22px;
+    min-width: 32px;
+}
+
+.nav-label {
+    font-size: 15px;
+}
+
+.nav-section {
+    margin-top: 30px;
+    border-top: 1px solid #edf2f7;
+    padding-top: 24px;
+}
+
+.profile-box {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid #eef4f9;
+}
+
+.profile-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.profile-text {
+    min-width: 0;
+    flex: 1;
+}
+
+.profile-name {
+    font-weight: 700;
+    color: #0a1a2f;
+    font-size: 15px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profile-role {
+    font-size: 13px;
+    color: #5e7487;
+}
+
+.online-dot {
+    background: #22c55e;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.credits-pill {
+    margin-top: 16px;
+    background: #f4f9ff;
+    border-radius: 40px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #0a1a2f;
+    font-size: 14px;
+}
+
+.credits-dot {
+    background: #ffbf3f;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.credits-bolt {
+    margin-left: auto;
+    font-size: 12px;
+    color: #3f6a9c;
+}
+
+@@media (min-width: 992px) {
+    .sidebar-nav {
+        position: static;
+        transform: none;
+        border-radius: 28px 0 0 28px;
+        overflow-y: visible;
+    }
+
+    .mobile-close-btn {
+        display: none;
+    }
+}
+</style>
+
+@code {
+    private bool isMobileMenuOpen = false;
+
+    private void ToggleMobileMenu()
+    {
+        isMobileMenuOpen = !isMobileMenuOpen;
+    }
+
+    // ============================================
+    // DESIGNER DASHBOARD – RESPONSIVE PAGE
+    // Route: /init/designerdashboard
+    // Fully responsive with mobile-first approach
+    // Touch-optimized for mobile devices
+    // ============================================
+
+    private bool ShowInviteClient = false;
+
+    private void OpenInviteClient()
+    {
+        ShowInviteClient = true;
+    }
+
+    private async Task CloseInviteClient(bool value)
+    {
+        ShowInviteClient = value;
+    }
+}
+
+    <InviteClient Show="@ShowInviteClient"
+              ShowChanged="CloseInviteClient"
+              DeliverableName="Invite Client" />

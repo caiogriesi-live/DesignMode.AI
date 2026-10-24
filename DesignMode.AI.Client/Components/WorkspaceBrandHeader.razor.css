@@ -1,0 +1,41 @@
+.workspace-brand-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem;
+    min-width: 0;
+}
+
+.workspace-logo {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    color: #1f2951;
+    font-family: 'SF Pro Display', Arial, sans-serif;
+    font-size: 24px;
+    font-weight: 650;
+    line-height: 1;
+    text-decoration: none;
+    text-transform: none;
+}
+
+.workspace-logo > img {
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+    object-fit: contain;
+}
+
+.workspace-logo span img {
+    width: 30px;
+    margin: 0 3px 3px;
+}
+
+@media (max-width: 767px) {
+    .workspace-brand-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: .45rem;
+        width: 100%;
+    }
+}

@@ -1,0 +1,54 @@
+@page "/unsubscribe"
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.WebUtilities
+@inject ApiConfigService ApiConfig
+@inject NavigationManager Navigation
+
+<PageTitle>Unsubscribe — DesignMode</PageTitle>
+<main style="max-width:560px;margin:60px auto;padding:32px;background:#fff;border-radius:16px;color:#111321">
+    <h1>DesignMode email preferences</h1>
+    @if (_done)
+    {
+        <p role="status">You’re unsubscribed from recovery reminders for all your DesignMode projects.</p>
+        <p>You may still receive service emails about previews you request and your account.</p>
+    }
+    else
+    {
+        <p>Stop receiving reminders to return to your DesignMode projects.</p>
+        <button type="button" disabled="@(_busy || string.IsNullOrEmpty(_token))" @onclick="UnsubscribeAsync"
+                style="background:#592ce0;color:white;border:0;border-radius:24px;padding:14px 28px">
+            @(_busy ? "Saving…" : "Unsubscribe")
+        </button>
+        @if (_error is not null) { <p role="alert">@_error</p> }
+    }
+</main>
+
+@code {
+    private string? _token, _error;
+    private bool _busy, _done;
+
+    protected override void OnInitialized()
+    {
+        var query = QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+        if (query.TryGetValue("token", out var value) && value.ToString().Length == 129)
+            _token = value.ToString();
+        else _error = "This unsubscribe link is invalid.";
+    }
+
+    private async Task UnsubscribeAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            using var client = new HttpClient();
+            using var response = await client.PostAsync(ApiConfig.ApiBaseUrl + "api/recovery/unsubscribe",
+                new StringContent(_token!));
+            if (response.IsSuccessStatusCode) _done = true;
+            else _error = response.StatusCode == System.Net.HttpStatusCode.BadRequest
+                ? "This unsubscribe link is invalid." : "We couldn’t save your preference. Please try again.";
+        }
+        catch { _error = "We couldn’t save your preference. Please try again."; }
+        finally { _busy = false; }
+    }
+}

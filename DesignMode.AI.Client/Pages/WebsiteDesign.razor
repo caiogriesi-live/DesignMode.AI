@@ -1,0 +1,703 @@
+﻿@page "/website"
+
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+@using DesignMode.AI.Shared.Security;
+@using DesignMode.AI.Client.Services;
+@using DesignMode.AI.Shared.Util;
+@using System.Text;
+@using Microsoft.AspNetCore.Components.Authorization
+@using DesignMode.AI.Shared.Security
+@using Microsoft.AspNetCore.Authorization
+
+@code {
+
+    private bool isMobileMenuOpen = false;
+    private ElementReference scrollContainer;
+    private List<string> animatedElements = new();
+
+    private void GoToInit()
+    {
+        Nav.NavigateTo("/signup", forceLoad: true, replace: true);
+    }
+
+    private void GoToSignUp()
+    {
+        // Update this with your actual sign up route
+        Nav.NavigateTo("/signup", forceLoad: true);
+    }
+
+    private void GoToLogIn()
+    {
+        // Update this with your actual login route
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    private void ToggleMobileMenu()
+    {
+        isMobileMenuOpen = !isMobileMenuOpen;
+    }
+    private string Login { get; set; } = "";
+    [Inject] AuthenticationStateProvider AuthStateProvider { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+
+        await UpdateLoginAsync();
+    }
+
+    private async Task UpdateLoginAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            Login = authState.User.Identity.Name ?? "Logged In";
+        }
+        else
+        {
+            Login = "";
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async void OnAuthenticationStateChanged(Task<AuthenticationState> task)
+    {
+        var authState = await task;
+
+        Login = authState.User.Identity?.IsAuthenticated == true
+            ? authState.User.Identity.Name ?? "Logged In"
+            : "";
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+
+        await JS.InvokeVoidAsync("eval", @"
+        window.removeEventListener('scroll', window.checkScrollAnimations);
+    ");
+    }
+    private async Task OnScroll()
+    {
+        var js = (IJSObjectReference)null;
+        try
+        {
+            js = await JS.InvokeAsync<IJSObjectReference>("import", "./js/scroll-animations.js");
+            await js.InvokeVoidAsync("checkScrollAnimations");
+        }
+        finally
+        {
+            if (js != null) await js.DisposeAsync();
+        }
+        StateHasChanged();
+    }
+
+    [Inject] IJSRuntime JS { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("eval", @"
+                window.checkScrollAnimations = function() {
+                    const elements = document.querySelectorAll('.animate-on-scroll');
+                    elements.forEach(el => {
+                        const rect = el.getBoundingClientRect();
+                        const isVisible = rect.top < window.innerHeight - 100 && rect.bottom > 0;
+                        if (isVisible && !el.classList.contains('animated')) {
+                            el.classList.add('animated');
+                            const animation = el.getAttribute('data-animation') || 'fadeInUp';
+                            el.classList.add(animation);
+                        }
+                    });
+                };
+                window.addEventListener('scroll', checkScrollAnimations);
+                window.checkScrollAnimations();
+            ");
+        }
+    }
+}
+
+<link href="assets/css/brief-landing.css" rel="stylesheet" />
+<div class="wrapper" style="width:100%;" @onscroll="OnScroll">
+    <!-- ========== HERO SECTION (UNCHANGED - FULLY RESTORED) ========== -->
+    <div class="section section-hero section-shaped" style="flex-flow: column;justify-content: flex-start;align-items: center;display: flex; margin-top: -49px;margin-bottom: 20px;padding-left: 20px;padding-right: 20px;">
+        <div class="page-header" style="background: url('images/header-bg.png') center calc(100% + 77px) no-repeat, linear-gradient(180deg, #Fff 2%, #CDE8EE 60%); background-size: cover; background-color: #f2f3f8; border-radius: 30px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); width: 100%; max-width: 1920px; overflow: hidden; position: relative; animation: fadeInImage 1s ease-in forwards;">
+
+            <!-- Hamburger Menu Button (Mobile) -->
+            <div style="position: absolute; top: 20px; right: 30px; z-index: 1001; display: none;" class="hamburger-container">
+                <button @onclick="ToggleMobileMenu" style="
+                    background: #244d88;
+                    border: none;
+                    border-radius: 10px;
+                    padding: 12px;
+                    cursor: pointer;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                    display: flex;
+                    flex-direction: column;
+                    gap: 5px;
+                    transition: transform 0.2s ease;
+                " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                    <span style="width: 25px; height: 3px; background: white; border-radius: 3px;"></span>
+                    <span style="width: 25px; height: 3px; background: white; border-radius: 3px;"></span>
+                    <span style="width: 25px; height: 3px; background: white; border-radius: 3px;"></span>
+                </button>
+            </div>
+
+            <!-- Balloon Popup Menu for Mobile -->
+            @if (isMobileMenuOpen)
+            {
+                <div class="balloon-menu" style="
+                    position: fixed;
+                    top: 80px;
+                    right: 30px;
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+                    z-index: 2000;
+                    padding: 15px;
+                    min-width: 180px;
+                    animation: balloonPop 0.3s ease-out;
+                    transform-origin: top right;
+                            ">
+                    <div style="
+                        position: absolute;
+                        top: -10px;
+                        right: 20px;
+                        width: 0;
+                        height: 0;
+                        border-left: 12px solid transparent;
+                        border-right: 12px solid transparent;
+                        border-bottom: 12px solid white;
+                                "></div>
+                    <button @onclick="ToggleMobileMenu" style="
+                        position: absolute;
+                        top: 8px;
+                        right: 12px;
+                        background: transparent;
+                        border: none;
+                        font-size: 18px;
+                        cursor: pointer;
+                        color: #999;
+                        transition: color 0.2s ease;
+                                " onmouseover="this.style.color='#244d88'" onmouseout="this.style.color='#999'">
+                        ✕
+                    </button>
+                    <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px;">
+                        <button @onclick="GoToSignUp" style="
+                            background: linear-gradient(135deg, #244d88 0%, #1a3866 100%);
+                            color: white;
+                            border: none;
+                            border-radius: 50px;
+                            padding: 12px 20px;
+                            font-size: 15px;
+                            font-weight: 600;
+                            font-family: 'SF Pro Display', 'Arial', sans-serif;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                            width: 100%;
+                            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
+                                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.1)'">
+                            Sign Up
+                        </button>
+                        <button @onclick="GoToLogIn" style="
+                            background: transparent;
+                            color: #244d88;
+                            border: 2px solid #244d88;
+                            border-radius: 50px;
+                            padding: 10px 20px;
+                            font-size: 15px;
+                            font-weight: 600;
+                            font-family: 'SF Pro Display', 'Arial', sans-serif;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                            background-color: white;
+                            width: 100%;
+                                    " onmouseover="this.style.backgroundColor='#244d88'; this.style.color='white'; this.style.transform='translateY(-2px)'"
+                                onmouseout="this.style.backgroundColor='white'; this.style.color='#244d88'; this.style.transform='translateY(0)'">
+                            Log In
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- Desktop Buttons -->
+            <div style="position: absolute; top: 20px; right: 30px; z-index: 1000; display: flex; gap: 15px;" class="desktop-buttons">
+                <button @onclick="GoToSignUp" style="
+                    background: linear-gradient(135deg, #244d88 0%, #1a3866 100%);
+                    color: white;
+                    border: none;
+                    border-radius: 50px;
+                    padding: 10px 28px;
+                    font-size: 15px;
+                    font-weight: 600;
+                    font-family: 'SF Pro Display', 'Arial', sans-serif;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2)';"
+                        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.15)';">
+                    Sign Up
+                </button>
+                <button @onclick="GoToLogIn" style="
+                    background: transparent;
+                    color: #244d88;
+                    border: 2px solid #244d88;
+                    border-radius: 50px;
+                    padding: 8px 28px;
+                    font-size: 15px;
+                    font-weight: 600;
+                    font-family: 'SF Pro Display', 'Arial', sans-serif;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    background-color: rgba(255, 255, 255, 0.9);
+                " onmouseover="this.style.backgroundColor='#244d88'; this.style.color='white'; this.style.transform='translateY(-2px)';"
+                        onmouseout="this.style.backgroundColor='rgba(255,255,255,0.9)'; this.style.color='#244d88'; this.style.transform='translateY(0)';">
+                    Log In @* @Login *@
+                </button>
+            </div>
+
+            <span class="hide-in-firefox" style="position: relative; left: 28px; top: 18px;">
+                <img src="assets/img/logo-left.png" width="26px" height="26px" class="navbar-brand-img h-100" alt="main_logo"
+                     style="width: 20px; height: 20px; margin-top: -9px; object-fit: contain;">
+                <span style="font-family: 'SF Pro Display','Arial'; font-weight: 650; font-size: 24px; color: #1f2951; text-transform: none;">
+                    design<span style="color: #ffa900; font-weight: 650;">
+                        <img src="images/logo-m3.svg" style="width: 30px; margin-left: 3px; margin-right: 3px; margin-bottom: 3px;">
+                    </span>ode.ai
+                </span>
+            </span>
+            <div class="container shape-container d-flex align-items-center justify-content-center py-lg">
+                <div class="col-12 text-center">
+                    <div class="row justify-content-center text-center" style="margin-top: -30px;">
+                        <div class="col-lg-12" style="z-index:999;">
+                            <h1 class="text-dark display-1 h1font">
+                                <span style="padding-left:10px;">AI × Designer</span> <span style="color: #ffa900;font-weight:600;">[fusion]</span>
+                            </h1>
+                            <h2 class="display-4 font-weight-normal text-grey" style="color:#000; font-size: 18px">
+                                AI explores. Designers decide.
+                            </h2>
+                            <div class="d-flex justify-content-center" style="margin-top: 30px; flex-direction: column; align-items: center;">
+                                <a @onclick="GoToInit" class="signup-link" style="color:white;">
+                                    Sign up for early access
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="padding-top: 4px;margin-left: -1px;"><path d="M12.8984 12.0001L9.11719 8.21881L10.1973 7.13867L15.0587 12.0001L10.1973 16.8615L9.11719 15.7813L12.8984 12.0001Z" fill="currentColor"></path></svg>
+                                </a>
+                                <p style="margin-top: 12px; font-size: 14px; color: #555; font-family: 'SF Pro Display', 'Arial', sans-serif; font-weight: 500; letter-spacing: 0.3px; margin-bottom: 0px;">
+                                    Join as a designer or client
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row justify-content-center" style="margin-top: 5px;margin-bottom: 102px;">
+                        <div class="col-lg-4"><br /><br /><br /></div>
+                        <div class="col-lg-4"></div>
+                    </div>
+                </div>
+            </div>
+
+            <br /><br /><br /><br /><br /><br /><br /><br /><br /><br />
+            <div class="container1" style="top: 21%;">
+                <div class="main-circles-left">
+                    <div class="circles-container">
+                        <div style="opacity: 0%; animation: fadeInImageCircles 0.3s ease-in-out forwards, moveRight 2s ease-in-out forwards; animation-delay: 0.8s, 1.1s;">
+                            <div class="flex justify-center items-center flex-row">
+                                <img src="images/circles-container.svg" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="circles-container2">
+                        <div style="opacity: 0%; animation: fadeInImageCircles 0.3s ease-in-out forwards, moveRight 2s ease-in-out forwards; animation-delay: 0.8s, 1.1s;">
+                            <div class="flex justify-center items-center flex-row">
+                                <img src="images/circles-container.svg" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="container2" style="top: 21%;">
+                <div class="main-circles-right">
+                    <div class="circles-container-right">
+                        <div style="opacity: 0%;animation: fadeInImageCircles 0.3s ease-in-out forwards;animation-delay: 0.8s;">
+                            <div class="flex justify-center items-center">
+                                <div class="flex justify-center items-center">
+                                    <img src="images/circles-container-right.svg" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="circles-container-right2">
+                        <div style="opacity: 0%;animation: fadeInImageCircles 0.3s ease-in-out forwards;animation-delay: 0.8s;">
+                            <div class="flex justify-center items-center">
+                                <div class="flex justify-center items-center">
+                                    <img src="images/circles-container-right.svg" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== RESTORED btdiv WITH ALL ANIMATED CARDS ========== -->
+            <div class="btdiv" style="
+padding: 64px 56px;
+position: absolute;
+bottom: 0;
+left: 50%;
+transform: translateX(-50%);
+max-width: 500px;
+height: 498px;
+background-color: #f8f9fb;
+border: 1px solid #bbbbbb;
+border-radius: 30px 30px 0 0;
+display: flex;
+align-items: center;
+justify-content: center;
+animation: fadeInUp 0.2s ease-in forwards;
+opacity: 0;
+animation-delay: 0.3s;
+">
+                <div class="container3">
+                    <span class="spancontainer3"></span>
+                    <div style="animation-name: moveup;
+                    animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1);
+                    animation-iteration-count: infinite;
+                    animation-fill-mode: none;
+                    animation-duration: 12s;">
+                        <div class="ws-illo-card-1" style="animation-name: zoomInUp; animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1); animation-iteration-count: infinite;animation-fill-mode: none; animation-duration: 12s;">
+                            <div class="ws-icon-wrapper">
+                                <div class="svg ws-logo first w-embed">
+                                    <img src="images/chat-icon.svg" />
+                                </div>
+                            </div><div class="ws-text">
+                                <div class="typing-container">
+                                    <span class="typing-text">Social ad for a coffee mug company.</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ws-illo-card-2" style="animation-name: zoomInUp2; animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1); animation-iteration-count: infinite;animation-fill-mode: none; animation-duration: 12s;margin-top:1%;">
+                            <div class="ws-icon-wrapper">
+                                <div class="svg ws-logo first w-embed">
+                                    <img src="images/adobe-icon.svg" />
+                                </div>
+                            </div>
+                            <div class="ws-text">
+                                <span class="loading-message">Fetching project images </span>
+                                <span class="loading-animation">
+                                    <img src="images/loading-spin.svg" />
+                                </span>
+                            </div>
+                        </div>
+                        <div class="ws-illo-card-2" style="animation-name: zoomInUp3; animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1); animation-iteration-count: infinite;animation-fill-mode: none; animation-duration: 12s;margin-top:1%;">
+                            <div class="ws-icon-wrapper">
+                                <div class="svg ws-logo first w-embed">
+                                    <img src="images/google-icon.svg" />
+                                </div>
+                            </div>
+                            <div class="ws-text">
+                                <span class="loading-message">Fetching emails </span>
+                                <span class="loading-animation">
+                                    <img src="images/loading-spin.svg" />
+                                </span>
+                            </div>
+                        </div>
+                        <div class="ws-illo-card-2" style="animation: zoomInUp4; animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1); animation-iteration-count: infinite;animation-fill-mode: none; animation-duration: 12s;margin-top:1%;">
+                            <div class="ws-icon-wrapper">
+                                <div class="svg ws-logo first w-embed">
+                                    <img src="images/slack-icon.svg" />
+                                </div>
+                            </div>
+                            <div class="ws-text">
+                                <span class="loading-message">Fetching messages </span>
+                                <span class="loading-animation">
+                                    <img src="images/loading-spin.svg" />
+                                </span>
+                            </div>
+                        </div>
+                        <div class="ws-illo-card-3" style="animation: zoomInUp5; animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1); animation-iteration-count: infinite;animation-fill-mode: none; animation-duration: 12s; margin-top:1%;">
+                            <span href="#getAI" style="
+font-weight: 550;
+display: flex
+;
+justify-content: center;
+align-items: center;
+text-align: center;
+text-decoration: none;
+background-color: #ffa900;
+color: white;
+border-radius: 50px;
+padding: 12px 24px;
+font-size: 16px;
+box-shadow: 0 2px 2px 1px rgba(146, 156, 196, .24), 0 0 7px rgba(146, 156, 196, .02);
+gap: 10px;
+width: 55%;
+margin: auto;
+margin-top: 6%;
+">
+                                <svg width="17" height="17" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="fill: white; animation: spinner 0.75s linear infinite;">
+                                    <g class="spinner">
+                                        <rect x="11" y="1" width="2" height="5" opacity=".14" fill="white"></rect>
+                                        <rect x="11" y="1" width="2" height="5" transform="rotate(30 12 12)" opacity=".29" fill="white"></rect>
+                                        <rect x="11" y="1" width="2" height="5" transform="rotate(60 12 12)" opacity=".43" fill="white"></rect>
+                                        <rect x="11" y="1" width="2" height="5" transform="rotate(90 12 12)" opacity=".57" fill="white"></rect>
+                                        <rect x="11" y="1" width="2" height="5" transform="rotate(120 12 12)" opacity=".71" fill="white"></rect>
+                                        <rect x="11" y="1" width="2" height="5" transform="rotate(150 12 12)" opacity=".86" fill="white"></rect>
+                                        <rect x="11" y="1" width="2" height="5" transform="rotate(180 12 12)" fill="white"></rect>
+                                    </g>
+                                </svg>
+                                Generating Design Ideas
+                            </span>
+                        </div>
+                        <div class="ws-illo-card-4" style="animation: zoomInUp6; animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1); animation-iteration-count: infinite;animation-fill-mode: none; animation-duration: 12s;margin-top:5%;">
+                            <div class="ws-icon-wrapper">
+                                <div class="svg ws-logo first w-embed" style="background-color: #aaa">
+                                    <h2 style="color:#000;font-weight:bold;text-align:center;">IDEA</h2>
+                                </div>
+                                <div>
+                                    Increase brand awareness and drive sales for our coffee mug company through a social media advertising campaign.
+                                </div>
+                                <div>
+                                    <br />
+                                    <img src="images/1.jpg" style="width:100%;height:100%;" />
+                                    <br />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ws-illo-card-2" style="animation-name: zoomInUp7; animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1); animation-iteration-count: infinite;animation-fill-mode: none; animation-duration: 12s;margin-top:1%;">
+                            <div class="ws-icon-wrapper">
+                                <div class="svg ws-logo first w-embed">
+                                    <img src="images/designer.png" style="width:40px;height:40px;" />
+                                </div>
+                            </div>
+                            <div class="ws-text">
+                                <span class="loading-message">Connecting with a designer </span>
+                                <span class="icon-checkmark">
+                                    <span style="animation-name: loadingSpinner; animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1); animation-iteration-count: infinite;animation-fill-mode: none; animation-duration: 12s;">
+                                        <img src="images/loading-spin.svg" style="width:22px;height:22px;" />
+                                    </span>
+                                    <span style="animation-name: iconCheckmark; animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1); animation-iteration-count: infinite;animation-fill-mode: none; animation-duration: 12s;">
+                                        <img src="images/icons8-checkmark.svg" style="width:22px;height:22px;" />
+                                    </span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="ws-illo-card-3" style="animation: zoomInUp8; animation-timing-function: cubic-bezier(0.8, 0, 0.2, 1); animation-iteration-count: infinite;animation-fill-mode: none; animation-duration: 12s;margin-top:3%;">
+                            <span href="#getAI" style="
+                            font-weight: 550;
+                                display: flex;
+                                justify-content: center;
+                                align-items: center;
+                                text-align: center;
+                                text-decoration: none;
+                                background-color: #324032;
+                                color: white;
+                                border-radius: 50px;
+                                padding: 12px 24px;
+                                font-size: 16px;
+                                box-shadow: 0 2px 2px 1px rgba(146, 156, 196, .24), 0 0 7px rgba(146, 156, 196, .02);
+                                gap: 10px;
+                                width: 55%;
+                                margin: auto;
+                                ">
+                                Done
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <span class="spanbtcontainer3"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== NEW SECTIONS BELOW (WITH SCROLL ANIMATIONS) ========== -->
+    <!-- Features Section -->
+    <div class="section-features animate-on-scroll" data-animation="fadeInUp" style="padding: 80px 20px; max-width: 1200px; margin: 0 auto;">
+        <div style="text-align: center; margin-bottom: 60px;">
+            <h2 style="font-family: 'SF Pro Display', 'Arial', sans-serif; font-size: 36px; font-weight: 700; color: #1f2951; margin-bottom: 16px;">Powerful Features for Modern Creatives</h2>
+            <p style="font-size: 18px; color: #555; max-width: 600px; margin: 0 auto;">Everything you need to bridge the gap between AI exploration and human creativity.</p>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 40px;">
+            <div class="feature-card" style="background: white; border-radius: 24px; padding: 32px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.05); transition: all 0.3s ease;">
+                <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #244d88 0%, #1a3866 100%); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2a10 10 0 1010 10 10 10 0 00-10-10zm0 18a8 8 0 118-8 8 8 0 01-8 8z" /><path d="M12 8v4l3 3" /></svg>
+                </div>
+                <h3 style="font-size: 22px; font-weight: 600; margin-bottom: 16px; color: #1f2951;">AI-Driven Exploration</h3>
+                <p style="color: #666; line-height: 1.5;">Our AI generates thousands of design variations, freeing you to focus on what matters most: creative decision-making.</p>
+            </div>
+            <div class="feature-card" style="background: white; border-radius: 24px; padding: 32px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.05); transition: all 0.3s ease;">
+                <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #244d88 0%, #1a3866 100%); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M20 7h-4.18A3 3 0 0016 5.18V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v1.18A3 3 0 008.18 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" /><path d="M12 12v4" /><path d="M9 13h6" /></svg>
+                </div>
+                <h3 style="font-size: 22px; font-weight: 600; margin-bottom: 16px; color: #1f2951;">Seamless Integrations</h3>
+                <p style="color: #666; line-height: 1.5;">Connect with Adobe Suite, Slack, Google, and more. Your workflow stays uninterrupted.</p>
+            </div>
+            <div class="feature-card" style="background: white; border-radius: 24px; padding: 32px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.05); transition: all 0.3s ease;">
+                <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #244d88 0%, #1a3866 100%); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px;">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2a10 10 0 00-10 10c0 4.42 2.58 8.16 6 9.68V22a2 2 0 002 2h4a2 2 0 002-2v-0.32c3.42-1.52 6-5.26 6-9.68a10 10 0 00-10-10z" /><path d="M12 8v4l2 2" /></svg>
+                </div>
+                <h3 style="font-size: 22px; font-weight: 600; margin-bottom: 16px; color: #1f2951;">Real-time Collaboration</h3>
+                <p style="color: #666; line-height: 1.5;">Work alongside your team and clients in real-time. Comment, revise, and approve instantly.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Value Proposition Section -->
+    <div class="section-value animate-on-scroll" data-animation="fadeInUp" style="background: linear-gradient(135deg, #f8f9fb 0%, #ffffff 100%); padding: 80px 20px; margin: 20px 0;">
+        <div style="max-width: 1200px; margin: 0 auto;">
+            <div style="text-align: center; margin-bottom: 60px;">
+                <h2 style="font-family: 'SF Pro Display', 'Arial', sans-serif; font-size: 36px; font-weight: 700; color: #1f2951; margin-bottom: 16px;">Why Choose designMode.ai?</h2>
+                <p style="font-size: 18px; color: #555; max-width: 600px; margin: 0 auto;">The perfect fusion of artificial intelligence and human creativity.</p>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px;">
+                <div style="display: flex; gap: 20px; align-items: flex-start;">
+                    <div style="background: #ffa90020; border-radius: 16px; padding: 12px;"><span style="font-size: 28px;">⚡</span></div>
+                    <div><h3 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">10x Faster Iterations</h3><p style="color: #666;">Generate hundreds of design concepts in minutes, not weeks.</p></div>
+                </div>
+                <div style="display: flex; gap: 20px; align-items: flex-start;">
+                    <div style="background: #ffa90020; border-radius: 16px; padding: 12px;"><span style="font-size: 28px;">🎯</span></div>
+                    <div><h3 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">Data-Driven Decisions</h3><p style="color: #666;">AI analyzes performance data to suggest optimal design directions.</p></div>
+                </div>
+                <div style="display: flex; gap: 20px; align-items: flex-start;">
+                    <div style="background: #ffa90020; border-radius: 16px; padding: 12px;"><span style="font-size: 28px;">🤝</span></div>
+                    <div><h3 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">Client-Designer Harmony</h3><p style="color: #666;">Clear communication channels and transparent revision history.</p></div>
+                </div>
+                <div style="display: flex; gap: 20px; align-items: flex-start;">
+                    <div style="background: #ffa90020; border-radius: 16px; padding: 12px;"><span style="font-size: 28px;">🔒</span></div>
+                    <div><h3 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">Enterprise-Grade Security</h3><p style="color: #666;">Your intellectual property remains yours, fully encrypted and protected.</p></div>
+                </div>
+                <div style="display: flex; gap: 20px; align-items: flex-start;">
+                    <div style="background: #ffa90020; border-radius: 16px; padding: 12px;"><span style="font-size: 28px;">🌍</span></div>
+                    <div><h3 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">Global Community</h3><p style="color: #666;">Connect with top designers and innovative clients worldwide.</p></div>
+                </div>
+                <div style="display: flex; gap: 20px; align-items: flex-start;">
+                    <div style="background: #ffa90020; border-radius: 16px; padding: 12px;"><span style="font-size: 28px;">📈</span></div>
+                    <div><h3 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">Scalable Solutions</h3><p style="color: #666;">From solo designers to enterprise teams, we grow with you.</p></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How It Works Section -->
+    <div class="section-howitworks animate-on-scroll" data-animation="fadeInUp" style="padding: 80px 20px; max-width: 1000px; margin: 0 auto;">
+        <div style="text-align: center; margin-bottom: 60px;">
+            <h2 style="font-family: 'SF Pro Display', 'Arial', sans-serif; font-size: 36px; font-weight: 700; color: #1f2951; margin-bottom: 16px;">How It Works</h2>
+            <p style="font-size: 18px; color: #555;">From concept to completion in four simple steps.</p>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px;">
+            <div style="flex: 1; min-width: 200px; text-align: center;"><div style="background: #244d88; width: 60px; height: 60px; border-radius: 30px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: white; font-weight: bold; font-size: 24px;">1</div><h3 style="font-weight: 600;">Brief</h3><p style="color: #666;">Share your project goals and requirements.</p></div>
+            <div style="flex: 1; min-width: 200px; text-align: center;"><div style="background: #244d88; width: 60px; height: 60px; border-radius: 30px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: white; font-weight: bold; font-size: 24px;">2</div><h3 style="font-weight: 600;">Explore</h3><p style="color: #666;">AI generates numerous design options.</p></div>
+            <div style="flex: 1; min-width: 200px; text-align: center;"><div style="background: #244d88; width: 60px; height: 60px; border-radius: 30px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: white; font-weight: bold; font-size: 24px;">3</div><h3 style="font-weight: 600;">Refine</h3><p style="color: #666;">Select, combine, and perfect with designer input.</p></div>
+            <div style="flex: 1; min-width: 200px; text-align: center;"><div style="background: #244d88; width: 60px; height: 60px; border-radius: 30px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: white; font-weight: bold; font-size: 24px;">4</div><h3 style="font-weight: 600;">Deliver</h3><p style="color: #666;">Export final assets and launch with confidence.</p></div>
+        </div>
+    </div>
+
+    <!-- Testimonials Section -->
+    <div class="section-testimonials animate-on-scroll" data-animation="fadeInUp" style="background: linear-gradient(135deg, #f8f9fb 0%, #ffffff 100%); padding: 80px 20px;">
+        <div style="max-width: 1200px; margin: 0 auto; text-align: center;">
+            <h2 style="font-family: 'SF Pro Display', 'Arial', sans-serif; font-size: 36px; font-weight: 700; color: #1f2951; margin-bottom: 16px;">Loved by Designers & Clients Alike</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px; margin-top: 50px;">
+                <div style="background: white; border-radius: 24px; padding: 32px; box-shadow: 0 10px 20px rgba(0,0,0,0.05);"><p style="font-style: italic;">"designmode.ai has transformed how I collaborate with clients. The AI suggestions are actually useful, and the workflow is seamless."</p><div style="margin-top: 20px; font-weight: 600;">— Sarah Chen, Creative Director</div></div>
+                <div style="background: white; border-radius: 24px; padding: 32px; box-shadow: 0 10px 20px rgba(0,0,0,0.05);"><p style="font-style: italic;">"Finally, a platform that respects the designer's role while leveraging AI's power. Game-changer for our agency."</p><div style="margin-top: 20px; font-weight: 600;">— Mark Rivera, Design Lead</div></div>
+                <div style="background: white; border-radius: 24px; padding: 32px; box-shadow: 0 10px 20px rgba(0,0,0,0.05);"><p style="font-style: italic;">"As a client, I love seeing multiple design directions quickly. The revision process is so much smoother now."</p><div style="margin-top: 20px; font-weight: 600;">— Priya Patel, Startup Founder</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Final CTA Section -->
+    <div class="section-cta animate-on-scroll" data-animation="fadeInUp" style="padding: 80px 20px; text-align: center; background: linear-gradient(135deg, #1f2951 0%, #244d88 100%); color: white; border-radius: 40px; margin: 40px 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.1);">
+        <h2 style="font-size: 36px; font-weight: 700; margin-bottom: 16px;">Ready to Redefine Your Design Workflow?</h2>
+        <p style="font-size: 18px; margin-bottom: 32px; opacity: 0.9;">Join thousands of designers and clients who are already creating better, faster.</p>
+        <button @onclick="GoToInit" style="background: #ffa900; color: #1f2951; border: none; border-radius: 50px; padding: 14px 42px; font-size: 18px; font-weight: 600; cursor: pointer; transition: transform 0.2s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">Get Early Access →</button>
+        @* <p style="margin-top: 24px; font-size: 14px; opacity: 0.7;">No credit card required. Free during beta.</p> *@
+    </div>
+</div>
+<style>
+    /* Keep existing hero styles plus add animation support */
+    a.signup-link {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        text-decoration: none;
+        background-color: #244d88;
+        color: white;
+        border-radius: 50px;
+        padding: 8px 0px 10px 11px;
+        font-size: 16px;
+        width: 230px;
+        cursor: pointer;
+        transition: background-color 0.2s ease-in-out;
+    }
+
+        a.signup-link:hover {
+            background-color: #1a3866;
+        }
+
+    @@keyframes balloonPop {
+        0% {
+            opacity: 0;
+            transform: scale(0.8);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@media (max-width: 768px) {
+        .desktop-buttons {
+            display: none !important;
+        }
+
+        .hamburger-container {
+            display: block !important;
+        }
+    }
+
+    @@media (min-width: 769px) {
+        .hamburger-container {
+            display: none !important;
+        }
+
+        .desktop-buttons {
+            display: flex !important;
+        }
+    }
+    /* Scroll animation styles */
+    .animate-on-scroll {
+        opacity: 0;
+        transform: translateY(30px);
+        transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+        .animate-on-scroll.animated {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+    .fadeInUp {
+        animation: fadeInUpAnim 0.6s ease forwards;
+    }
+
+    @@keyframes fadeInUpAnim {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .feature-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    }
+</style>

@@ -1,0 +1,151 @@
+﻿@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public string ImageUrl { get; set; }
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+
+    private async Task CloseModal()
+    {
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+        await OnClose.InvokeAsync(null); // Important to notify parent
+        StateHasChanged();
+
+    }
+}
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-wrapper" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+            <div class="modal-content">
+                <h2 class="modal-title">Make it you.<br />Through and through.</h2>
+                <p class="modal-description">
+                    <strong>Customization on Lock. Home. And beyond.</strong>
+                    Swap out your Lock Screen controls for ones you use more often — you can even assign a control to the Action button. Tint your Home Screen icons and widgets or let iOS choose a color to match your wallpaper.
+                </p>
+                <img src="@ImageUrl" alt="Full Size Image" class="modal-image" />
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow-y: auto;
+        z-index: 1000;
+        backdrop-filter: blur(20px);
+        background: rgba(0, 0, 0, 0.5);
+        animation: blurIn 0.3s ease-out forwards;
+        padding: 4rem 1rem;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start; /* Align top */
+    }
+
+
+
+@@keyframes blurIn {
+    0% {
+        backdrop-filter: blur(0px);
+        background-color: rgba(0, 0, 0, 0);
+    }
+    100% {
+        backdrop-filter: blur(20px);
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+}
+
+    .modal-wrapper {
+        background: #fff;
+        border-radius: 20px;
+        width: 100%;
+        max-width: 768px;
+        overflow: visible;
+        position: relative;
+        animation: zoomFadeIn 0.3s ease-out forwards;
+        box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
+        display: flex;
+        flex-direction: column;
+    }
+
+
+@@keyframes zoomFadeIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+    .modal-close {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        width: 30px;
+        height: 30px;
+        background-color: rgba(255, 255, 255, 0.3);
+        border: none;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        color: #000;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        padding: 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(4px);
+        transition: background-color 0.2s ease;
+        padding-bottom: 6px;
+    }
+
+        .modal-close:hover {
+            background-color: rgba(255, 255, 255, 0.6);
+            color: #000;
+        }
+
+.modal-content {
+    padding: 2rem;
+    text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+
+.modal-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: #000;
+    line-height: 1.2;
+}
+
+.modal-description {
+    font-size: 1rem;
+    color: #555;
+    line-height: 1.5;
+    max-width: 600px;
+    margin: 0 auto 2rem;
+}
+
+.modal-description strong {
+    color: #000;
+}
+
+.modal-image {
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+</style>

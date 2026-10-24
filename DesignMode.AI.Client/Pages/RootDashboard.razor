@@ -1,0 +1,25 @@
+@page "/dashboard"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+@if (authenticated)
+{
+    <Dashboard />
+}
+
+@code {
+    private bool authenticated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // RouteView does not enforce Authorize attributes. Resolve identity before
+        // constructing the dashboard or any of its data-loading children.
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        authenticated = auth.User.Identity?.IsAuthenticated == true;
+        if (!authenticated)
+        {
+            Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString("/dashboard")}", forceLoad: true);
+        }
+    }
+}

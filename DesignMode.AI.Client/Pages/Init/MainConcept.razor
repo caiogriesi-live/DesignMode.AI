@@ -1,0 +1,3430 @@
+@page "/init/mainconcept"
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.WebUtilities
+@using System.Text
+@using System.Text.RegularExpressions
+@using Newtonsoft.Json;
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@inject HttpClient Http
+@inject ApiConfigService ApiConfig
+@inject AuthenticationStateProvider AuthStateProvider
+
+<!-- FULL PAGE CONTENT - NO MODAL -->
+<div class="full-page-init">
+
+    <div class="vertical-modal-wrapper-init" style="overflow: hidden !important;" @onclick:stopPropagation>
+
+        <div class="modal-scroll-content-init">
+
+            <!-- HEADER WITH LOADING STATUS -->
+            <div class="brand-header">
+                @if (!finishedGenerating)
+                {
+                    <h2>@(WebsiteFunnel ? "✨ Choose your website direction" : "✨ Your Designer System Has Prepared 3 Creative Directions")</h2>
+                    <p>
+                        Select the direction that best matches your vision and continue to see what your designer has prepared next.
+                    </p>
+                    <div class="loading-status-header" style="margin-top:-3px !important;">
+                        <!-- Hidden ticker steps that still track progress for JS functions -->
+                        <div class="vertical-ticker" style="display:none;">
+                            <div class="ticker-item" data-step="1">
+                                <span class="ticker-icon">🔍</span>
+                                <span class="ticker-text">Understanding your brand</span>
+                                <span class="ticker-status"></span>
+                            </div>
+                            <div class="ticker-item" data-step="2">
+                                <span class="ticker-icon">🎨</span>
+                                <span class="ticker-text">Exploring visual directions</span>
+                                <span class="ticker-status"></span>
+                            </div>
+                            <div class="ticker-item" data-step="3">
+                                <span class="ticker-icon">✨</span>
+                                <span class="ticker-text">Crafting your first concepts</span>
+                                <span class="ticker-status"></span>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <h2>@(WebsiteFunnel ? "✨ Choose your website direction" : "✨ Your Designer System Has Prepared 3 Creative Directions")</h2>
+                    <p>
+                        Select the direction that best matches your vision and continue to see what your designer has prepared next.
+                    </p>
+                    <div class="recommended-strip">
+                        <span>👩‍🎨 Recommended by your designer system</span>
+                    </div>
+                }
+            </div>
+
+            <!-- CONCEPT CARDS -->
+            <div class="concept-grid" id="conceptGrid">
+                <!-- Card 1 -->
+                @if (loadingImage1)
+                {
+                    <div class="concept-card-pre loading-card concept-card-animate-loading" style="cursor:default; animation-delay: 0.3s;" disabled="true">
+                        <div class="loading-image-placeholder shimmer-container">
+                            <div class="shimmer-wrapper">
+                                <div class="shimmer-effect"></div>
+                            </div>
+                            <div class="pulse-animation"></div>
+                            <p>Finalizing concept...</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    var isSelected0 = imageUrl1 != null && SelectedPrimaryImageId == imageId1;
+                    var cardClass1 = "concept-card";
+                    if (isSelected0) cardClass1 += " selected";
+                    else if (!string.IsNullOrEmpty(SelectedPrimaryImageId)) cardClass1 += " blurred";
+                    cardClass1 += finishedGenerating ? " concept-card-animate-ready" : " concept-card-animate-loading";
+
+                    @if (finishedGenerating)
+                    {
+                        <div class="@cardClass1"
+                             id="conceptCard1"
+                             data-image-id="@imageId1"
+                             data-position="left"
+                             style="animation-delay: 0.1s;"
+                             @onclick="() => SelectPrimaryImage(imageId1)">
+
+                            <img src="@imageUrl1" class="concept-image" />
+
+                            <div class="style-label">
+                                @style1
+                            </div>
+
+                            <button class="select-btn @(isSelected0 ? "active" : "disabled")">
+                                Select@(isSelected0 ? "ed" : "") Concept
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="@cardClass1" style="cursor: @(isSelected0 ? "pointer" : "default"); animation-delay: 0.1s;" disabled="true">
+
+                            <img src="@imageUrl1" class="concept-image" />
+
+                            <div class="style-label">
+                                @style1
+                            </div>
+
+                            <button class="select-btn @(isSelected0 ? "active" : "disabled")"
+                                    disabled="true">
+                                Finalizing ...
+                            </button>
+                        </div>
+                    }
+                }
+
+                <!-- Card 2 -->
+                @if (loadingImage2)
+                {
+                    <div class="concept-card-pre loading-card concept-card-animate-loading" style="cursor:default; animation-delay: 0.3s;" disabled="true">
+                        <div class="loading-image-placeholder shimmer-container">
+                            <div class="shimmer-wrapper">
+                                <div class="shimmer-effect"></div>
+                            </div>
+                            <div class="pulse-animation"></div>
+                            <p>Finalizing concept...</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    var isSelected21 = imageUrl2 != null && SelectedPrimaryImageId == imageId2;
+                    var cardClass2 = "concept-card";
+                    if (isSelected21) cardClass2 += " selected";
+                    else if (!string.IsNullOrEmpty(SelectedPrimaryImageId)) cardClass2 += " blurred";
+                    cardClass2 += finishedGenerating ? " concept-card-animate-ready" : " concept-card-animate-loading";
+
+                    @if (finishedGenerating)
+                    {
+                        <div class="@cardClass2"
+                             id="conceptCard2"
+                             data-image-id="@imageId2"
+                             data-position="center"
+                             style="animation-delay: 0.3s;"
+                             @onclick="() => SelectPrimaryImage(imageId2)">
+
+                            <img src="@imageUrl2" class="concept-image" />
+
+                            <div class="style-label">
+                                @style2
+                            </div>
+
+                            <button class="select-btn @(isSelected21 ? "active" : "disabled")">
+                                Select@(isSelected21 ? "ed" : "") Concept
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="@cardClass2" style="cursor: @(isSelected21 ? "pointer" : "default"); animation-delay: 0.3s;" disabled="true">
+
+                            <img src="@imageUrl2" class="concept-image" />
+
+                            <div class="style-label">
+                                @style2
+                            </div>
+
+                            <button class="select-btn @(isSelected21 ? "active" : "disabled")"
+                                    disabled="true">
+                                Finalizing ...
+                            </button>
+                        </div>
+                    }
+                }
+
+                <!-- Card 3 -->
+                @if (loadingImage3)
+                {
+                    <div class="concept-card-pre loading-card concept-card-animate-loading" style="cursor:default; animation-delay: 0.5s;" disabled="true">
+                        <div class="loading-image-placeholder shimmer-container">
+                            <div class="shimmer-wrapper">
+                                <div class="shimmer-effect"></div>
+                            </div>
+                            <div class="pulse-animation"></div>
+                            <p>Finalizing concept...</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    var isSelected31 = imageUrl3 != null && SelectedPrimaryImageId == imageId3;
+                    var cardClass3 = "concept-card";
+                    if (isSelected31) cardClass3 += " selected";
+                    else if (!string.IsNullOrEmpty(SelectedPrimaryImageId)) cardClass3 += " blurred";
+                    cardClass3 += finishedGenerating ? " concept-card-animate-ready" : " concept-card-animate-loading";
+
+                    @if (finishedGenerating)
+                    {
+                        <div class="@cardClass3"
+                             id="conceptCard3"
+                             data-image-id="@imageId3"
+                             data-position="right"
+                             style="animation-delay: 0.5s;"
+                             @onclick="() => SelectPrimaryImage(imageId3)">
+
+                            <img src="@imageUrl3" class="concept-image" />
+
+                            <div class="style-label">
+                                @style3
+                            </div>
+
+                            <button class="select-btn @(isSelected31 ? "active" : "disabled")">
+                                Select@(isSelected31 ? "ed" : "") Concept
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="@cardClass3" style="cursor: @(isSelected31 ? "pointer" : "default"); animation-delay: 0.5s;" disabled="true">
+
+                            <img src="@imageUrl3" class="concept-image" />
+
+                            <div class="style-label">
+                                @style3
+                            </div>
+
+                            <button class="select-btn @(isSelected31 ? "active" : "disabled")"
+                                    disabled="true">
+                                Finalizing ...
+                            </button>
+                        </div>
+                    }
+                }
+
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script src="https://player.vimeo.com/api/player.js"></script>
+
+@code {
+
+    [Parameter] public bool WebsiteFunnel { get; set; }
+
+    private List<PrimaryImage> PrimaryImages { get; set; } = new();
+    private string SelectedPrimaryImageId { get; set; }
+    private string PromptText { get; set; }
+    private bool isExpanded;
+    private bool showFooterAnimation;
+    private bool showBrandPreview;
+    private bool isPreloading = false;
+    private Dictionary<string, bool> PreloadedVideos = new();
+    private string promptId { get; set; } = "";
+    private string CompanyIdeaId { get; set; } = "";
+    private string promptIdfromCID { get; set; } = "";
+    private List<string> Deliverables = new();
+    private string CompanyDetails { get; set; }
+    private PrimaryImage imagePri1 { get; set; }
+    private PrimaryImage imagePri2 { get; set; }
+    private PrimaryImage imagePri3 { get; set; }
+    private string imageUrl1 { get; set; }
+    private string imageUrl2 { get; set; }
+    private string imageUrl3 { get; set; }
+    private string script1 { get; set; }
+    private string script2 { get; set; }
+    private string script3 { get; set; }
+    private string style1 { get; set; }
+    private string style2 { get; set; }
+    private string style3 { get; set; }
+    private string imageId1 { get; set; }
+    private string imageId2 { get; set; }
+    private string imageId3 { get; set; }
+    private bool loadingImage1 { get; set; } = true;
+    private bool loadingImage2 { get; set; } = true;
+    private bool loadingImage3 { get; set; } = true;
+    private bool finishedGenerating { get; set; } = false;
+    private int currentStep { get; set; } = 1;
+    private bool isConceptCentered { get; set; } = false;
+    private string selectedImageIdForJS { get; set; } = "";
+    private bool isRedirecting { get; set; } = false;
+    private string encryptedEmailParam { get; set; } = "";
+    private string inviteIdParam { get; set; } = "";
+
+    // Invite data properties
+    private InviteClientData InviteData { get; set; }
+    private bool IsLoadingInviteData { get; set; } = false;
+    private string InviteErrorMessage { get; set; } = "";
+    private string MainDeliverable { get; set; }
+    private string DisplayLocation { get; set; }
+    private List<string> RunwareImageUrls { get; set; } = new();
+
+    private List<string> SecondaryRunwareImageUrls { get; set; } = new();
+
+    private List<string> RunwareImageId { get; set; } = new List<string>();
+    private List<string> SecondaryRunwareImageIds { get; set; } = new List<string>();
+
+    private System.Timers.Timer _timer;
+    private DateTime _startTime;
+    private string CounterDisplay = "0.00s";
+    private async Task<string?> GenerateScript(string imageUrl, string conceptNumber, string name, string industry)
+    {
+        try
+        {
+            var imageDescription = await GetAIImageDescriptionAsync(imageUrl);
+            if (string.IsNullOrWhiteSpace(imageDescription))
+            {
+                Console.WriteLine($"❌ Failed to get image description for scene {conceptNumber}");
+                return String.Empty;
+            }
+
+            // Regenerate scene from image
+            var updatedSceneDescription = await RegenerateSceneFromImageAsync(
+                $"The prompt is for a company named {name} in the {industry} industry.",
+                Int32.Parse(conceptNumber),
+                imageDescription
+            );
+            return updatedSceneDescription;
+        }
+        catch (System.Exception ex)
+        {
+            return $"Failed with exception {ex.ToString()}";
+        }
+    }
+    private async Task<string?> RegenerateSceneFromImageAsync(
+    string fullVideoPrompt, int sceneNumber, string imageBase64)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url =
+                    $"{ApiConfig.ApiBaseUrl}api/RegenerateSceneFromImageInit" +
+                    "?code=REDACTED_FOR_GROOMING";
+
+                var payload = new
+                {
+                    FullVideoPrompt = fullVideoPrompt,
+                    SceneNumber = sceneNumber,
+                    ImageBase64 = imageBase64
+                };
+
+                var content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(payload),
+                    Encoding.UTF8,
+                    "application/json");
+
+                var response = await client.PostAsync(url, content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"❌ Failed to regenerate scene {sceneNumber}: {response.StatusCode}");
+                    return null;
+                }
+
+                var result = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"✅ Scene {sceneNumber} regenerated successfully.");
+                return result;
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception regenerating scene {sceneNumber}: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task<string?> GetAIImageDescriptionAsync(string imageUrl)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url =
+                    $"{ApiConfig.ApiBaseUrl}api/GetAIImageDescription" +
+                    "?code=REDACTED_FOR_GROOMING";
+
+                var payload = new
+                {
+                    ImageUrl = imageUrl
+                };
+
+                var content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(payload),
+                    Encoding.UTF8,
+                    "application/json");
+
+                var response = await client.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine("✅ Image description generated.");
+                    return result;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to generate image description: {response.StatusCode}");
+                    return null;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception generating image description: {ex.Message}");
+            return null;
+        }
+    }
+    private async Task<string?> GetAISceneDialogueAsync(string sceneScript)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url =
+                    $"{ApiConfig.ApiBaseUrl}api/GetAISceneDialogue" +
+                    "?code=REDACTED_FOR_GROOMING";
+
+                var payload = new
+                {
+                    sceneScript
+                };
+
+                var content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(payload),
+                    Encoding.UTF8,
+                    "application/json");
+
+                var response = await client.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine("✅ Scene dialogue generated.");
+                    return result;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to generate scene dialogue: {response.StatusCode}");
+                    return null;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception generating scene dialogue: {ex.Message}");
+            return null;
+        }
+    }
+
+    private void UpdateCounter(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        var elapsed = DateTime.Now - _startTime;
+        var seconds = (int)elapsed.TotalSeconds;
+        var milliseconds = elapsed.Milliseconds / 10; // 2 digits
+        CounterDisplay = $"{seconds}.{milliseconds:D2}s";
+
+        StateHasChanged();
+    }
+
+    public class InviteClientData
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string Industry { get; set; }
+        public string Prompt { get; set; }
+        public string Email { get; set; }
+        public string ImagePath { get; set; }
+        public string ImageId { get; set; }
+        public bool UseSameImageSeedForAll { get; set; }
+        public string TimeStamp { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = NavigationManager.Uri;
+        var queryParams = QueryHelpers.ParseQuery(new Uri(uri).Query);
+
+        // Store URL parameters for redirect
+        if (queryParams.TryGetValue("e", out var encryptedEmail))
+        {
+            encryptedEmailParam = encryptedEmail.ToString();
+        }
+        if (queryParams.TryGetValue("id", out var inviteId))
+        {
+            inviteIdParam = inviteId.ToString();
+        }
+
+        await LoadInviteDataFromUrl();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (finishedGenerating) await Analytics.TrackAsync("creative_directions_viewed", new { result_count = 3 }, once: true);
+        if (firstRender && !isPreloading)
+        {
+            await JS.InvokeVoidAsync("initScrollAnimation");
+            await JS.InvokeVoidAsync("initVerticalTicker");
+            await JS.InvokeVoidAsync("initVerticalTextTicker");
+            await JS.InvokeVoidAsync("initStepBadge");
+        }
+        else if (firstRender)
+        {
+            await JS.InvokeVoidAsync("initScrollAnimation");
+            await JS.InvokeVoidAsync("initVerticalTicker");
+            await JS.InvokeVoidAsync("initVerticalTextTicker");
+            await JS.InvokeVoidAsync("initStepBadge");
+        }
+
+        // Check if we need to trigger the center animation
+        if (!string.IsNullOrEmpty(SelectedPrimaryImageId) && !isConceptCentered && finishedGenerating && !isRedirecting)
+        {
+            isConceptCentered = true;
+            selectedImageIdForJS = SelectedPrimaryImageId;
+            await Task.Delay(600); // Wait 600ms after selection
+            await JS.InvokeVoidAsync("centerSelectedConcept", selectedImageIdForJS);
+
+            // Wait for the center animation to complete before redirecting
+            await Task.Delay(1200);
+
+            // Now perform the redirect
+            await PerformRedirect();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!isPreloading && !PreloadedVideos.Any())
+        {
+
+        }
+    }
+
+    private async Task LoadInviteDataFromUrl()
+    {
+        try
+        {
+            var uri = NavigationManager.Uri;
+            var queryParams = QueryHelpers.ParseQuery(new Uri(uri).Query);
+
+            // Check for encrypted email parameter
+            if (queryParams.TryGetValue("e", out var encryptedEmail) && !string.IsNullOrEmpty(encryptedEmail))
+            {
+                Console.WriteLine($"✅ 'e' parameter detected, attempting to decrypt...");
+
+                IsLoadingInviteData = true;
+                StateHasChanged();
+
+                // ✅ Read invite ID from querystring
+                string inviteId = "";
+
+                if (queryParams.TryGetValue("id", out var idParam))
+                {
+                    inviteId = idParam.ToString();
+                }
+
+                var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+                var user = authState.User;
+
+                var isAuthorized = true; // user.Identity?.IsAuthenticated == true;
+                if (isAuthorized)
+                {
+                    var username = "sample";
+
+                    if (!string.IsNullOrWhiteSpace(username))
+                    {
+                        var existingImages = await FetchInviteClientImages(inviteId);
+                        // Decrypt the email
+                        var decryptedEmail = DecryptEmail(encryptedEmail);
+                        Console.WriteLine($"✅ 'e' parameter detected, attempting to decrypt...");
+
+                        // ✅ Fetch invite data using email + invite ID
+                        InviteData = await GetInviteClientByEmail(decryptedEmail, inviteId);
+                        if (existingImages != null && existingImages.Count >= 3)
+                        {
+                            Console.WriteLine($"✅ Found {existingImages.Count} existing images.");
+
+                            var image1 = existingImages.FirstOrDefault(x => x.CountId == "1");
+                            var image2 = existingImages.FirstOrDefault(x => x.CountId == "2");
+                            var image3 = existingImages.FirstOrDefault(x => x.CountId == "3");
+                            if (image1 != null)
+                            {
+                                imageUrl1 = image1.ImageUrl;
+                                imageId1 = image1.ImageId;
+                                style1 = image1.Style;
+                                loadingImage1 = false;
+                            }
+
+                            if (image2 != null)
+                            {
+                                imageUrl2 = image2.ImageUrl;
+                                imageId2 = image2.ImageId;
+                                style2 = image2.Style;
+                                loadingImage2 = false;
+                            }
+
+                            if (image3 != null)
+                            {
+                                imageUrl3 = image3.ImageUrl;
+                                imageId3 = image3.ImageId;
+                                style3 = image3.Style;
+                                loadingImage3 = false;
+                            }
+
+                            finishedGenerating = true;
+                            StateHasChanged();
+                        }
+
+                        Console.WriteLine($"📊 Summary: {PrimaryImages.Count(img => img != null && !string.IsNullOrEmpty(img.ImageUrl) && img.ImageUrl != "/images/loading-placeholder.jpg")} out of 3 images generated successfully");
+                    }
+                }
+                IsLoadingInviteData = false;
+                Console.WriteLine($"✅ Invite data loaded for: {InviteData.Name}");
+                StateHasChanged();
+
+
+                IsLoadingInviteData = false;
+                StateHasChanged();
+                var name = InviteData.Name;
+                var industry = InviteData.Industry;
+                //var script1 = await GenerateScript(imageUrl1, "1", name, industry);
+                //var script2 = await GenerateScript(imageUrl2, "2", name, industry);
+                //var script3 = await GenerateScript(imageUrl3, "3", name, industry);
+                var test = "";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading invite data: {ex.Message}");
+            InviteErrorMessage = $"Error loading invitation: {ex.Message}";
+            IsLoadingInviteData = false;
+            StateHasChanged();
+        }
+    }
+    private async Task<List<InviteClientImage>> FetchInviteClientImages(
+    string inviteId)
+    {
+        HttpClient client = new HttpClient();
+
+        string functionUrl =
+            $"{ApiConfig.ApiBaseUrl}api/GetInviteClientImages?code=REDACTED_FOR_GROOMING";
+
+        var response = await client.PostAsJsonAsync(
+            functionUrl,
+            new
+            {
+                InviteId = inviteId
+            });
+
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<List<InviteClientImage>>()
+                   ?? new List<InviteClientImage>();
+        }
+
+        return new List<InviteClientImage>();
+    }
+
+    public class InviteClientImage
+    {
+        public string Id { get; set; }
+        public string InviteId { get; set; }
+        public string ImageId { get; set; }
+        public string ImageUrl { get; set; }
+        public string CountId { get; set; }
+        public string TimeStamp { get; set; }
+
+        public string Style { get; set; }
+
+        public string StylePrompt { get; set; }
+        public string Important { get; set; }
+        public string Project { get; set; }
+        public string OutputRequirements { get; set; }
+    }
+
+    private async Task<bool> UpdateInviteClientImageId(string id, string name, string imageId)
+    {
+        try
+        {
+            var client = new HttpClient();
+
+            var requestBody = new
+            {
+                id = id,
+                name = name,
+                imageId = imageId
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(
+                $"{ApiConfig.ApiBaseUrl}api/UpdateInviteClientImageIdByIdAndName?code=REDACTED_FOR_GROOMING",
+                content
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"✅ Successfully updated ImageId for Id: {id}, Name: {name}");
+                Console.WriteLine($"Response: {responseContent}");
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"❌ Failed to update ImageId: {response.StatusCode}, Error: {errorContent}");
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception updating InviteClient ImageId: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task<string?> SaveInviteClientImageAsync(
+        string inviteId,
+        string imageId,
+        string imageUrl,
+        string countId,
+        string style,
+        string stylePrompt,
+        string important,
+        string project,
+        string outputRequirements)
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var requestBody = new
+                {
+                    InviteId = inviteId,
+                    ImageId = imageId,
+                    ImageUrl = imageUrl,
+                    CountId = countId,
+                    TimeStamp = DateTime.UtcNow.ToString("o"),
+
+                    Style = style,
+                    StylePrompt = stylePrompt,
+                    Important = important,
+                    Project = project,
+                    OutputRequirements = outputRequirements
+                };
+
+                var response = await Http.PostAsJsonAsync(
+                    $"{ApiConfig.ApiBaseUrl}api/SaveInviteClientImage?code=REDACTED_FOR_GROOMING",
+                    requestBody);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"❌ Failed to save invite client image: {response.StatusCode}");
+                    return null;
+                }
+
+                var jsonResponse = await response.Content
+                    .ReadFromJsonAsync<SaveInviteClientImageResponse>();
+
+                Console.WriteLine("✅ Invite client image saved successfully.");
+
+                return jsonResponse?.Id;
+            }
+
+            Console.WriteLine("⚠️ User not authenticated. Skipping invite client image save.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception in SaveInviteClientImageAsync: {ex.Message}");
+            return null;
+        }
+    }
+
+    public class SaveInviteClientImageResponse
+    {
+        public string Id { get; set; }
+        public string Message { get; set; }
+    }
+
+    public enum ModalCloseReason
+    {
+        UserClosed,
+        UnlockTriggered,
+        BackgroundClick,
+        EscapeKey
+    }
+    private async Task<InviteClientData> GetInviteClientByEmail(string email, string inviteId)
+    {
+        try
+        {
+            var client = new HttpClient();
+
+            var requestBody = new
+            {
+                email = email,
+                id = inviteId   // ✅ added
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(
+                $"{ApiConfig.ApiBaseUrl}api/GetInviteClientByEmail?code=REDACTED_FOR_GROOMING",
+                content
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Response content: {responseContent}");
+
+                using var document = System.Text.Json.JsonDocument.Parse(responseContent);
+
+                var root = document.RootElement;
+
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    var firstItem = root;
+
+                    string GetStringValue(System.Text.Json.JsonElement element, string propertyName)
+                    {
+                        if (element.TryGetProperty(propertyName, out var property))
+                            return ExtractSValue(property);
+
+                        foreach (var prop in element.EnumerateObject())
+                        {
+                            if (prop.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                                return ExtractSValue(prop.Value);
+                        }
+
+                        return null;
+                    }
+
+                    bool GetBoolValue(System.Text.Json.JsonElement element, string propertyName)
+                    {
+                        if (element.TryGetProperty(propertyName, out var property))
+                            return ExtractBoolValue(property);
+
+                        foreach (var prop in element.EnumerateObject())
+                        {
+                            if (prop.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+                                return ExtractBoolValue(prop.Value);
+                        }
+
+                        return false;
+                    }
+
+                    bool ExtractBoolValue(System.Text.Json.JsonElement property)
+                    {
+                        if (property.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            if (property.TryGetProperty("BOOL", out var boolValue))
+                                return boolValue.GetBoolean();
+
+                            if (property.TryGetProperty("bool", out var boolValueLower))
+                                return boolValueLower.GetBoolean();
+
+                            if (property.TryGetProperty("S", out var stringValue))
+                                return bool.TryParse(stringValue.GetString(), out var parsed) && parsed;
+
+                            if (property.TryGetProperty("s", out var stringValueLower))
+                                return bool.TryParse(stringValueLower.GetString(), out var parsed) && parsed;
+                        }
+
+                        if (property.ValueKind is System.Text.Json.JsonValueKind.True
+                            or System.Text.Json.JsonValueKind.False)
+                            return property.GetBoolean();
+
+                        if (property.ValueKind == System.Text.Json.JsonValueKind.String)
+                            return bool.TryParse(property.GetString(), out var parsed) && parsed;
+
+                        return false;
+                    }
+
+                    string ExtractSValue(System.Text.Json.JsonElement property)
+                    {
+                        if (property.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        {
+                            if (property.TryGetProperty("s", out var s))
+                                return s.GetString();
+
+                            if (property.TryGetProperty("S", out var S))
+                                return S.GetString();
+                        }
+
+                        if (property.ValueKind == System.Text.Json.JsonValueKind.String)
+                            return property.GetString();
+
+                        return null;
+                    }
+
+                    var inviteData = new InviteClientData
+                        {
+                            Id = GetStringValue(firstItem, "Id"),
+                            Name = GetStringValue(firstItem, "Name"),
+                            Industry = GetStringValue(firstItem, "Industry"),
+                            Prompt = GetStringValue(firstItem, "Prompt"),
+                            Email = GetStringValue(firstItem, "Email"),
+                            ImagePath = GetStringValue(firstItem, "ImagePath") ?? GetStringValue(firstItem, "Imagepath"),
+                            ImageId = GetStringValue(firstItem, "ImageId"),
+                            UseSameImageSeedForAll = GetBoolValue(firstItem, "UseSameImageSeedForAll"),
+                            TimeStamp = GetStringValue(firstItem, "Timestamp") ?? GetStringValue(firstItem, "TimeStamp")
+                        };
+
+                    Console.WriteLine($"✅ Retrieved invite data for email: {email}");
+                    return inviteData;
+                }
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                Console.WriteLine($"⚠️ No invite found for email: {email}");
+                return null;
+            }
+
+            var errorContent = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"❌ Failed: {response.StatusCode}, Error: {errorContent}");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async void SelectPrimaryImage(string imageId)
+    {
+        if (isRedirecting) return; // Prevent multiple selections
+        await Analytics.TrackAsync("main_concept_selected", new { funnel_stage = "directions" });
+
+        var uri = NavigationManager.Uri;
+        var queryParams = QueryHelpers.ParseQuery(new Uri(uri).Query);
+
+        // Check for encrypted email parameter
+        if (queryParams.TryGetValue("e", out var encryptedEmail) &&
+        queryParams.TryGetValue("id", out var inviteId))
+        {
+            // Decrypt the email
+            var decryptedEmail = DecryptEmail(encryptedEmail);
+            Console.WriteLine($"✅ 'e' parameter detected, attempting to decrypt...");
+
+            // ✅ Fetch invite data using email + invite ID
+            InviteData = await GetInviteClientByEmail(decryptedEmail, inviteId);
+
+            IsLoadingInviteData = true;
+            StateHasChanged();
+
+            // Decrypt the email
+            decryptedEmail = DecryptEmail(encryptedEmail);
+
+            // Call update function with email + imageId
+            if (!string.IsNullOrEmpty(decryptedEmail) && !string.IsNullOrEmpty(imageId))
+            {
+                var updateSuccess = await UpdateInviteClientImageId(InviteData.Id, InviteData.Name, imageId);
+
+                if (updateSuccess)
+                {
+                    Console.WriteLine($"✅ InviteClient updated with ImageId: {imageId} for {decryptedEmail}");
+                    SelectedPrimaryImageId = imageId;
+                    isExpanded = true;
+                    showBrandPreview = true;
+                    showFooterAnimation = true;
+                    isConceptCentered = false; // Reset so animation triggers
+                    selectedImageIdForJS = imageId;
+                    StateHasChanged();
+
+                    // The redirect will happen in OnAfterRenderAsync after the center animation completes
+                }
+                else
+                {
+                    if (WebsiteFunnel) { IsLoadingInviteData = false; return; }
+                    Console.WriteLine($"⚠️ Failed to update InviteClient ImageId for {decryptedEmail}");
+                }
+            }
+
+            IsLoadingInviteData = false;
+        }
+
+        SelectedPrimaryImageId = imageId;
+        isExpanded = true;
+        showBrandPreview = true;
+        showFooterAnimation = true;
+        isConceptCentered = false; // Reset so animation triggers
+        selectedImageIdForJS = imageId;
+        StateHasChanged();
+    }
+
+    private async Task PerformRedirect()
+    {
+        if (isRedirecting) return;
+        isRedirecting = true;
+
+        var uri = NavigationManager.Uri;
+        var queryParams = QueryHelpers.ParseQuery(new Uri(uri).Query);
+
+        var encryptedEmailParamId = "";
+
+        // Store URL parameters for redirect
+        if (queryParams.TryGetValue("eid", out var encryptedEmailId))
+        {
+            encryptedEmailParamId = encryptedEmailId.ToString();
+        }
+
+        // Build the redirect URL with the same parameters
+        string redirectUrl = $"/init/funnelend?i=1&id={inviteIdParam}&e={encryptedEmailParam}&eid={encryptedEmailParamId}";
+
+        if (WebsiteFunnel) redirectUrl = QueryHelpers.AddQueryString("/init/funnelendwebsite",
+            queryParams.ToDictionary(pair => pair.Key, pair => (string?)pair.Value.ToString()));
+
+        // Add a small delay to ensure the animation is fully visible
+        //await Task.Delay(300);
+
+        // Navigate to the next page
+        NavigationManager.NavigateTo(redirectUrl, true);
+    }
+
+    private string DecryptEmail(string encryptedEmail)
+    {
+        if (string.IsNullOrEmpty(encryptedEmail))
+            return "";
+
+        try
+        {
+            var decoded = Uri.UnescapeDataString(encryptedEmail);
+            var bytes = Convert.FromBase64String(decoded);
+            return Encoding.UTF8.GetString(bytes);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private void OnUnlockClick()
+    {
+        Console.WriteLine($"Unlocking concept: {SelectedPrimaryImageId}");
+
+        if (InviteData != null)
+        {
+            Console.WriteLine($"For client: {InviteData.Name} ({InviteData.Email})");
+
+            // Get current full URL
+            var curUrl = NavigationManager.Uri;
+
+            // Encode it for safe query string usage
+            var encodedUrl = Uri.EscapeDataString(curUrl);
+
+            NavigationManager.NavigateTo($"/init/upgrade?b={encodedUrl}", true);
+        }
+    }
+    private async Task<string> FetchPromptIdInit(string userId, string companyIdeaId)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetPromptIdForCompanyIdea?code=REDACTED_FOR_GROOMING&userId={Uri.EscapeDataString(userId)}&companyIdeaId={Uri.EscapeDataString(companyIdeaId)}";
+
+        var response = await client.GetAsync(functionUrl);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var promptId = await response.Content.ReadAsStringAsync();
+            return promptId.Trim('"'); // Remove extra quotes if returned as a string
+        }
+
+        return "Error: Unable to fetch prompt ID.";
+    }
+
+    public class PrimaryImage
+    {
+        public string Id { get; set; }
+        public string ImageUrl { get; set; }
+    }
+
+    public class RunwareResponse
+    {
+        public bool Success { get; set; }
+        public List<RunwareImageData> Data { get; set; }
+    }
+
+    public class RunwareImageData
+    {
+        public string ImageURL { get; set; }
+        public string ImageId { get; set; }
+    }
+
+    public class OpenAIIdeaRequest
+    {
+        public string Name { get; set; }
+        public string Industry { get; set; }
+        public string Prompt { get; set; }
+    }
+}
+
+<style>
+    /* FULL PAGE - NO OVERLAY */
+    .full-page-init {
+        width: 100%;
+        min-height: 85vh;
+        background: white;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .vertical-modal-wrapper-init {
+        width: 100%;
+        max-width: 1400px;
+        height: auto;
+        max-height: 90vh;
+        background: white;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        cursor: default;
+        margin: auto;
+    }
+
+        .vertical-modal-wrapper-init.expanded {
+            max-height: 92vh;
+            transition: all 0.5s cubic-bezier(0.34, 1.2, 0.64, 1);
+        }
+
+    .modal-scroll-content-init {
+        flex: 1;
+        overflow-y: hidden;
+        padding: 24px 32px 40px 32px;
+        margin-top: 15px;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+    }
+
+        .modal-scroll-content-init::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .modal-scroll-content-init::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .modal-scroll-content-init::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 10px;
+        }
+
+            .modal-scroll-content-init::-webkit-scrollbar-thumb:hover {
+                background: #a8a8a8;
+            }
+
+    .brand-header {
+        text-align: center;
+        margin-top: 10px;
+        margin-bottom: 20px;
+    }
+
+        .brand-header h2 {
+            font-size: 26px;
+            font-weight: 500;
+            margin-bottom: 10px;
+            color: #1a1a2e;
+        }
+
+        .brand-header p {
+            color: #666;
+            margin-top: 6px;
+            font-size: 18px;
+            font-weight: 350;
+        }
+
+    .simple-spinner-container {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 20px;
+        background: #f0f4ff;
+        border-radius: 40px;
+        min-width: 320px;
+        justify-content: center;
+    }
+
+    .simple-blue-spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid #e0e7ff;
+        border-top-color: #4a6cf7;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        flex-shrink: 0;
+    }
+
+    .step-counter-badge {
+        background: rgba(74, 108, 247, 0.1);
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #4a6cf7;
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
+    .step-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .vertical-text-ticker {
+        height: 24px;
+        overflow: hidden;
+        position: relative;
+        flex: 1;
+        text-align: left;
+    }
+
+    .ticker-text-item {
+        height: 24px;
+        line-height: 24px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #4a6cf7;
+        white-space: nowrap;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        text-align: left;
+        opacity: 0;
+        transform: translateY(100%);
+        transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        pointer-events: none;
+    }
+
+    .ticker-text {
+        font-size: 14px;
+        font-weight: 500;
+        color: #4a6cf7;
+        width: 100%;
+    }
+
+    .ticker-text-item.active {
+        opacity: 1;
+        transform: translateY(0);
+        position: relative;
+    }
+
+    .ticker-text-item.exit-up {
+        opacity: 0;
+        transform: translateY(-100%);
+        position: absolute;
+    }
+
+    .ticker-text-item.exit-down {
+        opacity: 0;
+        transform: translateY(100%);
+        position: absolute;
+    }
+
+    .loading-status-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        margin-top: 15px;
+        flex-wrap: wrap;
+    }
+
+    .spinner-small {
+        width: 24px;
+        height: 24px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #4a6cf7;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .vertical-ticker {
+        display: none;
+    }
+
+    .loading-card {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 280px;
+        background: #ffffff;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid #f0f0f0;
+    }
+
+    .shimmer-container {
+        width: 100%;
+        height: 100%;
+        min-height: 280px;
+        position: relative;
+        overflow: hidden;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 15px;
+        padding: 30px;
+        text-align: center;
+    }
+
+    .shimmer-wrapper {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .shimmer-effect {
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 200%;
+        height: 100%;
+        background: linear-gradient( 90deg, transparent 0%, rgba(200, 200, 210, 0.15) 20%, rgba(220, 220, 235, 0.35) 45%, rgba(200, 200, 210, 0.25) 60%, rgba(180, 180, 200, 0.10) 80%, transparent 100% );
+        animation: shimmer 2.8s ease-in-out infinite;
+        transform: skewX(-25deg);
+    }
+
+        .shimmer-effect::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 200%;
+            height: 100%;
+            background: linear-gradient( 90deg, transparent 0%, rgba(255, 255, 255, 0.1) 30%, rgba(255, 255, 255, 0.3) 50%, rgba(255, 255, 255, 0.1) 70%, transparent 100% );
+            animation: shimmer 3.2s ease-in-out 0.5s infinite;
+            transform: skewX(-15deg);
+        }
+
+    @@keyframes shimmer {
+        0% {
+            left: -100%;
+        }
+
+        100% {
+            left: 100%;
+        }
+    }
+
+    .pulse-animation {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, #f0f2f5, #e8eaed);
+        border-radius: 12px;
+        animation: pulse 1.8s ease-in-out infinite;
+        position: relative;
+        z-index: 1;
+        border: 1px solid #eef0f2;
+    }
+
+    .loading-image-placeholder .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #e8eaed;
+        border-top: 3px solid #4a6cf7;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        position: relative;
+        z-index: 1;
+    }
+
+    .loading-image-placeholder p {
+        color: #999;
+        font-size: 16px;
+        font-weight: 400;
+        margin: 0;
+        position: relative;
+        z-index: 1;
+    }
+
+    @@keyframes pulse {
+        0%, 100% {
+            opacity: 0.7;
+            transform: scale(1);
+        }
+
+        50% {
+            opacity: 1;
+            transform: scale(1.02);
+        }
+    }
+
+    .recommended-strip {
+        margin: 14px auto 30px auto;
+        background: #f2f4ff;
+        padding: 10px 16px;
+        border-radius: 999px;
+        font-size: 13px;
+        color: #445;
+        width: fit-content;
+    }
+
+    .concept-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        padding-top: 10px;
+        position: relative;
+        transition: all 0.8s cubic-bezier(0.34, 1.2, 0.64, 1);
+    }
+
+    .concept-card-pre {
+        width: 100%;
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        text-align: center;
+        transition: all 0.25s ease;
+        cursor: pointer;
+        padding-bottom: 16px;
+    }
+
+    .concept-card {
+        width: 100%;
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        text-align: center;
+        transition: all 0.8s cubic-bezier(0.34, 1.2, 0.64, 1);
+        cursor: pointer;
+        padding-bottom: 16px;
+        transform: scale(1);
+        filter: blur(0px) brightness(1);
+        opacity: 1;
+        position: relative;
+    }
+
+        .concept-card:hover {
+            transform: translateY(-6px) scale(1.02);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+        }
+
+        /* Selected state - grows and stands out */
+        .concept-card.selected {
+            transform: scale(1.08);
+            outline: 3px solid #4a6cf7;
+            box-shadow: 0 16px 40px rgba(74, 108, 247, 0.25);
+            z-index: 10;
+            position: relative;
+            filter: blur(0px) brightness(1);
+            opacity: 1;
+        }
+
+        /* Blurred state - other cards when one is selected */
+        .concept-card.blurred {
+            filter: blur(3px) brightness(0.85);
+            transform: scale(0.92);
+            opacity: 0.6;
+            pointer-events: none;
+            transition: all 0.5s cubic-bezier(0.34, 1.2, 0.64, 1);
+        }
+
+            .concept-card.blurred:hover {
+                transform: scale(0.92);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+            }
+
+        /* Center animation state - the selected card moves to center */
+        .concept-card.center-animate {
+            position: relative;
+            z-index: 20;
+            transform: scale(1.15);
+            outline: 3px solid #4a6cf7;
+            box-shadow: 0 8px 30px rgba(74, 108, 247, 0.2);
+            opacity: 1 !important;
+            filter: blur(0px) brightness(1) !important;
+            pointer-events: auto !important;
+        }
+
+        /* Fade away state - other cards fade to 0 opacity */
+        .concept-card.fade-away {
+            opacity: 0 !important;
+            transform: scale(0.8) translateY(30px);
+            filter: blur(8px) brightness(0.5);
+            pointer-events: none;
+            transition: all 0.8s cubic-bezier(0.34, 1.2, 0.64, 1);
+        }
+
+    .concept-card-animate-loading {
+        opacity: 0;
+        transform: translateX(-40px) scale(0.98);
+        animation: slideInFromLeft 0.7s cubic-bezier(0.42, 0.0, 0.58, 1.0) forwards;
+        animation-fill-mode: forwards;
+    }
+
+    @@keyframes slideInFromLeft {
+        0% {
+            opacity: 0;
+            transform: translateX(-40px) scale(0.98);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+        }
+    }
+
+    .concept-card-animate-ready {
+        opacity: 0;
+        animation: fadeIn 0.6s ease-in-out forwards;
+        animation-fill-mode: forwards;
+    }
+
+    @@keyframes fadeIn {
+        0% {
+            opacity: 0;
+        }
+
+        100% {
+            opacity: 1;
+        }
+    }
+
+    /* Center mode - grid becomes flex to center the selected card */
+    .concept-grid.center-mode {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 24px;
+        transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+        .concept-grid.center-mode .concept-card:not(.center-animate) {
+            opacity: 0 !important;
+            transform: scale(0.8) translateY(30px);
+            filter: blur(8px) brightness(0.5);
+            pointer-events: none;
+            width: 0;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            flex: 0 0 0;
+            transition: all 0.8s cubic-bezier(0.34, 1.2, 0.64, 1);
+        }
+
+        .concept-grid.center-mode .concept-card.center-animate {
+            flex: 0 0 400px;
+            max-width: 400px;
+            transform: scale(1.15);
+            outline: 3px solid #4a6cf7;
+            box-shadow: 0 8px 30px rgba(74, 108, 247, 0.2);
+            transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+            padding-bottom: 16px;
+        }
+
+    .concept-image {
+        width: 100%;
+        height: 263px;
+        object-fit: cover;
+        display: block;
+    }
+
+    .select-btn {
+        margin-top: 12px;
+        border: none;
+        padding: 10px 18px;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+        .select-btn.disabled {
+            background: #d6d6d6;
+            color: #000;
+        }
+
+        .select-btn.active {
+            background: linear-gradient(135deg, #4a6cf7, #244D88);
+            color: white;
+            cursor: pointer;
+        }
+
+            .select-btn.active:hover {
+                opacity: 0.9;
+                transform: translateY(-2px);
+            }
+
+    .brand-system-preview {
+        display: flex;
+        gap: 32px;
+        margin-top: 40px;
+        margin-bottom: 30px;
+        background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+        border-radius: 24px;
+        padding: 28px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(74, 108, 247, 0.2);
+        opacity: 0;
+        transform: translateY(30px);
+        transition: all 0.5s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+    }
+
+        .brand-system-preview.preview-animate-in {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+    .preview-video {
+        flex: 1;
+        min-width: 0;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        background: transparent;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 427px;
+    }
+
+    .brand-video {
+        width: 100%;
+        height: 100%;
+        display: block;
+        border-radius: 16px;
+        object-fit: contain;
+    }
+
+    .preview-text {
+        flex: 1;
+        padding: 8px 12px;
+    }
+
+        .preview-text h3 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: #1a1a2e;
+            background: linear-gradient(135deg, #4a6cf7, #244D88);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .preview-text p {
+            color: #444;
+            font-size: 17px;
+            line-height: 1.5;
+            margin-bottom: 16px;
+            font-weight: 326;
+        }
+
+        .preview-text ul {
+            list-style: none;
+            padding-left: 0;
+            margin: 16px 0;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+            .preview-text ul li {
+                color: #333;
+                font-size: 14px;
+                padding: 6px 0;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+    .bonus-text {
+        background: linear-gradient(135deg, #f5b04220, #f59e0b20);
+        padding: 12px 16px;
+        border-radius: 12px;
+        margin-top: 16px;
+        border-left: 4px solid #f59e0b;
+        font-size: 14px;
+    }
+
+    .footer-actions-init {
+        position: sticky;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: white;
+        border-top: 1px solid #ccc;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 16px 32px;
+        z-index: 1050;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        flex-shrink: 0;
+    }
+
+        .footer-actions-init.footer-animate-in {
+            animation: slideUpFadeIn 0.4s cubic-bezier(0.2, 0.9, 0.4, 1.1) forwards;
+        }
+
+    @@keyframes slideUpFadeIn {
+        0% {
+            opacity: 0;
+            transform: translateY(100%);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .cancel-button {
+        font-size: 1rem;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        background-color: transparent;
+        border: 2px solid #ddd;
+        color: #333;
+        transition: all 0.3s ease;
+    }
+
+        .cancel-button:hover {
+            border-color: #999;
+            color: #000;
+        }
+
+    .unlock-button {
+        background: linear-gradient(135deg, #f5b042, #f59e0b);
+        border: none;
+        padding: 10px 28px;
+        border-radius: 999px;
+        font-size: 1rem;
+        font-weight: 600;
+        color: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+    }
+
+        .unlock-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+            background: linear-gradient(135deg, #f6b84e, #f59e0b);
+        }
+
+        .unlock-button:active {
+            transform: translateY(1px);
+        }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .loading-container {
+        text-align: center;
+        padding: 40px;
+    }
+
+        .loading-container .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4a6cf7;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+    .error-message {
+        text-align: center;
+        padding: 20px;
+        background: #fee;
+        border-radius: 12px;
+        margin: 20px;
+        color: #c00;
+    }
+
+    .invite-welcome {
+        text-align: center;
+        padding: 15px;
+        background: linear-gradient(135deg, #e8f0ff, #f0f4ff);
+        border-radius: 12px;
+        margin: 10px 20px 20px 20px;
+    }
+
+        .invite-welcome p {
+            margin: 5px 0;
+            color: #4a6cf7;
+            font-weight: 600;
+        }
+
+        .invite-welcome .industry-text {
+            font-size: 14px;
+            color: #666;
+            font-weight: normal;
+        }
+
+    /* ============================================================
+               MOBILE OPTIMIZATIONS FOR CONCEPT CENTERING ANIMATION
+               ============================================================ */
+
+    @@media (max-width: 767px) {
+        /* Full page takes full width */
+        .full-page-init {
+            padding: 8px;
+            min-height: 90vh;
+        }
+
+        .vertical-modal-wrapper-init {
+            max-height: none;
+            border-radius: 0;
+        }
+
+        .modal-scroll-content-init {
+            padding: 12px 12px 80px 12px !important;
+        }
+        /* Header adjustments */
+        .brand-header h2 {
+            font-size: 20px !important;
+        }
+
+        .brand-header p {
+            font-size: 14px !important;
+        }
+        /* Concept grid - single column */
+        .concept-grid {
+            grid-template-columns: 1fr !important;
+            gap: 16px !important;
+            padding-top: 8px;
+        }
+
+        .concept-image {
+            height: 180px !important;
+        }
+        /* Selected state on mobile - smaller scale */
+        .concept-card.selected {
+            transform: scale(1.04) !important;
+        }
+        /* Center animation on mobile */
+        .concept-grid.center-mode {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 0 !important;
+            padding: 0 !important;
+            min-height: 60vh;
+        }
+
+            .concept-grid.center-mode .concept-card:not(.center-animate) {
+                opacity: 0 !important;
+                transform: scale(0.7) translateY(20px) !important;
+                filter: blur(6px) brightness(0.4) !important;
+                width: 0;
+                height: 0;
+                margin: 0;
+                padding: 0;
+                overflow: hidden;
+                flex: 0 0 0;
+                border: none;
+                min-height: 0;
+            }
+
+            .concept-grid.center-mode .concept-card.center-animate {
+                flex: 0 0 auto !important;
+                width: 92% !important;
+                max-width: 92% !important;
+                transform: scale(1.05) !important;
+                outline: 3px solid #4a6cf7;
+                box-shadow: 0 6px 20px rgba(74, 108, 247, 0.2) !important;
+                margin: 0 auto !important;
+                border-radius: 16px;
+                padding-bottom: 12px !important;
+            }
+        /* Center animate state */
+        .concept-card.center-animate {
+            transform: scale(1.05) !important;
+            outline: 3px solid #4a6cf7;
+            box-shadow: 0 6px 20px rgba(74, 108, 247, 0.2) !important;
+            transition: all 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+            padding-bottom: 12px !important;
+        }
+        /* Fade away on mobile */
+        .concept-card.fade-away {
+            opacity: 0 !important;
+            transform: scale(0.7) translateY(20px) !important;
+            filter: blur(6px) brightness(0.4) !important;
+            pointer-events: none;
+            transition: all 0.7s cubic-bezier(0.34, 1.2, 0.64, 1);
+            height: 0 !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: hidden;
+            border: none;
+        }
+        /* Style label on mobile */
+        .style-label {
+            font-size: 14px !important;
+            padding: 4px 8px !important;
+        }
+        /* Select button on mobile */
+        .select-btn {
+            padding: 8px 14px !important;
+            font-size: 13px !important;
+        }
+
+        .concept-card {
+            padding-bottom: 12px !important;
+            border-radius: 12px !important;
+        }
+
+        .concept-card-pre {
+            border-radius: 12px !important;
+            min-height: 200px !important;
+        }
+
+        .loading-card {
+            min-height: 200px !important;
+        }
+
+        .shimmer-container {
+            min-height: 200px !important;
+        }
+
+        .pulse-animation {
+            width: 60px !important;
+            height: 60px !important;
+        }
+
+        .loading-image-placeholder p {
+            font-size: 14px !important;
+        }
+
+        .shimmer-effect {
+            animation-duration: 2s !important;
+        }
+
+            .shimmer-effect::after {
+                animation-duration: 2.4s !important;
+            }
+
+        .recommended-strip {
+            font-size: 11px !important;
+            padding: 6px 12px !important;
+            margin: 8px auto 16px auto !important;
+        }
+    }
+
+    /* Extra small phones (iPhone SE, etc.) */
+    @@media (max-width: 380px) {
+        .full-page-init {
+            padding: 4px;
+        }
+
+        .modal-scroll-content-init {
+            padding: 8px 8px 70px 8px !important;
+        }
+
+        .brand-header h2 {
+            font-size: 17px !important;
+        }
+
+        .brand-header p {
+            font-size: 12px !important;
+        }
+
+        .concept-image {
+            height: 150px !important;
+        }
+
+        .concept-grid {
+            gap: 12px !important;
+        }
+
+            .concept-grid.center-mode .concept-card.center-animate {
+                width: 96% !important;
+                max-width: 96% !important;
+                transform: scale(1.02) !important;
+                box-shadow: 0 4px 16px rgba(74, 108, 247, 0.15) !important;
+            }
+
+        .concept-card.center-animate {
+            transform: scale(1.02) !important;
+            box-shadow: 0 4px 16px rgba(74, 108, 247, 0.15) !important;
+        }
+
+        .style-label {
+            font-size: 12px !important;
+        }
+
+        .select-btn {
+            font-size: 11px !important;
+            padding: 6px 12px !important;
+        }
+
+        .concept-card {
+            border-radius: 10px !important;
+            padding-bottom: 10px !important;
+        }
+
+        .loading-card {
+            min-height: 160px !important;
+        }
+
+        .shimmer-container {
+            min-height: 160px !important;
+        }
+
+        .pulse-animation {
+            width: 48px !important;
+            height: 48px !important;
+        }
+
+        .loading-image-placeholder p {
+            font-size: 12px !important;
+        }
+
+        .loading-image-placeholder .loading-spinner {
+            width: 24px !important;
+            height: 24px !important;
+        }
+    }
+
+    /* Landscape phones */
+    @@media (max-height: 500px) and (orientation: landscape) {
+        .full-page-init {
+            min-height: 100vh;
+            padding: 8px 12px;
+        }
+
+        .modal-scroll-content-init {
+            padding: 8px 12px 60px 12px !important;
+        }
+
+        .concept-grid {
+            gap: 12px !important;
+        }
+
+        .concept-image {
+            height: 120px !important;
+        }
+
+        .brand-header h2 {
+            font-size: 18px !important;
+            margin-bottom: 4px !important;
+        }
+
+        .brand-header p {
+            font-size: 13px !important;
+            margin-top: 2px !important;
+        }
+
+        .concept-grid.center-mode .concept-card.center-animate {
+            width: 80% !important;
+            max-width: 80% !important;
+            transform: scale(1.04) !important;
+            box-shadow: 0 4px 16px rgba(74, 108, 247, 0.15) !important;
+        }
+
+        .concept-card.center-animate {
+            transform: scale(1.04) !important;
+            box-shadow: 0 4px 16px rgba(74, 108, 247, 0.15) !important;
+        }
+
+        .concept-card {
+            padding-bottom: 8px !important;
+        }
+
+        .style-label {
+            font-size: 12px !important;
+            margin-top: 4px !important;
+        }
+
+        .select-btn {
+            padding: 4px 10px !important;
+            font-size: 11px !important;
+            margin-top: 6px !important;
+        }
+
+        .recommended-strip {
+            margin: 4px auto 10px auto !important;
+            padding: 4px 10px !important;
+            font-size: 10px !important;
+        }
+    }
+
+    /* Tablet (portrait) */
+    @@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+        .concept-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 18px !important;
+        }
+
+        .concept-image {
+            height: 200px !important;
+        }
+
+        .concept-grid.center-mode .concept-card.center-animate {
+            flex: 0 0 350px !important;
+            max-width: 350px !important;
+            transform: scale(1.1) !important;
+            box-shadow: 0 6px 24px rgba(74, 108, 247, 0.2) !important;
+        }
+
+        .concept-card.center-animate {
+            transform: scale(1.1) !important;
+            box-shadow: 0 6px 24px rgba(74, 108, 247, 0.2) !important;
+        }
+
+        .concept-grid.center-mode .concept-card:not(.center-animate) {
+            flex: 0 0 0 !important;
+        }
+
+        .brand-header h2 {
+            font-size: 24px !important;
+        }
+
+        .brand-header p {
+            font-size: 16px !important;
+        }
+
+        .modal-scroll-content-init {
+            padding: 16px 20px 30px 20px !important;
+        }
+    }
+
+    /* Tablet (landscape) */
+    @@media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+        .concept-grid {
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 16px !important;
+        }
+
+        .concept-image {
+            height: 180px !important;
+        }
+
+        .concept-grid.center-mode .concept-card.center-animate {
+            flex: 0 0 380px !important;
+            max-width: 380px !important;
+            transform: scale(1.12) !important;
+            box-shadow: 0 8px 28px rgba(74, 108, 247, 0.2) !important;
+        }
+
+        .concept-card.center-animate {
+            transform: scale(1.12) !important;
+            box-shadow: 0 8px 28px rgba(74, 108, 247, 0.2) !important;
+        }
+
+        .brand-header h2 {
+            font-size: 22px !important;
+        }
+
+        .brand-header p {
+            font-size: 15px !important;
+        }
+    }
+
+    /* Desktop/Laptop */
+    @@media (min-width: 1025px) {
+        .concept-grid.center-mode .concept-card.center-animate {
+            flex: 0 0 420px;
+            max-width: 420px;
+            transform: scale(1.18);
+            outline: 3px solid #4a6cf7;
+            box-shadow: 0 8px 32px rgba(74, 108, 247, 0.2);
+            padding-bottom: 16px;
+        }
+
+        .concept-card.center-animate {
+            transform: scale(1.18);
+            outline: 3px solid #4a6cf7;
+            box-shadow: 0 8px 32px rgba(74, 108, 247, 0.2);
+            padding-bottom: 16px;
+        }
+    }
+
+    /* Large screens */
+    @@media (min-width: 1400px) {
+        .concept-grid.center-mode .concept-card.center-animate {
+            flex: 0 0 460px;
+            max-width: 460px;
+            transform: scale(1.2);
+            box-shadow: 0 8px 32px rgba(74, 108, 247, 0.2);
+        }
+
+        .concept-card.center-animate {
+            transform: scale(1.2);
+            box-shadow: 0 8px 32px rgba(74, 108, 247, 0.2);
+        }
+    }
+
+    /* ============================================================
+               END MOBILE OPTIMIZATIONS
+               ============================================================ */
+
+    .brand-system-preview {
+        display: flex;
+        align-items: center;
+        gap: 40px;
+        margin-top: 40px;
+        margin-bottom: 30px;
+        background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+        border-radius: 24px;
+        padding: 40px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(74, 108, 247, 0.15);
+        opacity: 0;
+        transform: translateY(30px);
+        transition: all 0.5s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+    }
+
+        .brand-system-preview.preview-animate-in {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+    .preview-video {
+        flex: 0 0 42%;
+        max-width: 520px;
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    }
+
+    .brand-video {
+        width: 100%;
+        height: 100%;
+        aspect-ratio: 16 / 10;
+        object-fit: cover;
+        display: block;
+    }
+
+    .preview-text {
+        flex: 1;
+    }
+
+    .hero-title {
+        font-size: 64px;
+        font-weight: 500;
+        line-height: 1.1;
+        margin-bottom: 10px;
+        background: linear-gradient(90deg, #4a6cf7, #8b5cf6, #ec4899, #f59e0b);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+        font-size: 21px;
+        font-weight: 700;
+        color: #111;
+        margin-bottom: 18px;
+    }
+
+    .hero-description {
+        font-size: 17px;
+        color: #555;
+        line-height: 1.6;
+        max-width: 520px;
+    }
+
+    .hero-features {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px 24px;
+        font-size: 14px;
+        color: #333;
+    }
+
+        .hero-features span {
+            opacity: 0.9;
+        }
+
+    .hero-bonus {
+        margin-top: 18px;
+        font-size: 14px;
+        color: #666;
+    }
+
+    @@media (max-width: 1024px) {
+        .brand-system-preview {
+            flex-direction: column;
+            padding: 24px;
+        }
+
+        .preview-video {
+            width: 100%;
+            max-width: 100%;
+            display: none;
+        }
+
+        .hero-title {
+            font-size: 34px;
+        }
+
+        .hero-subtitle {
+            font-size: 26px;
+        }
+    }
+
+    @@media (max-width: 767px) {
+        .hero-title {
+            font-size: 28px;
+        }
+
+        .hero-subtitle {
+            font-size: 22px;
+        }
+
+        .hero-description {
+            font-size: 15px;
+        }
+
+        .hero-features {
+            flex-direction: column;
+            gap: 8px;
+        }
+    }
+
+    .style-label {
+        margin-top: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #666;
+        text-align: center;
+        opacity: 0.85;
+    }
+
+    body.ios-chrome .footer-actions-init {
+        padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+        margin-bottom: 120px !important;
+    }
+
+    body.ios-chrome .concept-grid {
+        margin-bottom: 100px !important;
+    }
+
+    body {
+        background: white !important;
+        margin: 0;
+        padding: 0;
+    }
+
+    html, body, #app, .app-container {
+        background: white !important;
+    }
+
+    .demo-trigger {
+        background: linear-gradient(135deg, #4a6cf7, #244D88);
+        border: none;
+        padding: 14px 32px;
+        border-radius: 60px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: white;
+        cursor: pointer;
+        box-shadow: 0 8px 20px rgba(74, 108, 247, 0.3);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .locked-features-section {
+        margin-top: 30px;
+        margin-bottom: 40px;
+    }
+
+    .locked-features-header {
+        text-align: center;
+        margin-bottom: 24px;
+    }
+
+        .locked-features-header .header-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            display: inline-block;
+        }
+
+        .locked-features-header h3 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 8px;
+            background: black;
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .locked-features-header p {
+            font-size: 17px;
+            color: #666;
+            font-weight: 326;
+        }
+
+    .locked-features {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 18px;
+        opacity: 0;
+        transform: translateY(40px);
+        transition: all 0.7s cubic-bezier(0.2, 0.9, 0.3, 1);
+        animation: itemFadeUp 0.5s forwards;
+    }
+
+        .locked-features.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+    .locked-item {
+        position: relative;
+        height: 110px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #f8f9ff, #ffffff);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: #222;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        transition: all 0.25s ease;
+        opacity: 0.85;
+    }
+
+        .locked-item:hover {
+            opacity: 1;
+        }
+
+        .locked-item .icon {
+            font-size: 26px;
+            margin-bottom: 6px;
+        }
+
+        .locked-item .lock {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+    .locked-features.visible .locked-item {
+        opacity: 0;
+        transform: translateY(20px);
+        animation: itemFadeUp 0.5s forwards;
+    }
+
+        .locked-features.visible .locked-item:nth-child(1) {
+            animation-delay: 0.05s;
+        }
+
+        .locked-features.visible .locked-item:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+
+        .locked-features.visible .locked-item:nth-child(3) {
+            animation-delay: 0.15s;
+        }
+
+        .locked-features.visible .locked-item:nth-child(4) {
+            animation-delay: 0.2s;
+        }
+
+        .locked-features.visible .locked-item:nth-child(5) {
+            animation-delay: 0.25s;
+        }
+
+        .locked-features.visible .locked-item:nth-child(6) {
+            animation-delay: 0.3s;
+        }
+
+        .locked-features.visible .locked-item:nth-child(7) {
+            animation-delay: 0.35s;
+        }
+
+        .locked-features.visible .locked-item:nth-child(8) {
+            animation-delay: 0.4s;
+        }
+
+        .locked-features.visible .locked-item:nth-child(9) {
+            animation-delay: 0.45s;
+        }
+
+        .locked-features.visible .locked-item:nth-child(10) {
+            animation-delay: 0.5s;
+        }
+
+    @@keyframes itemFadeUp {
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@keyframes gentlePulse {
+        0%, 100% {
+            transform: scale(1);
+            opacity: 0.8;
+        }
+
+        50% {
+            transform: scale(1.08);
+            opacity: 1;
+        }
+    }
+
+    @@media (max-width: 767px) {
+        .locked-features-header h3 {
+            font-size: 20px;
+        }
+
+        .locked-features-header p {
+            font-size: 13px;
+        }
+
+        .locked-features-header .header-icon {
+            font-size: 36px;
+        }
+    }
+
+    .locked-features.visible {
+        opacity: 1 !important;
+        transform: translateY(0) !important;
+    }
+
+        .locked-features.visible .locked-item {
+            opacity: 1 !important;
+            animation: itemFadeUp 0.5s forwards !important;
+        }
+
+    @@media (max-width: 1100px) {
+        .locked-features {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 18px;
+        }
+    }
+
+    @@media (max-width: 850px) {
+        .locked-features {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .locked-item {
+            padding: 14px 6px 12px 6px;
+            min-height: 110px;
+        }
+
+            .locked-item .icon {
+                font-size: 28px;
+            }
+
+        .locked-features-header h3 {
+            font-size: 22px;
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .locked-features {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }
+
+        .locked-item {
+            padding: 12px 6px 10px 6px;
+            min-height: 100px;
+        }
+
+            .locked-item .icon {
+                font-size: 28px;
+            }
+
+            .locked-item span {
+                font-size: 12px;
+            }
+
+            .locked-item .lock {
+                top: 6px;
+                right: 8px;
+                font-size: 12px;
+            }
+
+        .locked-features-header .header-icon {
+            font-size: 36px;
+        }
+
+        .locked-features-header p {
+            font-size: 13px;
+            padding: 0 8px;
+        }
+    }
+
+    @@media (max-width: 480px) {
+        .locked-features {
+            gap: 12px;
+        }
+
+        .locked-item {
+            padding: 10px 4px 8px 4px;
+            border-radius: 16px;
+        }
+
+            .locked-item .icon {
+                font-size: 24px;
+                margin-bottom: 6px;
+            }
+
+            .locked-item span {
+                font-size: 11px;
+            }
+    }
+
+    @@media (max-width: 370px) {
+        .locked-item span {
+            font-size: 10px;
+        }
+
+        .locked-item .icon {
+            font-size: 22px;
+        }
+
+        .locked-item {
+            min-height: 88px;
+        }
+    }
+
+    .locked-features {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    @@media only screen and (device-width: 344px) {
+        .preview-video {
+            width: 100%;
+            max-width: 100%;
+            display: none !important;
+        }
+    }
+
+    .modal-scroll-content-init::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    .is-windows .modal-scroll-content-init::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .is-windows .modal-scroll-content-init::-webkit-scrollbar-thumb {
+        border: 1px solid transparent;
+    }
+
+    .modal-scroll-content-init::-webkit-scrollbar-track {
+        background: transparent;
+        margin: 4px 0;
+    }
+
+    .modal-scroll-content-init::-webkit-scrollbar-thumb {
+        background: rgba(60, 72, 100, 0.55);
+        border-radius: 999px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+    }
+
+        .modal-scroll-content-init::-webkit-scrollbar-thumb:hover {
+            background: rgba(60, 72, 100, 0.7);
+        }
+
+        .modal-scroll-content-init::-webkit-scrollbar-thumb:active {
+            background: rgba(60, 72, 100, 0.85);
+        }
+
+    .modal-scroll-content-init {
+        scrollbar-width: thick;
+        scrollbar-color: rgba(60, 72, 100, 0.65) transparent;
+    }
+
+    .is-windows .modal-scroll-content-init {
+        scrollbar-width: auto;
+    }
+
+    .vertical-text-ticker {
+        height: 28px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .ticker-track {
+        position: relative;
+        height: 100%;
+    }
+
+    .ticker-slide {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        opacity: 0;
+        transform: translateY(100%);
+        transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+
+        .ticker-slide[data-step="1"] {
+            opacity: calc(1 - abs(var(--current-step, 1) - 1));
+            transform: translateY(calc((var(--current-step, 1) - 1) * -100%));
+        }
+
+        .ticker-slide[data-step="2"] {
+            opacity: calc(1 - abs(var(--current-step, 1) - 2));
+            transform: translateY(calc((var(--current-step, 1) - 2) * -100%));
+        }
+
+        .ticker-slide[data-step="3"] {
+            opacity: calc(1 - abs(var(--current-step, 1) - 3));
+            transform: translateY(calc((var(--current-step, 1) - 3) * -100%));
+        }
+
+    @@keyframes stepProgress {
+        0%, 30% {
+            --current-step: 1;
+        }
+
+        33%, 63% {
+            --current-step: 2;
+        }
+
+        66%, 96% {
+            --current-step: 3;
+        }
+
+        100% {
+            --current-step: 1;
+        }
+    }
+
+    .ticker-track {
+        animation: stepProgress 9s infinite;
+        --current-step: 1;
+    }
+
+    .vertical-text-ticker.completed .ticker-track {
+        animation: none;
+        --current-step: 3;
+    }
+
+    .style-label {
+        padding-bottom: 6px;
+        font-size: 16px;
+        font-weight: 600;
+        color: black;
+        border-radius: 999px;
+        backdrop-filter: blur(6px);
+        z-index: 2;
+    }
+
+    .loading-card {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 280px;
+        background: #ffffff;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid #f0f0f0;
+    }
+
+    .shimmer-container {
+        width: 100%;
+        height: 100%;
+        min-height: 280px;
+        position: absolute;
+        top: 0;
+        left: 0;
+        overflow: hidden;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 15px;
+        padding: 30px;
+        text-align: center;
+        z-index: 0;
+    }
+
+    .shimmer-wrapper {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        z-index: 0;
+    }
+
+    .shimmer-effect {
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 200%;
+        height: 100%;
+        background: linear-gradient( 90deg, transparent 0%, rgba(200, 200, 210, 0.15) 20%, rgba(220, 220, 235, 0.35) 45%, rgba(200, 200, 210, 0.25) 60%, rgba(180, 180, 200, 0.10) 80%, transparent 100% );
+        animation: shimmer 2.8s ease-in-out infinite;
+        transform: skewX(-25deg);
+    }
+
+        .shimmer-effect::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 200%;
+            height: 100%;
+            background: linear-gradient( 90deg, transparent 0%, rgba(255, 255, 255, 0.1) 30%, rgba(255, 255, 255, 0.3) 50%, rgba(255, 255, 255, 0.1) 70%, transparent 100% );
+            animation: shimmer 3.2s ease-in-out 0.5s infinite;
+            transform: skewX(-15deg);
+        }
+
+    .pulse-animation,
+    .loading-image-placeholder .loading-spinner,
+    .loading-image-placeholder p {
+        position: relative;
+        z-index: 1;
+    }
+    /* Short desktop screens (laptops with limited height) */
+    @@media (min-width: 768px) and (max-height: 760px) {
+        .modal-scroll-content-init {
+            overflow-y: hidden !important;
+            margin-top: 10px !important;
+            padding-top: 0 !important;
+        }
+
+        .vertical-modal-wrapper-init {
+            max-height: none !important;
+            overflow: visible !important;
+        }
+
+        .full-page-init {
+            min-height: auto !important;
+        }
+    }
+</style>
+
+<script>
+    const isWindows = navigator.userAgent.includes("Windows");
+    if (isWindows) {
+        document.documentElement.classList.add("is-windows");
+    }
+    // Store preloaded iframe elements
+    window.preloadedIframes = {};
+
+    // Preload Vimeo video in background
+    window.preloadVimeoVideo = (videoUrl) => {
+        return new Promise((resolve) => {
+            // Check if already preloaded
+            if (window.preloadedIframes[videoUrl]) {
+                resolve();
+                return;
+            }
+
+            // Create hidden iframe for preloading
+            const preloadIframe = document.createElement('iframe');
+            preloadIframe.src = videoUrl;
+            preloadIframe.style.display = 'none';
+            preloadIframe.style.position = 'absolute';
+            preloadIframe.style.width = '1px';
+            preloadIframe.style.height = '1px';
+            preloadIframe.style.opacity = '0';
+            preloadIframe.style.pointerEvents = 'none';
+            preloadIframe.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture');
+
+            // Store reference and resolve when ready
+            preloadIframe.onload = () => {
+                window.preloadedIframes[videoUrl] = preloadIframe;
+                resolve();
+            };
+
+            document.body.appendChild(preloadIframe);
+        });
+    };
+
+    // Enhanced video player with preloading support
+    window.getOrCreateVideoPlayer = (videoUrl, containerElement) => {
+        // Check if we have a preloaded version
+        if (window.preloadedIframes[videoUrl]) {
+            const preloadedIframe = window.preloadedIframes[videoUrl];
+            // Move preloaded iframe to container
+            containerElement.innerHTML = '';
+            containerElement.appendChild(preloadedIframe);
+            preloadedIframe.style.display = 'block';
+            preloadedIframe.style.position = 'relative';
+            preloadedIframe.style.width = '100%';
+            preloadedIframe.style.height = '100%';
+            return preloadedIframe;
+        }
+
+        // Fallback: create new iframe
+        const iframe = document.createElement('iframe');
+        iframe.src = videoUrl;
+        iframe.setAttribute('frameborder', '0');
+        iframe.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture');
+        iframe.setAttribute('allowfullscreen', 'true');
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.position = 'absolute';
+        iframe.style.top = '0';
+        iframe.style.left = '0';
+        containerElement.innerHTML = '';
+        containerElement.appendChild(iframe);
+        return iframe;
+    };
+
+    // Center the selected concept and fade others to opacity 0 with ease-in-out
+    window.centerSelectedConcept = (selectedImageId) => {
+        const conceptGrid = document.getElementById('conceptGrid');
+        if (!conceptGrid) return;
+
+        // Find all concept cards
+        const cards = conceptGrid.querySelectorAll('.concept-card');
+        let selectedCard = null;
+
+        // Find which card is selected by data-image-id attribute
+        cards.forEach((card) => {
+            const cardImageId = card.getAttribute('data-image-id');
+            if (cardImageId === selectedImageId) {
+                selectedCard = card;
+            }
+        });
+
+        // Fallback: find by class
+        if (!selectedCard) {
+            cards.forEach(card => {
+                if (card.classList.contains('selected')) {
+                    selectedCard = card;
+                }
+            });
+        }
+
+        if (!selectedCard) {
+            console.warn('No selected card found for center animation');
+            return;
+        }
+
+        // Add center mode class to grid - this changes display to flex
+        conceptGrid.classList.add('center-mode');
+
+        // Remove selected class from all cards first
+        cards.forEach(card => {
+            card.classList.remove('selected', 'blurred');
+        });
+
+        // Add center-animate class to selected card
+        selectedCard.classList.add('center-animate');
+
+        // Add fade-away class to other cards - they will fade to opacity 0
+        cards.forEach((card) => {
+            if (card !== selectedCard) {
+                card.classList.add('fade-away');
+            }
+        });
+
+        // Trigger locked features scroll after animation completes
+        setTimeout(() => {
+            if (window.scrollToLockedFeatures) {
+                window.scrollToLockedFeatures();
+            }
+        }, 1200);
+    };
+
+    // Initialize step badge
+    window.initStepBadge = () => {
+        const stepNumber = document.getElementById('stepNumber');
+        if (stepNumber) {
+            stepNumber.textContent = '1';
+        }
+    };
+
+    // Update step badge
+    window.updateStepBadge = (step) => {
+        const stepNumber = document.getElementById('stepNumber');
+        if (stepNumber) {
+            stepNumber.textContent = step;
+            // Add a subtle pulse effect
+            const badge = document.getElementById('stepCounterBadge');
+            if (badge) {
+                badge.style.transform = 'scale(1.05)';
+                setTimeout(() => {
+                    if (badge) badge.style.transform = 'scale(1)';
+                }, 200);
+            }
+        }
+    };
+
+    // Complete step badge
+    window.completeStepBadge = () => {
+        const stepNumber = document.getElementById('stepNumber');
+        if (stepNumber) {
+            stepNumber.textContent = '3';
+        }
+    };
+
+    // Vertical text ticker animation - only one visible at a time
+    window.initVerticalTextTicker = () => {
+        const container = document.querySelector('.vertical-text-ticker');
+        const items = document.querySelectorAll('.ticker-text-item');
+        if (!container || items.length === 0) return;
+
+        let currentIndex = 0;
+        let interval = null;
+        let isAnimating = false;
+        window.textTickerComplete = false;
+
+        // Hide all items initially
+        items.forEach(item => {
+            item.classList.remove('active', 'exit-up', 'exit-down');
+            item.style.opacity = '0';
+            item.style.transform = 'translateY(100%)';
+        });
+
+        const showItem = (index, animate = true) => {
+            if (isAnimating) return;
+            isAnimating = true;
+
+            if (window.textTickerComplete || window.generationComplete) {
+                // Show the last item as completed
+                items.forEach((item, i) => {
+                    if (i === items.length - 1) {
+                        item.classList.remove('exit-up', 'exit-down');
+                        item.classList.add('active');
+                        item.style.opacity = '1';
+                        item.style.transform = 'translateY(0)';
+                    } else {
+                        item.classList.remove('active', 'exit-up', 'exit-down');
+                        item.style.opacity = '0';
+                    }
+                });
+                if (interval) clearInterval(interval);
+                isAnimating = false;
+                return;
+            }
+
+            // Hide all items first
+            items.forEach((item, i) => {
+                if (i === index) {
+                    // Show the new item
+                    item.classList.remove('exit-up', 'exit-down');
+                    item.classList.add('active');
+                    if (animate) {
+                        item.style.animation = 'none';
+                        item.offsetHeight; // Force reflow
+                        item.style.transition = 'all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+                    }
+                    item.style.opacity = '1';
+                    item.style.transform = 'translateY(0)';
+                } else {
+                    // Hide other items
+                    item.classList.remove('active');
+                    item.style.opacity = '0';
+                    // Determine direction to exit
+                    if (i < index) {
+                        item.style.transform = 'translateY(-100%)';
+                    } else {
+                        item.style.transform = 'translateY(100%)';
+                    }
+                }
+            });
+
+            setTimeout(() => {
+                isAnimating = false;
+            }, 400);
+        };
+
+        // Function to advance to next item
+        const advanceToNext = () => {
+            if (window.textTickerComplete || window.generationComplete) {
+                if (interval) clearInterval(interval);
+                return;
+            }
+
+            if (currentIndex < items.length - 1) {
+                currentIndex++;
+                showItem(currentIndex);
+            } else {
+                // Reset to beginning
+                currentIndex = 0;
+                showItem(currentIndex);
+            }
+        };
+
+        // Start with first item
+        showItem(0, false);
+
+        // Start continuous rotation (every 3 seconds)
+        interval = setInterval(() => {
+            advanceToNext();
+        }, 3000);
+
+        window.textTickerInterval = interval;
+
+        // Function to check generation status
+        window.checkTextTickerStatus = () => {
+            if (window.generationComplete && !window.textTickerComplete) {
+                window.textTickerComplete = true;
+                if (window.textTickerInterval) {
+                    clearInterval(window.textTickerInterval);
+                    window.textTickerInterval = null;
+                }
+                // Show the last item as completed
+                items.forEach((item, i) => {
+                    if (i === items.length - 1) {
+                        item.classList.remove('exit-up', 'exit-down');
+                        item.classList.add('active');
+                        item.style.opacity = '1';
+                        item.style.transform = 'translateY(0)';
+                    } else {
+                        item.classList.remove('active', 'exit-up', 'exit-down');
+                        item.style.opacity = '0';
+                    }
+                });
+            }
+        };
+
+        // Check every 500ms
+        window.textTickerStatusInterval = setInterval(() => {
+            window.checkTextTickerStatus();
+        }, 500);
+    };
+
+    // Complete the text ticker when generation finishes
+    window.completeTextTicker = () => {
+        window.generationComplete = true;
+        window.textTickerComplete = true;
+
+        const items = document.querySelectorAll('.ticker-text-item');
+
+        if (window.textTickerInterval) {
+            clearInterval(window.textTickerInterval);
+            window.textTickerInterval = null;
+        }
+        if (window.textTickerStatusInterval) {
+            clearInterval(window.textTickerStatusInterval);
+            window.textTickerStatusInterval = null;
+        }
+
+        // Show the last step as completed, hide others
+        items.forEach((item, i) => {
+            if (i === items.length - 1) {
+                item.classList.remove('exit-up', 'exit-down');
+                item.classList.add('active');
+                item.style.opacity = '1';
+                item.style.transform = 'translateY(0)';
+            } else {
+                item.classList.remove('active', 'exit-up', 'exit-down');
+                item.style.opacity = '0';
+            }
+        });
+
+        createCompletionEffect();
+    };
+
+    // Vertical ticker animation (kept functional but hidden)
+    window.initVerticalTicker = () => {
+        const ticker = document.querySelector('.vertical-ticker');
+        const items = document.querySelectorAll('.ticker-item');
+        if (items.length === 0) return;
+
+        let currentIndex = 0;
+        let isAnimating = false;
+        let interval = null;
+
+        window.tickerComplete = false;
+
+        const showItem = (index, animate = true) => {
+            if (isAnimating) return;
+            isAnimating = true;
+
+            if (window.tickerComplete || window.generationComplete) {
+                if (interval) clearInterval(interval);
+                return;
+            }
+
+            updateProgressRing(index + 1, items.length);
+
+            setTimeout(() => {
+                isAnimating = false;
+            }, 100);
+        };
+
+        const updateProgressRing = (step, total) => {
+            const progressCircle = document.querySelector('.progress-ring-circle');
+            const stepIndicator = document.querySelector('.step-indicator');
+            const radius = 17;
+            const circumference = 2 * Math.PI * radius;
+
+            if (progressCircle && !window.tickerComplete && !window.generationComplete) {
+                const progress = step / total;
+                const offset = circumference - (progress * circumference);
+                progressCircle.style.strokeDashoffset = offset;
+            } else if (progressCircle && (window.tickerComplete || window.generationComplete)) {
+                progressCircle.style.strokeDashoffset = 0;
+                progressCircle.style.stroke = '#4caf50';
+            }
+
+            if (stepIndicator && !window.tickerComplete && !window.generationComplete) {
+                stepIndicator.textContent = `${step}/${total}`;
+            } else if (stepIndicator && (window.tickerComplete || window.generationComplete)) {
+                stepIndicator.textContent = `✓ ${total}/${total}`;
+                stepIndicator.style.color = '#4caf50';
+            }
+
+            const progressFill = document.querySelector('.progress-bar-fill');
+            if (progressFill && !window.tickerComplete && !window.generationComplete) {
+                const percent = (step / total) * 100;
+                progressFill.style.width = `${percent}%`;
+            } else if (progressFill && (window.tickerComplete || window.generationComplete)) {
+                progressFill.style.width = '100%';
+            }
+        };
+
+        updateProgressRing(1, items.length);
+
+        window.checkGenerationStatus = () => {
+            if (window.generationComplete && !window.tickerComplete) {
+                window.tickerComplete = true;
+                if (interval) clearInterval(interval);
+                updateProgressRing(items.length, items.length);
+            }
+        };
+
+        window.statusCheckInterval = setInterval(() => {
+            window.checkGenerationStatus();
+        }, 500);
+    };
+
+    window.updateTickerStep = (step) => {
+        const items = document.querySelectorAll('.ticker-item');
+        if (items.length === 0) return;
+
+        const progressCircle = document.querySelector('.progress-ring-circle');
+        const stepIndicator = document.querySelector('.step-indicator');
+        const radius = 17;
+        const circumference = 2 * Math.PI * radius;
+
+        if (progressCircle && !window.generationComplete) {
+            const progress = step / items.length;
+            const offset = circumference - (progress * circumference);
+            progressCircle.style.strokeDashoffset = offset;
+        }
+
+        if (stepIndicator && !window.generationComplete) {
+            stepIndicator.textContent = `${step}/${items.length}`;
+        }
+
+        const progressFill = document.querySelector('.progress-bar-fill');
+        if (progressFill && !window.generationComplete) {
+            const percent = (step / items.length) * 100;
+            progressFill.style.width = `${percent}%`;
+        }
+    };
+
+    window.completeTicker = () => {
+        // Already handled by completeTextTicker
+    };
+
+    // Add a subtle celebration effect when generation completes
+    function createCompletionEffect() {
+        const container = document.querySelector('.simple-spinner-container');
+        if (!container) return;
+
+        const celebration = document.createElement('div');
+        celebration.className = 'completion-celebration';
+        celebration.innerHTML = '✓';
+        celebration.style.position = 'absolute';
+        celebration.style.fontSize = '18px';
+        celebration.style.opacity = '0';
+        celebration.style.transition = 'all 0.3s ease';
+        celebration.style.pointerEvents = 'none';
+        celebration.style.color = '#4caf50';
+        celebration.style.right = '-25px';
+        celebration.style.top = '50%';
+        celebration.style.transform = 'translateY(-50%)';
+
+        container.style.position = 'relative';
+        container.appendChild(celebration);
+
+        setTimeout(() => {
+            celebration.style.opacity = '1';
+            celebration.style.transform = 'translateY(-50%) scale(1.2)';
+        }, 10);
+
+        setTimeout(() => {
+            celebration.style.opacity = '0';
+            setTimeout(() => {
+                celebration.remove();
+            }, 300);
+        }, 1500);
+    }
+
+    // Scroll animation for locked features
+    window.initScrollAnimation = () => {
+        setTimeout(() => {
+            const featuresElement = document.querySelector('#lockedFeatures');
+            if (!featuresElement) {
+                return;
+            }
+
+            const checkVisibility = () => {
+                const rect = featuresElement.getBoundingClientRect();
+                const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+                const isVisible = rect.top <= windowHeight - 100 && rect.bottom >= 100;
+
+                if (isVisible) {
+                    featuresElement.classList.add('visible');
+                    return true;
+                }
+                return false;
+            };
+
+            if (checkVisibility()) {
+                return;
+            }
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.2, rootMargin: "0px 0px -50px 0px" });
+
+            observer.observe(featuresElement);
+
+            setTimeout(() => {
+                if (!featuresElement.classList.contains('visible')) {
+                    checkVisibility();
+                }
+            }, 1000);
+        }, 100);
+    };
+
+    window.scrollToLockedFeatures = () => {
+        const element = document.querySelector('#lockedFeatures');
+        if (element) {
+            const scrollContainer = document.querySelector('.modal-scroll-content-init');
+            if (scrollContainer) {
+                setTimeout(() => {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => {
+                        window.initScrollAnimation();
+                    }, 600);
+                }, 300);
+            } else {
+                setTimeout(() => {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => {
+                        window.initScrollAnimation();
+                    }, 600);
+                }, 300);
+            }
+        }
+    };
+
+    window.playBrandVideo = () => {
+        const iframe = document.querySelector('.brand-video');
+        if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage('{"method":"play"}', '*');
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        window.initScrollAnimation();
+        window.initVerticalTicker();
+        window.initVerticalTextTicker();
+        window.initStepBadge();
+    });
+</script>

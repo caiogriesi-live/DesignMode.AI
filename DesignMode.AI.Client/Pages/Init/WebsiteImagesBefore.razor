@@ -1,0 +1,905 @@
+@using Microsoft.AspNetCore.Components
+@inject IJSRuntime JSRuntime
+@using DesignMode.AI.Client.Services;
+@using System.Text;
+
+@if (Show)
+{
+    <div class="modal-overlay" @onclick="() => { if (!isGenerating) CloseModal(); }">
+        <div class="website-images-modal" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal" disabled="@isGenerating">×</button>
+
+            <div class="content">
+                <h2 class="title">Generate Website Images</h2>
+                <span class="ai-pill">AI RECOMMENDATION</span>
+
+                <p class="subtitle">
+                    Generate professional images for your website to improve visual appeal and engagement.
+                </p>
+
+                <div class="recommendation-section">
+                    <h3>Recommended for Websites:</h3>
+                    <ul class="recommendation-list">
+                        <li><strong>Hero/Banner Images</strong> - High-quality header images for your homepage</li>
+                        <li><strong>Product/Service Showcases</strong> - Professional images of what you offer</li>
+                        <li><strong>Team/Office Photos</strong> - Humanize your brand with authentic images</li>
+                        <li><strong>Lifestyle Context Images</strong> - Show your products/services in use</li>
+                        <li><strong>Social Proof Images</strong> - Testimonials, case studies, and results</li>
+                    </ul>
+                </div>
+
+                <div class="quantity-selector">
+                    <label for="imageQuantity">How many website images would you like to generate?</label>
+                    <div class="quantity-buttons">
+                        @foreach (var option in quantityOptions)
+                        {
+                            <button class="quantity-btn @(HowMuchMore == option.Value ? "selected" : "")"
+                                    @onclick="() => SelectQuantity(option.Value)">
+                                @option.Label
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @if (isGenerating)
+                {
+                    <div class="generating-overlay">
+                        <div class="loading-spinner"></div>
+                        <p>Generating @HowMuchMore website images... This may take a moment.</p>
+                        <div class="loading-counter">@loadingCounter</div>
+
+                        @if (generatedImages.Count > 0)
+                        {
+                            <div class="generated-preview">
+                                <p>Generated @generatedImages.Count/@HowMuchMore images so far:</p>
+                                <div class="preview-images">
+                                    @foreach (var image in generatedImages)
+                                    {
+                                        <img src="@image.ImageUrl" alt="Generated website image" class="preview-image" />
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <div class="progress-info">
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: @((generatedImages.Count * 100) / HowMuchMore)%"></div>
+                            </div>
+                            <span class="progress-text">@generatedImages.Count of @HowMuchMore images generated</span>
+                        </div>
+                    </div>
+                }
+
+                <div class="button-row">
+                    <button class="primary-action-btn"
+                            style="background-color: #1e40af;"
+                            @onclick="GenerateWebsiteImages"
+                            disabled="@isGenerating">
+                        @(isGenerating ? "Generating..." : $"Generate {HowMuchMore} Website Images")
+                    </button>
+
+                    <button class="secondary-action-btn"
+                            @onclick="SkipGeneration"
+                            disabled="@isGenerating">
+                        Skip for Now → Continue
+                    </button>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="error-message">
+                        @errorMessage
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(successMessage))
+                {
+                    <div class="success-message">
+                        @successMessage
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public int HowMuchMore { get; set; } = 5; // Default to 5 website images
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public EventCallback OnGenerateComplete { get; set; }
+    [Parameter] public EventCallback OnSkip { get; set; }
+
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> ExistingImages { get; set; } = new();
+    [Parameter] public EventCallback<List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel>> OnNewImagesGenerated { get; set; }
+
+    [Inject] private HttpClient Http { get; set; }
+    [Inject] private NavigationManager NavigationManager { get; set; }
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+
+    private bool isGenerating = false;
+    private string errorMessage = "";
+    private string successMessage = "";
+    private int loadingCounter = 0;
+    private Timer loadingTimer;
+    private List<GeneratedImage> generatedImages = new();
+
+    // Website-specific parameters
+    private List<QuantityOption> quantityOptions = new()
+    {
+        new QuantityOption { Value = 3, Label = "3 Images (Basic)" },
+        new QuantityOption { Value = 5, Label = "5 Images (Recommended)" },
+        new QuantityOption { Value = 8, Label = "8 Images (Comprehensive)" },
+        new QuantityOption { Value = 12, Label = "12 Images (Full Set)" }
+    };
+
+    private class QuantityOption
+    {
+        public int Value { get; set; }
+        public string Label { get; set; } = "";
+    }
+
+    public class GeneratedImage
+    {
+        public string ImageUrl { get; set; } = string.Empty;
+        public string ImageId { get; set; } = string.Empty;
+        public string Prompt { get; set; } = string.Empty;
+        public string ImageType { get; set; } = "";
+    }
+
+    // Website image types with prompts
+    private List<WebsiteImageType> websiteImageTypes = new()
+    {
+        new WebsiteImageType
+        {
+            Type = "Hero Banner",
+            PromptTemplate = "Professional website hero banner image for {0}. Clean, modern design with ample negative space for text overlay. High-quality, attention-grabbing, suitable for website header.",
+            AspectRatio = "16:9",
+            Width = 1920,
+            Height = 1080
+        },
+        new WebsiteImageType
+        {
+            Type = "Product Showcase",
+            PromptTemplate = "Professional product showcase image for {0}. Clean background, well-lit, focus on product details. Suitable for e-commerce or service display.",
+            AspectRatio = "1:1",
+            Width = 1200,
+            Height = 1200
+        },
+        new WebsiteImageType
+        {
+            Type = "Team/Office",
+            PromptTemplate = "Professional team or office environment image for {0}. Authentic, friendly, professional atmosphere. People collaborating or working in modern office setting.",
+            AspectRatio = "4:3",
+            Width = 1600,
+            Height = 1200
+        },
+        new WebsiteImageType
+        {
+            Type = "Lifestyle Context",
+            PromptTemplate = "Lifestyle image showing {0} in real-world use. Authentic, relatable scene showing benefits and application in daily life or business context.",
+            AspectRatio = "16:9",
+            Width = 1920,
+            Height = 1080
+        },
+        new WebsiteImageType
+        {
+            Type = "Social Proof",
+            PromptTemplate = "Professional image representing social proof for {0}. Could show testimonials, results, or success stories in visually appealing way.",
+            AspectRatio = "1:1",
+            Width = 1080,
+            Height = 1080
+        },
+        new WebsiteImageType
+        {
+            Type = "Feature Highlight",
+            PromptTemplate = "Image highlighting key features or benefits of {0}. Clean, informative, visually appealing graphic or photograph.",
+            AspectRatio = "4:3",
+            Width = 1600,
+            Height = 1200
+        }
+    };
+
+    private class WebsiteImageType
+    {
+        public string Type { get; set; } = "";
+        public string PromptTemplate { get; set; } = "";
+        public string AspectRatio { get; set; } = "";
+        public int Width { get; set; }
+        public int Height { get; set; }
+    }
+
+    private string companyDescription = "";
+    private string companyIdeaId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCompanyInfo();
+    }
+
+    private async Task LoadCompanyInfo()
+    {
+        try
+        {
+            var uri = NavigationManager.Uri;
+            var queryString = new Uri(uri).Query;
+            companyIdeaId = GetQueryParameter(queryString, "cid", "");
+
+            if (!string.IsNullOrEmpty(companyIdeaId))
+            {
+                var ideasResponse = await CallGetIdeasByCompanyIdeaId(companyIdeaId);
+                if (ideasResponse?.Ideas != null && ideasResponse.Ideas.Count > 0)
+                {
+                    // Look for website-related idea or use first one
+                    var websiteIdea = ideasResponse.Ideas.FirstOrDefault(i =>
+                        (i.Title ?? "").ToLower().Contains("website") ||
+                        (i.Title ?? "").ToLower().Contains("web") ||
+                        (i.Title ?? "").ToLower().Contains("online"));
+
+                    var firstIdea = ideasResponse.Ideas.FirstOrDefault();
+                    companyDescription = websiteIdea != null ?
+                        $"{websiteIdea.Title}: {websiteIdea.Description}" :
+                        (firstIdea != null ? $"{firstIdea.Title}: {firstIdea.Description}" : "");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading company info: {ex.Message}");
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+    }
+
+    private void SelectQuantity(int quantity)
+    {
+        if (!isGenerating)
+        {
+            HowMuchMore = quantity;
+            StateHasChanged();
+        }
+    }
+
+    private async Task GenerateWebsiteImages()
+    {
+        if (string.IsNullOrEmpty(companyDescription))
+        {
+            errorMessage = "Unable to generate images: Company information not found.";
+            return;
+        }
+
+        try
+        {
+            isGenerating = true;
+            errorMessage = "";
+            successMessage = "";
+            generatedImages.Clear();
+            StateHasChanged();
+
+            // Start loading counter
+            loadingCounter = 0;
+            loadingTimer = new Timer(async _ =>
+            {
+                loadingCounter++;
+                if (loadingCounter > 99) loadingCounter = 0;
+                await InvokeAsync(StateHasChanged);
+            }, null, 0, 1000);
+
+            var newImageModels = new List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel>();
+
+            // Generate images based on selected quantity
+            for (int i = 0; i < HowMuchMore; i++)
+            {
+                try
+                {
+                    // Select image type (cycling through available types)
+                    var imageTypeIndex = i % websiteImageTypes.Count;
+                    var websiteImageType = websiteImageTypes[imageTypeIndex];
+
+                    // Create prompt for this image
+                    var prompt = string.Format(websiteImageType.PromptTemplate, companyDescription);
+
+                    // Add website-specific styling
+                    prompt += " | Professional website image, high resolution, clean, modern, corporate, professional photography, suitable for website use, 4K quality, sharp focus, well-composed";
+
+                    // Generate the image
+                    var imageUrl = await CallRunwareImageFunction(
+                        prompt,
+                        websiteImageType.Width,
+                        websiteImageType.Height,
+                        1
+                    );
+
+                    if (!string.IsNullOrEmpty(imageUrl))
+                    {
+                        // Generate timestamp
+                        string timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+
+                        // Save the image idea
+                        string imageId = await CallSaveImageIdeaFunction(
+                            "Website",
+                            websiteImageType.Type,
+                            prompt,
+                            imageUrl,
+                            "", // PromptId - can be empty for website images
+                            timestamp,
+                            (i + 1).ToString()
+                        );
+
+                        var generatedImage = new GeneratedImage
+                            {
+                                ImageUrl = imageUrl,
+                                ImageId = imageId ?? string.Empty,
+                                Prompt = prompt,
+                                ImageType = websiteImageType.Type
+                            };
+
+                        generatedImages.Add(generatedImage);
+
+                        // Convert to ImageIdeaModel
+                        var imageModel = new DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel
+                            {
+                                Id = imageId ?? Guid.NewGuid().ToString(),
+                                ImageUrl = imageUrl,
+                                ImagePrompt = prompt,
+                                DeliverableType = "Website",
+                                SubCategory = websiteImageType.Type
+                            };
+
+                        newImageModels.Add(imageModel);
+
+                        StateHasChanged();
+
+                        // Small delay between generations
+                        if (i < HowMuchMore - 1)
+                        {
+                            await Task.Delay(2500); // 2.5 second delay
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error generating website image {i + 1}: {ex.Message}");
+                }
+            }
+
+            // Success!
+            successMessage = $"Successfully generated {generatedImages.Count} website images!";
+
+            // Add new images to existing images list
+            if (newImageModels.Any() && OnNewImagesGenerated.HasDelegate)
+            {
+                await OnNewImagesGenerated.InvokeAsync(newImageModels);
+            }
+
+            // Auto-close after 2 seconds
+            await Task.Delay(2000);
+
+            // Notify completion
+            if (OnGenerateComplete.HasDelegate)
+            {
+                await OnGenerateComplete.InvokeAsync();
+            }
+
+            // Close modal
+            await CloseModal();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error generating website images: {ex.Message}";
+            Console.WriteLine($"❌ Error in GenerateWebsiteImages: {ex.Message}");
+        }
+        finally
+        {
+            isGenerating = false;
+            loadingTimer?.Dispose();
+            StateHasChanged();
+        }
+    }
+
+    private async Task SkipGeneration()
+    {
+        if (OnSkip.HasDelegate)
+        {
+            await OnSkip.InvokeAsync();
+        }
+        await CloseModal();
+    }
+
+    private async Task<string> CallRunwareImageFunction(string positivePrompt, int width, int height, int numberResults)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            string functionUrl = $"{ApiConfig.ApiBaseUrl}api/CallRunwareAPI?code=REDACTED_FOR_GROOMING";
+
+            var requestBody = new
+            {
+                positivePrompt = positivePrompt,
+                width = width,
+                height = height,
+                numberResults = numberResults
+            };
+
+            var response = await client.PostAsJsonAsync(functionUrl, requestBody);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<RunwareResponse>();
+
+                if (result != null && result.Data != null)
+                {
+                    var firstUrl = result.Data
+                        .Where(img => !string.IsNullOrWhiteSpace(img.ImageURL))
+                        .Select(img => img.ImageURL)
+                        .FirstOrDefault();
+
+                    return firstUrl ?? string.Empty;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception in CallRunwareImageFunction: {ex.Message}");
+        }
+
+        return string.Empty;
+    }
+
+    private async Task<string> CallSaveImageIdeaFunction(string deliverableType, string subCategory, string imagePrompt, string imageUrl, string promptId, string timeStamp, string countId)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            string functionUrl = $"{ApiConfig.ApiBaseUrl}api/SaveImageIdea?code=REDACTED_FOR_GROOMING";
+
+            var requestBody = new
+            {
+                DeliverableType = deliverableType,
+                SubCategory = subCategory,
+                ImagePrompt = imagePrompt,
+                ImageUrl = imageUrl,
+                PromptId = promptId,
+                TimeStamp = timeStamp,
+                CountId = countId
+            };
+
+            var response = await client.PostAsJsonAsync(functionUrl, requestBody);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var responseObject = System.Text.Json.JsonSerializer.Deserialize<SaveImageIdeaResponse>(
+                    responseContent,
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                );
+
+                return responseObject?.Id;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception in CallSaveImageIdeaFunction: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private async Task<IdeasResponse> CallGetIdeasByCompanyIdeaId(string companyIdeaId)
+    {
+        try
+        {
+            var url = $"{ApiConfig.ApiBaseUrl}api/GetIdeasByCompanyIdeaId?code=REDACTED_FOR_GROOMING&companyIdeaId={companyIdeaId}";
+            var response = await Http.GetAsync(url);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<IdeasResponse>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error calling GetIdeasByCompanyIdeaId: {ex.Message}");
+        }
+
+        return new IdeasResponse { Ideas = new List<IdeaDto>(), Count = 0 };
+    }
+
+    private string GetQueryParameter(string queryString, string key, string defaultValue)
+    {
+        try
+        {
+            var query = System.Web.HttpUtility.ParseQueryString(queryString);
+            return query[key] ?? defaultValue;
+        }
+        catch
+        {
+            return defaultValue;
+        }
+    }
+
+    public void Dispose()
+    {
+        loadingTimer?.Dispose();
+    }
+
+    // Response classes
+    public class RunwareResponse
+    {
+        public List<RunwareImage> Data { get; set; } = new();
+    }
+
+    public class RunwareImage
+    {
+        public string ImageURL { get; set; } = string.Empty;
+    }
+
+    public class SaveImageIdeaResponse
+    {
+        public string Id { get; set; } = "";
+    }
+
+    public class IdeaDto
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+
+    public class IdeasResponse
+    {
+        public List<IdeaDto> Ideas { get; set; } = new();
+        public int Count { get; set; }
+    }
+}
+
+<style>
+    /* Modal overlay */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    /* Modal wrapper */
+    .website-images-modal {
+        width: 700px;
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+        position: relative;
+        max-width: 90vw;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    /* Close button */
+    .modal-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        font-size: 24px;
+        border: none;
+        background: #f3f4f6;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        line-height: 1;
+    }
+
+        .modal-close:hover {
+            background: #e5e7eb;
+        }
+
+    /* Title */
+    .title {
+        font-size: 28px;
+        font-weight: 700;
+        margin: 8px 0 18px 0;
+        color: #111827;
+        line-height: 1.2;
+    }
+
+    /* Pill Tag */
+    .ai-pill {
+        display: inline-block;
+        background: #dbeafe;
+        color: #1e40af;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 11px;
+    }
+
+    /* Subtitle */
+    .subtitle {
+        font-size: 18px;
+        color: #374151;
+        margin: 8px 0 20px 0;
+        line-height: 1.5;
+        font-weight: 500;
+    }
+
+    /* Recommendation section */
+    .recommendation-section {
+        background: #f8fafc;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 0;
+        border-left: 4px solid #3b82f6;
+    }
+
+        .recommendation-section h3 {
+            color: #1e40af;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+    .recommendation-list {
+        margin: 0;
+        padding-left: 20px;
+    }
+
+        .recommendation-list li {
+            margin-bottom: 8px;
+            color: #4b5563;
+            line-height: 1.5;
+        }
+
+    /* Quantity selector */
+    .quantity-selector {
+        margin: 25px 0;
+    }
+
+        .quantity-selector label {
+            display: block;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+    .quantity-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .quantity-btn {
+        padding: 10px 20px;
+        border: 2px solid #d1d5db;
+        background: white;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+
+        .quantity-btn:hover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        .quantity-btn.selected {
+            border-color: #3b82f6;
+            background: #3b82f6;
+            color: white;
+        }
+
+    /* Buttons Row */
+    .button-row {
+        display: flex;
+        gap: 16px;
+        margin-top: 31px;
+    }
+
+    /* Primary button */
+    .primary-action-btn {
+        background: #1e40af;
+        color: #fff;
+        padding: 14px 28px;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        flex: 1;
+        transition: background-color 0.2s;
+    }
+
+        .primary-action-btn:hover:not(:disabled) {
+            background: #1e3a8a;
+        }
+
+    /* Secondary button */
+    .secondary-action-btn {
+        background: #fff;
+        border: 1px solid #d1d5db;
+        padding: 14px 28px;
+        font-size: 16px;
+        font-weight: 500;
+        border-radius: 8px;
+        cursor: pointer;
+        color: #374151;
+        flex: 1;
+        transition: background-color 0.2s;
+    }
+
+        .secondary-action-btn:hover:not(:disabled) {
+            background: #f9fafb;
+        }
+
+    /* Generating overlay */
+    .generating-overlay {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 25px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        margin: 25px 0;
+    }
+
+    .loading-spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #1e40af;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+    }
+
+    .loading-counter {
+        font-size: 16px;
+        color: #666;
+        margin-top: 15px;
+        font-family: monospace;
+        background: #f1f1f1;
+        padding: 5px 15px;
+        border-radius: 20px;
+    }
+
+    /* Progress bar */
+    .progress-info {
+        width: 100%;
+        max-width: 400px;
+        margin-top: 25px;
+    }
+
+    .progress-bar {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: #10b981;
+        transition: width 0.3s ease;
+    }
+
+    .progress-text {
+        font-size: 14px;
+        color: #6b7280;
+        text-align: center;
+        display: block;
+    }
+
+    /* Error message */
+    .error-message {
+        background: #fee;
+        border: 1px solid #fcc;
+        color: #c33;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-top: 20px;
+        font-size: 14px;
+    }
+
+    /* Success message */
+    .success-message {
+        background: #d1fae5;
+        border: 1px solid #a7f3d0;
+        color: #065f46;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-top: 20px;
+        font-size: 14px;
+    }
+
+    /* Generated preview */
+    .generated-preview {
+        margin-top: 20px;
+        text-align: center;
+    }
+
+    .preview-images {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 15px;
+    }
+
+    .preview-image {
+        width: 90px;
+        height: 90px;
+        object-fit: cover;
+        border-radius: 6px;
+        border: 2px solid #1e40af;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Responsive adjustments */
+    @@media (max-width: 768px) {
+        .website-images-modal {
+            padding: 24px;
+            width: 95%;
+        }
+
+        .button-row {
+            flex-direction: column;
+        }
+
+        .quantity-buttons {
+            flex-direction: column;
+        }
+
+        .quantity-btn {
+            width: 100%;
+        }
+
+        .title {
+            font-size: 24px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+        }
+
+        .preview-images {
+            gap: 8px;
+        }
+
+        .preview-image {
+            width: 70px;
+            height: 70px;
+        }
+    }
+</style>

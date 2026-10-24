@@ -1,0 +1,3341 @@
+@inherits DesignMode.AI.Client.Components.GenerationAwareComponent
+@using System.Collections.Generic
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components;
+@using Microsoft.AspNetCore.Components.Authorization;
+@using Newtonsoft.Json;
+@using System.Text;
+@using System.Text.RegularExpressions;
+@inject IJSRuntime JSRuntime
+@inject AttributionContextService AttributionContext
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+@if (IsBusy)
+{
+    <div class="modal-busy-overlay">
+        <div class="loader"></div>
+    </div>
+}
+
+@if (Show)
+{
+    <div class="modal-overlay generation-workspace-overlay" @onclick="CloseModal">
+        <div class="vertical-modal-wrapper generation-workspace" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+
+            <!-- Tabs Navigation -->
+            <div class="modal-tabs">
+                <button class="tab-button @(ActiveTab == TabType.GenerateNew ? "active" : "")"
+                        @onclick="() => SetActiveTab(TabType.GenerateNew)">
+                    <span class="tab-icon">✨</span>
+                    Generate New
+                </button>
+                <button class="tab-button @(ActiveTab == TabType.GeneratedWebsite ? "active" : "")"
+                        aria-label="Generated Websites"
+                        @onclick="() => SetActiveTab(TabType.GeneratedWebsite)"
+                        disabled="@(!HasExistingVersions && !IsGeneratingWebsite && string.IsNullOrWhiteSpace(GeneratedWebsiteHtml))">
+                    <span class="tab-icon">🌐</span>
+                    Results
+                    @if (HasExistingVersions && !IsGeneratingWebsite)
+                    {
+                        <span class="tab-badge">@sortedWebsites.Count</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(GeneratedWebsiteHtml) && !IsGeneratingWebsite && !HasExistingVersions)
+                    {
+                        <span class="tab-badge">New</span>
+                    }
+                    @if (IsGeneratingWebsite)
+                    {
+                        <span class="tab-badge generating">Generating...</span>
+                    }
+                </button>
+            </div>
+
+            <div class="modal-scroll-content">
+                <!-- Generate New Tab Content -->
+                @if (ActiveTab == TabType.GenerateNew)
+                {
+                    <div class="tab-content generate-new-tab">
+                        <div class="modal-header">
+                            <h2>Generate Website</h2>
+                        </div>
+                        <div style="margin-bottom: 30px;">
+                            Select <strong>one image</strong> to include in your website. We'll create a responsive website based on your selected image and branding.
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(imageGenerationError))
+                        {
+                            <div class="error-message" role="alert">@imageGenerationError</div>
+                        }
+                        <!-- Brand Kit Status -->
+                        <div class="brand-kit-status">
+                            <span class="brand-kit-count">
+                                <span class="brand-kit-icon">🌐</span>
+
+                                @if (HasWebsiteImages())
+                                {
+                                    <span>Website images ready</span>
+                                }
+                                else
+                                {
+                                    <span style="font-weight:bold;">No images available</span>
+
+                                    <span style="font-weight:normal;"> – Generate images first to unlock website creation</span>
+                                }
+                            </span>
+                        </div>
+
+                        <AIRecommendationGenerationLoader IsVisible="@isGeneratingWebsiteImages" Message="Generating website UI preview..." />
+                        @if (IsBusy && !isGeneratingWebsiteImages)
+                        {
+                            <div class="loading-container text-center">
+                                <div class="spinner-border text-primary mb-2"></div>
+                                <p>Loading images...</p>
+                            </div>
+                        }
+                        else if (!isGeneratingWebsiteImages)
+                        {
+                            <div class="image-grid">
+                                @if (SelectedImages != null && SelectedImages.Any())
+                                {
+                                    @if (HasWebsiteImages())
+                                    {
+                                        // Get all unique website images (excluding duplicates)
+                                        var allWebsiteImages = GetUniqueWebsiteImages();
+
+                                        // Group by DeliverableType and SubCategory
+                                        var groupedImages = allWebsiteImages
+                                        .GroupBy(img => img.SubCategory?.ToLower() == "generic" ? img.DeliverableType : img.SubCategory);
+
+                                        @foreach (var group in groupedImages)
+                                        {
+                                            var firstImage = group.First();
+                                            var sectionTitle = group.Key;
+
+                                            // If this is a generic group, get the DeliverableType from the first image
+                                            if (firstImage.SubCategory?.ToLower() == "generic")
+                                            {
+                                                sectionTitle = firstImage.DeliverableType;
+                                            }
+
+                                            // Only render the section if there are images with valid URLs
+                                            var validImages = group
+                                            .Where(i => !string.IsNullOrWhiteSpace(i.ImageUrl))
+                                            .OrderBy(i => i.CountId)
+                                            .ToList();
+
+                                            if (validImages.Any())
+                                            {
+                                                <div class="deliverable-section">
+                                                    <h3 class="section-title">@sectionTitle</h3>
+                                                    <div class="image-col">
+                                                        @foreach (var image in validImages)
+                                                        {
+                                                            @ImageCard(image)
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <!-- Only show the "No Website Images Yet" section if we haven't generated any images -->
+                                        @if (!isGeneratingWebsiteImages && !HasWebsiteImages())
+                                        {
+                                            <div class="empty-state">
+                                                <div style="margin-bottom: 20px;">
+                                                    <div style="font-size: 48px; margin-bottom: 16px;">🌐</div>
+                                                    <h3 style="font-size: 1.5rem; color: #666; margin-bottom: 16px;">No Website Images Yet</h3>
+                                                    <p style="color: #888; margin-bottom: 24px; max-width: 500px; margin-left: auto; margin-right: auto;">
+                                                        Create website or digital marketing images and we'll automatically use them to build your site.
+                                                    </p>
+                                                </div>
+
+                                                <div style="margin-bottom: 30px; background: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #eee;">
+                                                    <button class="generate-images-button"
+                                                            @onclick="GoToGenerateImages"
+                                                            disabled="@isGeneratingWebsiteImages"
+                                                            style="background-color: #244d88; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background-color 0.3s; @(isGeneratingWebsiteImages ? "opacity: 0.7; cursor: not-allowed;" : "")">
+                                                        @if (isGeneratingWebsiteImages)
+                                                        {
+                                                            <span style="display: inline-flex; align-items: center; gap: 8px;">
+                                                                <span class="website-generating-spinner"></span>
+                                                                Generating Website Image...
+                                                                <span style="font-size: 12px; opacity: 0.8;">(@currentGenerationIndex/@totalGenerations)</span>
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>Generate Website Image</span>
+                                                        }
+                                                    </button>
+                                                    <p style="color: #666; font-size: 0.95rem; margin-bottom: 16px;">
+                                                        Images are used for layout, branding, and visual sections.
+                                                    </p>
+                                                    <h4 style="color: #244d88; margin-bottom: 12px; font-size: 1.1rem;">
+                                                        Generate Digital Marketing Images
+                                                    </h4>
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+
+                                    <!-- Show loading indicator for newly generating images -->
+                                    @if (isGeneratingWebsiteImages && !HasWebsiteImages())
+                                    {
+                                        <div class="image-generating-section">
+                                            <h3 class="section-title">Generating Website Image...</h3>
+                                            <p style="color: #666; margin-bottom: 16px; font-size: 14px;">
+                                                Creating a website-optimized image based on your content. This may take a moment.
+                                            </p>
+                                            <div class="image-col">
+                                                <!-- Show only 1 loading placeholder -->
+                                                <div class="image-card image-card-loading">
+                                                    <div class="loading-placeholder">
+                                                        <div class="loading-spinner-small"></div>
+                                                        <span>Generating website image...</span>
+                                                        @if (currentGenerationIndex >= 1)
+                                                        {
+                                                            <span style="color: #4CAF50; font-size: 12px;">✓ Done</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span style="color: #244d88; font-size: 12px;">● Generating...</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="empty-state">
+                                        <p>No images available</p>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <!-- Website Configuration Options -->
+                        <div class="website-config-section" style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                            <h3 style="margin-bottom: 15px; color: #244d88;">Website Configuration</h3>
+
+                            <div class="config-options" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
+                                <div class="config-option">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
+                                        Website Type
+                                    </label>
+                                    <select @bind="SelectedWebsiteType" class="config-select" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                                        <option value="LandingPage">Landing Page</option>
+                                        <option value="Portfolio">Portfolio</option>
+                                        <option value="Ecommerce">E-commerce</option>
+                                        <option value="Business">Business Website</option>
+                                    </select>
+                                </div>
+
+                                <div class="config-option">
+                                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
+                                        Color Scheme
+                                    </label>
+                                    <select @bind="SelectedColorScheme" class="config-select" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                                        <option value="Light">Light Theme</option>
+                                        <option value="Dark">Dark Theme</option>
+                                        <option value="BrandColors">Use Brand Colors</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="config-options" style="margin-top: 15px;">
+                                <div class="config-option">
+                                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600; color: #333;">
+                                        <input type="checkbox" @bind="IncludeContactForm" />
+                                        Include Contact Form
+                                    </label>
+                                </div>
+
+                                <div class="config-option" style="margin-top: 10px;">
+                                    <label style="display: flex; align-items: center; gap: 10px; font-weight: 600; color: #333;">
+                                        <input type="checkbox" @bind="MakeResponsive" />
+                                        Mobile Responsive
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Generated Website Tab Content -->
+                @if (ActiveTab == TabType.GeneratedWebsite)
+                {
+                    <div class="tab-content generated-website-tab">
+                        <div class="modal-header" style="margin-top: 7px;">
+                            <h2 style="margin-bottom: 30px;">Generated Website Preview</h2>
+                        </div>
+
+                        @if (IsGeneratingWebsite)
+                        {
+                            <div class="generation-loading-container">
+                                <div class="generation-header">
+                                    <h3>Building Your Website</h3>
+                                    <div class="generation-status">@GenerationStatus</div>
+                                </div>
+
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar" style="width: @(GenerationProgress)%;"></div>
+                                </div>
+
+                                <div class="current-step-details">
+                                    @CurrentStepDetails
+                                </div>
+
+                                <div class="generation-steps-log">
+                                    <h4>Generation Steps:</h4>
+                                    <div class="steps-list">
+                                        @foreach (var step in GenerationSteps)
+                                        {
+                                            <div class="step-item">
+                                                <span class="step-check">✓</span>
+                                                <span class="step-text">@step</span>
+                                            </div>
+                                        }
+                                        @if (GenerationSteps.Count > 0 && GenerationProgress < 100)
+                                        {
+                                            <div class="step-item current">
+                                                <span class="step-spinner"></span>
+                                                <span class="step-text">@GenerationStatus</span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="generation-visual">
+                                    <div class="website-skeleton">
+                                        <div class="skeleton-header"></div>
+                                        <div class="skeleton-hero"></div>
+                                        <div class="skeleton-content">
+                                            <div class="skeleton-row"></div>
+                                            <div class="skeleton-row"></div>
+                                            <div class="skeleton-row"></div>
+                                        </div>
+                                        <div class="skeleton-footer"></div>
+                                    </div>
+                                </div>
+
+                                <div class="generation-tip">
+                                    💡 Tip: The AI is crafting a unique website based on your selected images and branding
+                                </div>
+                            </div>
+                        }
+                        else if (HasExistingVersions || !string.IsNullOrWhiteSpace(GeneratedWebsiteHtml))
+                        {
+                            var name = SelectedWebsiteName.Replace(" ","").ToLower() + ".com";
+                            <!-- Current Website Preview -->
+                            @if (!string.IsNullOrWhiteSpace(GeneratedWebsiteHtml))
+                            {
+                                    // Get current version and other versions
+                                    var currentVersionRecord = sortedWebsites.FirstOrDefault(s => s.Version == $"v{currentVersion}");
+                                    var otherVersions = sortedWebsites.Where(s => s.Version != $"v{currentVersion}").OrderByDescending(s => s.Version);
+                                    var liveViewUrl = "";
+                                    // Display current version first if it exists
+                                    if (currentVersionRecord != null)
+                                    {
+                                        var safeCompanyName = string.Concat(SelectedWebsiteName
+                                        .Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+                                        .Replace(" ", "-").Replace("&", "");
+                                        var versionNumber = currentVersionRecord.Version?.Replace("v", "");
+                                        liveViewUrl = $"{ApiConfig.StorageBaseUrl}" + safeCompanyName + $"-v{versionNumber}" + "/index.html";
+                                    }
+                                <div class="preview-controls" style="
+max-width: 950px;
+margin: 0 auto 12px auto;
+background: linear-gradient(180deg, #ffffff, #f8f9fc);
+border: 1px solid #e6e8ef;
+border-radius: 12px;
+padding: 10px;
+display: flex;
+align-items: center;
+justify-content: space-between;
+box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+                            ">
+
+                                    <!-- LEFT: Tabs -->
+                                    <div style="display: flex; gap: 6px;">
+
+                                        <!-- Live View (ACTIVE) -->
+                                        <button @onclick="() => OpenLiveView(liveViewUrl)" style="
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: none;
+    background: #f5f5f8;
+    color: #3c3b4c;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 10px rgba(91,108,255,0.3);
+    cursor: pointer;
+                ">
+                                            🌐 Live View
+                                        </button>
+                                        <button @onclick="() => DownloadWebsiteAsync(SelectedWebsiteName, currentVersion)"
+                                                style="
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid #e0e3eb;
+        background: white;
+        color: #444;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+                    ">
+                                            📥 Download
+                                        </button>
+                                        <!-- Edit -->
+                                        <button style="
+        padding: 8px 14px;
+        border-radius: 8px;
+        border: 1px solid #e0e3eb;
+        background: white;
+        color: #444;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+                                    ">
+                                            ✏️ Next: Edit with Designer →
+                                        </button>
+                                        <!-- Edit -->
+                                    </div>
+                                </div>
+                                <div class="browser-mockup" style="border: 1px solid #ddd; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); background: white; max-width: 950px; margin: 0 auto;">
+                                    <div class="browser-header" style="background: #f1f1f1; padding: 10px 15px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #ddd;">
+                                        <div class="dots" style="display: flex; gap: 6px;">
+                                            <span style="width: 10px; height: 10px; border-radius: 50%; background: #ff5f56;"></span>
+                                            <span style="width: 10px; height: 10px; border-radius: 50%; background: #ffbd2e;"></span>
+                                            <span style="width: 10px; height: 10px; border-radius: 50%; background: #27c93f;"></span>
+                                        </div>
+                                        <div class="address-bar" style="flex-grow: 1; background: white; border-radius: 4px; padding: 4px 12px; font-size: 13px; color: #666; display: flex; align-items: center; gap: 8px; border: 1px solid #e0e0e0;">
+                                            <span>🔒 @name</span>
+                                        </div>
+                                        <div class="browser-actions" style="display: flex; gap: 12px; color: #777;">
+                                            <span>🔄</span> <span>🔍</span> <span>⤢</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="preview-frame" style="position: relative; background: #fff;">
+                                        @if (!string.IsNullOrWhiteSpace(GeneratedWebsiteHtml))
+                                        {
+                                            <img src="@GeneratedWebsiteHtml" style="width: 100%; border: none;" />
+                                        }
+                                        else
+                                        {
+                                            <div style="padding: 100px; text-align: center; color: #999;">Select a version below to load the preview</div>
+                                        }
+                                    </div>
+
+   @*                                  <div class="inline-footer-bar" style="padding: 15px 20px; background: white; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                                        <button class="btn-secondary" @onclick="CloseModal" style="padding: 8px 24px; border: 1px solid #ddd; border-radius: 20px; background: white; cursor: pointer;">Return</button>
+                                        <div style="display: flex; gap: 10px;">
+                                            <button class="btn-primary" style="padding: 8px 24px; background: #626ed4; color: white; border: none; border-radius: 6px; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                                Finish with Designer <span>›</span>
+                                            </button>
+                                        </div>
+                                    </div> *@
+                                </div>
+                            }
+                            else if (HasExistingVersions)
+                            {
+                                <div class="website-preview">
+                                    <h4>Select a version above to preview</h4>
+                                    <div class="preview-placeholder">
+                                        <p>Click "View Version" on any website version to see its preview</p>
+                                    </div>
+                                </div>
+                            }
+                            <div class="website-preview-container">
+                                <div class="website-info">
+                                    <div class="info-item">
+                                        <span class="info-label">Website Name:</span>
+                                        <span class="info-value">@SelectedWebsiteName</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Industry:</span>
+                                        <span class="info-value">@SelectedIndustry</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Type:</span>
+                                        <span class="info-value">@SelectedWebsiteType</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Color Scheme:</span>
+                                        <span class="info-value">@SelectedColorScheme</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Total Versions:</span>
+                                        <span class="info-value">@sortedWebsites.Count</span>
+                                    </div>
+                                </div>
+
+                                <!-- All Versions Screenshots Section - Current version on top -->
+                                @if (sortedWebsites != null && sortedWebsites.Any())
+                                {
+                                    <div class="versions-screenshots-section">
+                                        <h4>Website Versions (@sortedWebsites.Count total)</h4>
+                                        <div class="versions-grid">
+                                            @{
+                                                // Get current version and other versions
+                                                var currentVersionRecord = sortedWebsites.FirstOrDefault(s => s.Version == $"v{currentVersion}");
+                                                var otherVersions = sortedWebsites.Where(s => s.Version != $"v{currentVersion}").OrderByDescending(s => s.Version);
+                                                
+                                                // Display current version first if it exists
+                                                if (currentVersionRecord != null)
+                                                {
+                                                    var safeCompanyName = string.Concat(SelectedWebsiteName
+                                                        .Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+                                                        .Replace(" ", "-").Replace("&", "");
+                                                    var versionNumber = currentVersionRecord.Version?.Replace("v", "");
+                                                    var screenshotUrl = $"{ApiConfig.StorageBaseUrl}" + safeCompanyName + $"-v{versionNumber}" + "/website-shot.png";
+                                                    
+                                                    <div class="version-card current-version">
+                                                        <div class="version-header">
+                                                            <span class="version-number">Version @currentVersionRecord.Version (Current)</span>
+                                                            <span class="version-date">@FormatDateTime(currentVersionRecord.TimeStamp)</span>
+                                                        </div>
+                                                        <div class="version-screenshot">
+                                                            <img src="@screenshotUrl" 
+                                                                 alt="Website version @currentVersionRecord.Version" 
+                                                                 onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'150\' viewBox=\'0 0 200 150\'%3E%3Crect width=\'200\' height=\'150\' fill=\'%23f0f0f0\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%23999\' font-size=\'14\'%3ENo screenshot%3C/text%3E%3C/svg%3E';" 
+                                                                 class="version-thumbnail" />
+                                                        </div>
+                                                        <div class="version-actions">
+                                                            <button class="view-version-button" @onclick="() => ViewVersion(currentVersionRecord)">
+                                                                View Version
+                                                            </button>
+                                                            <span class="current-badge">Current</span>
+                                                        </div>
+                                                    </div>
+                                                }
+                                                
+                                                // Display other versions
+                                                foreach (var site in otherVersions)
+                                                {
+                                                    var safeCompanyName = string.Concat(SelectedWebsiteName
+                                                        .Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+                                                        .Replace(" ", "-").Replace("&", "");
+                                                    var versionNumber = site.Version?.Replace("v", "");
+                                                    var screenshotUrl = $"{ApiConfig.StorageBaseUrl}" + safeCompanyName + $"-v{versionNumber}" + "/website-shot.png";
+                                                    
+                                                    <div class="version-card">
+                                                        <div class="version-header">
+                                                            <span class="version-number">Version @site.Version</span>
+                                                            <span class="version-date">@FormatDateTime(site.TimeStamp)</span>
+                                                        </div>
+                                                        <div class="version-screenshot">
+                                                            <img src="@screenshotUrl" 
+                                                                 alt="Website version @site.Version" 
+                                                                 onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'150\' viewBox=\'0 0 200 150\'%3E%3Crect width=\'200\' height=\'150\' fill=\'%23f0f0f0\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%23999\' font-size=\'14\'%3ENo screenshot%3C/text%3E%3C/svg%3E';" 
+                                                                 class="version-thumbnail" />
+                                                        </div>
+                                                        <div class="version-actions">
+                                                            <button class="view-version-button" @onclick="() => ViewVersion(site)">
+                                                                View Version
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-state generated-empty-state">
+                                <div style="font-size: 64px; margin-bottom: 20px;">🌐</div>
+                                <h3>No Website Generated Yet</h3>
+                                <p>Go to the "Generate New" tab to create your website.</p>
+                                <button class="generate-button" @onclick="() => SetActiveTab(TabType.GenerateNew)">
+                                    Start Generating
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Footer Actions - Only show in Generate New tab -->
+            @if (ActiveTab == TabType.GenerateNew)
+            {
+                <div class="footer-actions sticky-footer">
+                    <button class="discard-button" @onclick="CloseModal">
+                        Cancel
+                    </button>
+                    @if (IsGeneratingWebsite || isGeneratingWebsiteImages)
+                    {
+                        <button class="save-button" disabled style="background-color:#fff; color: #000;">
+                            Generating Website ...
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="save-button"
+                                @onclick="GenerateWebsite"
+                                disabled="@(!(SelectedImageIds.Any()) || IsGeneratingWebsite || isGeneratingWebsiteImages)"
+                                style="@(!SelectedImageIds.Any() ? "background-color:#eee; color: #ababab;" : null)">
+                            @GetGenerateButtonText()
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="footer-actions sticky-footer">
+                    <button class="discard-button" disabled="@(IsGeneratingWebsite || isGeneratingWebsiteImages)" @onclick="() => SetActiveTab(TabType.GenerateNew)">
+                        ← Back to Generate New Website
+                    </button>
+@*                     <button class="save-button" @onclick="() => SetActiveTab(TabType.GenerateNew)">
+                        Generate New Version
+                    </button> *@
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Inject] private AIUsageRefreshService UsageRefresh { get; set; } = default!;
+    // Add Tab enum and property
+    private enum TabType
+    {
+        GenerateNew,
+        GeneratedWebsite
+    }
+
+    private TabType ActiveTab { get; set; } = TabType.GenerateNew;
+
+    private void SetActiveTab(TabType tab)
+    {
+        ActiveTab = tab;
+        StateHasChanged();
+    }
+
+    // Add methods for download and copy functionality
+    private async Task DownloadWebsiteHtml()
+    {
+        if (string.IsNullOrWhiteSpace(GeneratedWebsiteHtml))
+            return;
+
+        var bytes = Encoding.UTF8.GetBytes(GeneratedWebsiteHtml);
+        var fileName = $"website-{SelectedWebsiteName?.Replace(" ", "-")}-{DateTime.Now:yyyyMMddHHmmss}.html";
+
+        await JS.InvokeVoidAsync("downloadFile", fileName, "text/html", bytes);
+    }
+
+    private async Task CopyWebsiteHtml()
+    {
+        if (string.IsNullOrWhiteSpace(GeneratedWebsiteHtml))
+            return;
+
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", GeneratedWebsiteHtml);
+
+        // Optional: Show a toast or notification
+        Console.WriteLine("Website HTML copied to clipboard!");
+    }
+
+    // Helper method to format datetime
+    private string FormatDateTime(string dateTimeString)
+    {
+        if (string.IsNullOrWhiteSpace(dateTimeString))
+            return "Unknown date";
+
+        try
+        {
+            if (DateTime.TryParse(dateTimeString, out DateTime dateTime))
+            {
+                return dateTime.ToString("MM/dd/yyyy hh:mm tt");
+            }
+            
+            // Try to parse ISO format
+            if (DateTime.TryParse(dateTimeString, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime isoDate))
+            {
+                return isoDate.ToString("MM/dd/yyyy hh:mm tt");
+            }
+            
+            return dateTimeString;
+        }
+        catch
+        {
+            return dateTimeString;
+        }
+    }
+
+    // Rest of your existing code remains exactly the same...
+    [Inject] private ApiConfigService ApiConfig { get; set; }
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; }
+    [Inject] private HttpClient Http { get; set; }
+    [Inject] private NavigationManager NavigationManager { get; set; }
+    [Inject] private IJSRuntime JS { get; set; } // Add this for JavaScript interop
+
+    private bool IsBusy = false;
+
+    [Parameter] public Func<string, Task<DesignMode.AI.Shared.Models.Attribution.ProjectContextResponse>> ResolveWebsiteProject { get; set; }
+    [Parameter] public Func<string, Task<Gen.ImageIdeaModel>> EnsureWebsiteImage { get; set; }
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public DesignMode.AI.Client.Pages.Init.MakeVideoModal.ImageIdeaCountResult AllIdeas { get; set; }
+
+
+    // Updated parameter to accept the selected images
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> SelectedImages { get; set; }
+
+    [Parameter] public EventCallback<List<string>> OnImagesSelected { get; set; }
+    [Parameter] public EventCallback<bool> OnWebsiteGenerated { get; set; }
+
+    // New parameter for parent's CallRunwareImageFunction
+    [Parameter] public Func<string, int, int, int, Task<string>> CallRunwareImageFunction { get; set; }
+
+    // New parameter for parent's CallSaveImageIdeaFunction
+    [Parameter] public Func<string, string, string, string, string, string, string, Task<string>> CallSaveImageIdeaFunction { get; set; }
+
+    // New parameter for parent's other functions
+    [Parameter] public string CompanyIdeaId { get; set; }
+    [Parameter] public string CompanyDescription { get; set; }
+    [Parameter] public string PromptIdFromCID { get; set; }
+    [Parameter] public string MainPromptText { get; set; }
+
+
+    [Parameter] public EventCallback<string> OnModalClosed { get; set; }
+
+    public string promptText { get; set; }
+    public string backgroundImage { get; set; } = "";
+    public string GeneratedWebsiteHtml { get; set; } = "";
+    public string SelectedWebsiteName { get; set; }
+    public string SelectedIndustry { get; set; }
+    private HashSet<string> SelectedImageIds = new();
+    private HashSet<string> SelectedImageUrls = new();
+
+    // Website configuration
+    private string SelectedWebsiteType = "LandingPage";
+    private string SelectedColorScheme = "Light";
+    private bool IncludeContactForm = true;
+    private bool MakeResponsive = true;
+
+    // For generating website images
+    private bool isGeneratingWebsiteImages = false;
+    private List<string> generatedWebsiteImageUrls = new();
+    private string? preparedImageId;
+    private List<string> websitePromptsToGenerate = new();
+    private int currentGenerationIndex = 0;
+    private int totalGenerations = 0;
+
+    // NEW: Track if an image was generated during this modal session
+
+    // Add property for sorted websites
+    private List<WebsiteRecord> sortedWebsites = new();
+    private string currentVersion = "1";
+    private bool hasLoadedVersions = false;
+
+    // Property to check if there are existing versions
+    private bool HasExistingVersions => sortedWebsites != null && sortedWebsites.Any();
+
+    private string? imageProjectId;
+    private string? imageGenerationError;
+
+    private bool HasWebsiteImages() => GetUniqueWebsiteImages().Any();
+    private bool HasWebsiteImagesOnly() => HasWebsiteImages();
+
+    private List<Gen.ImageIdeaModel> GetUniqueWebsiteImages() =>
+        (SelectedImages ?? new())
+            .Where(WebsiteImageState.IsUsable)
+            .GroupBy(image => image.Id)
+            .Select(group => group.First())
+            .ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Show)
+        {
+            autoGenerationTriggered = false;
+            return;
+        }
+        if (imageProjectId != CompanyIdeaId)
+        {
+            imageProjectId = CompanyIdeaId;
+            preparedImageId = null;
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+            autoGenerationTriggered = false;
+            hasLoadedVersions = false;
+            sortedWebsites.Clear();
+            GeneratedWebsiteHtml = "";
+            SelectedWebsiteName = "";
+            SelectedIndustry = "";
+        }
+        if (autoGenerationTriggered || isGeneratingWebsiteImages) return;
+        autoGenerationTriggered = true;
+        var cid = CompanyIdeaId;
+        var parts = (cid ?? "").Split("|~~|@@|^^|", StringSplitOptions.None);
+        if (parts.Length >= 2)
+        {
+            try
+            {
+                SelectedWebsiteName = Encoding.UTF8.GetString(Convert.FromBase64String(parts[0]));
+                SelectedIndustry = Encoding.UTF8.GetString(Convert.FromBase64String(parts[1]));
+            }
+            catch (FormatException) { /* Opaque project identity. */ }
+        }
+        if (!TrySelectExistingWebsiteImage())
+            await GoToGenerateImages();
+        if (cid != CompanyIdeaId || !Show) return;
+        if (!hasLoadedVersions && !string.IsNullOrWhiteSpace(SelectedWebsiteName))
+        {
+            hasLoadedVersions = true;
+            var safeName = string.Concat(SelectedWebsiteName.Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+                .Replace(" ", "-").Replace("&", "");
+            await LoadExistingVersionsAsync(safeName);
+        }
+    }
+
+    private async Task LoadExistingVersionsAsync(string companyName)
+    {
+        var websitesResponse = await GetWebsitesByCompanyAsync(companyName);
+        
+        if (websitesResponse?.Data != null)
+        {
+            sortedWebsites = websitesResponse.Data;
+
+            // Get the current version (latest)
+            if (sortedWebsites.Any())
+            {
+                var latestVersion = sortedWebsites.First();
+                currentVersion = latestVersion.Version?.Replace("v", "") ?? "1";
+                
+                // If there are existing versions, set the latest screenshot as the current preview
+                var safeCompanyName = string.Concat(SelectedWebsiteName
+                    .Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+                    .Replace(" ", "-").Replace("&", "");
+                GeneratedWebsiteHtml = $"{ApiConfig.StorageBaseUrl}" + safeCompanyName + $"-v{currentVersion}" + "/website-shot.png";
+            }
+
+            Console.WriteLine($"📊 Loaded {sortedWebsites.Count} existing websites (sorted by newest)");
+
+            foreach (var site in sortedWebsites)
+            {
+                Console.WriteLine($"🕒 {site.TimeStamp} | {site.Version}");
+            }
+        }
+    }
+
+    public class IdeaDto
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
+
+    public class IdeasResponse
+    {
+        public List<IdeaDto> Ideas { get; set; } = new();
+        public int Count { get; set; }
+    }
+    private async Task<IdeasResponse> CallGetIdeasByCompanyIdeaId(string companyIdeaId)
+    {
+        try
+        {
+            var url = $"{ApiConfig.ApiBaseUrl}api/GetIdeasByCompanyIdeaId?code=REDACTED_FOR_GROOMING&companyIdeaId={companyIdeaId}";
+            var response = await Http.GetAsync(url);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadFromJsonAsync<IdeasResponse>();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error calling GetIdeasByCompanyIdeaId: {ex.Message}");
+        }
+
+        return new IdeasResponse { Ideas = new List<IdeaDto>(), Count = 0 };
+    }
+    // Helper method to extract query parameter values
+    private string GetQueryParameter(string queryString, string key, string defaultValue)
+    {
+        var parameters = System.Web.HttpUtility.ParseQueryString(queryString);
+        return parameters[key] ?? defaultValue;
+    }
+    private async Task OpenLiveView(string url)
+    {
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+    }
+    private bool TrySelectExistingWebsiteImage()
+    {
+        var images = GetUniqueWebsiteImages();
+        var image = images.FirstOrDefault(i => SelectedImageIds.Contains(i.Id)) ?? images.FirstOrDefault();
+        if (image is null) return false;
+        SelectedImageIds.Clear();
+        SelectedImageUrls.Clear();
+        SelectedImageIds.Add(image.Id);
+        SelectedImageUrls.Add(image.ImageUrl);
+        imageGenerationError = null;
+        return true;
+    }
+
+    private async Task GoToGenerateImages()
+    {
+        if (isGeneratingWebsiteImages || TrySelectExistingWebsiteImage()) return;
+        await using var generationOperation = await BeginGenerationAsync();
+        var cid = CompanyIdeaId;
+        IsBusy = true;
+        isGeneratingWebsiteImages = true;
+        imageGenerationError = null;
+        StateHasChanged();
+        try
+        {
+            var image = await EnsureWebsiteImage(cid);
+            if (cid != CompanyIdeaId || !Show) return;
+            if (!WebsiteImageState.IsUsable(image)) throw new InvalidOperationException();
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+            preparedImageId = image.Id;
+            SelectedImageIds.Add(image.Id);
+            SelectedImageUrls.Add(image.ImageUrl);
+            Console.WriteLine("[WEBSITE IMAGE] modal state updated selected=true");
+        }
+        catch (Exception)
+        {
+            if (cid != CompanyIdeaId) return;
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+            imageGenerationError = "Unable to prepare the Website image. Check your AI Credits or reopen Website to retry loading the saved image.";
+            Console.WriteLine("[WEBSITE IMAGE] failed stage=modal-preparation");
+        }
+        finally
+        {
+            IsBusy = false;
+            isGeneratingWebsiteImages = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+    private async Task<string> CheckPackageLabelRelevance(string name, string industry, string prompt, string companyDescription = "")
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/CheckPackageLabelRelevance?code=REDACTED_FOR_GROOMING";
+
+        var payload = new
+        {
+            Name = name,
+            Industry = industry,
+            Prompt = prompt,
+            CompanyDescription = companyDescription
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Just return the full response string
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        return "Error: Unable to check package label relevance.";
+    }
+
+    private async Task<string> GetPackageModularFormula(string name, string industry, string prompt, string companyDescription = "")
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetPackageModularFormula?code=REDACTED_FOR_GROOMING";
+
+        var payload = new
+        {
+            Name = name,
+            Industry = industry,
+            Prompt = prompt,
+            CompanyDescription = companyDescription
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadAsStringAsync();
+
+            // Optional cleanup: remove leading/trailing quotes or whitespace
+            string cleanedResult = result.Trim().Trim('"').Trim();
+
+            return cleanedResult;
+        }
+
+        return "Error: Unable to retrieve modular packaging formula.";
+    }
+
+    private async Task<string> FetchCompanyDescription(string name, string industry, string prompt)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetCompanyDescription?code=REDACTED_FOR_GROOMING";
+
+        var payload = new
+        {
+            Name = name,
+            Industry = industry,
+            Prompt = prompt
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadAsStringAsync();
+
+            // Normalize newlines and collapse to one line
+            string singleLine = Regex.Replace(result, @"\s*\r?\n\s*", " ").Trim();
+            return singleLine;
+        }
+
+        return "Error: Unable to fetch company description.";
+    }
+
+    private async Task<string> FetchDeliverableDetail(string deliverable)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetDeliverableDetail?code=REDACTED_FOR_GROOMING";
+
+        var content = new StringContent($"\"{deliverable}\"", System.Text.Encoding.UTF8, "application/json");
+
+        var response = await client.PostAsync(functionUrl, content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var detail = await response.Content.ReadAsStringAsync();
+
+            // Normalize newlines and collapse to one line
+            string singleLine = Regex.Replace(detail, @"\s*\r?\n\s*", " ").Trim();
+            return singleLine;
+        }
+
+        return "Error: Unable to fetch deliverable detail.";
+    }
+
+    private async Task<string> FetchPromptId(string userId, string companyIdeaId)
+    {
+        HttpClient client = new HttpClient();
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetPromptIdForCompanyIdea?code=REDACTED_FOR_GROOMING&userId={Uri.EscapeDataString(userId)}&companyIdeaId={Uri.EscapeDataString(companyIdeaId)}";
+
+        var response = await client.GetAsync(functionUrl);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var promptId = await response.Content.ReadAsStringAsync();
+            return promptId.Trim('"'); // Remove extra quotes if returned as a string
+        }
+
+        return "Error: Unable to fetch prompt ID.";
+    }
+    private async Task<string> FetchPromptText(string promptId)
+    {
+        using HttpClient client = new HttpClient();
+
+        // Construct the function URL
+        string functionUrl = $"{ApiConfig.ApiBaseUrl}api/GetPromptById?code=REDACTED_FOR_GROOMING&promptId={Uri.EscapeDataString(promptId)}";
+
+        var response = await client.GetAsync(functionUrl);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var promptText = await response.Content.ReadAsStringAsync();
+            return promptText.Trim('"'); // Remove extra quotes if returned as JSON string
+        }
+
+        return "Error: Unable to fetch prompt text.";
+    }
+
+    private bool autoGenerationTriggered = false;
+
+    private bool IsWebRelated(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        string[] webKeywords =
+        {
+        "web",
+        "website",
+        "ux",
+        "ui",
+        "ux/ui",
+        "user experience",
+        "user interface",
+        "frontend",
+        "front-end",
+        "web design",
+        "web app",
+        "landing page"
+    };
+
+        return webKeywords.Any(keyword =>
+            text.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Method to get only 1 website prompt
+    private List<string> GetSingleWebsitePrompt()
+    {
+        var websitePrompts = new List<string>();
+
+        if (SelectedImages == null || !SelectedImages.Any())
+            return websitePrompts;
+
+        // Look for images that are already website-related
+        var existingWebsiteImages = SelectedImages
+            .Where(img => !string.IsNullOrWhiteSpace(img.ImagePrompt) &&
+                         (img.DeliverableType?.ToLower().Contains("web") == true ||
+                          img.SubCategory?.ToLower().Contains("web") == true ||
+                          img.DeliverableType?.ToLower().Contains("digital") == true ||
+                          img.SubCategory?.ToLower().Contains("digital") == true ||
+                          img.DeliverableType?.ToLower().Contains("website") == true ||
+                          img.SubCategory?.ToLower().Contains("website") == true))
+            .Select(img => img.ImagePrompt)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .ToList();
+
+        if (existingWebsiteImages.Any())
+        {
+            // Use the first existing website prompt
+            websitePrompts.Add(existingWebsiteImages.First());
+        }
+        else if (SelectedImages.Any(img => !string.IsNullOrWhiteSpace(img.ImagePrompt)))
+        {
+            // Transform the first non-website prompt for website use
+            var firstImageWithPrompt = SelectedImages.First(img => !string.IsNullOrWhiteSpace(img.ImagePrompt));
+            var websitePrompt = TransformPromptForWebsite(firstImageWithPrompt.ImagePrompt);
+            websitePrompts.Add(websitePrompt);
+        }
+        else
+        {
+            // Default prompt
+            websitePrompts.Add("modern website hero banner with clean design, professional layout, web interface");
+        }
+
+        return websitePrompts.Take(1).ToList(); // Only take 1 prompt
+    }
+
+    private List<string> GetWebsitePromptsFromSelectedImages()
+    {
+        // Now returns only 1 prompt
+        return GetSingleWebsitePrompt();
+    }
+
+    private string TransformPromptForWebsite(string originalPrompt)
+    {
+        // Transform the prompt to be more website-focused
+        var transformed = originalPrompt;
+
+        // Remove any existing deliverable references
+        transformed = transformed.Replace("logo", "")
+                                .Replace("social media", "")
+                                .Replace("print", "")
+                                .Replace("brochure", "")
+                                .Replace("flyer", "")
+                                .Replace("label", "")
+                                .Replace("package", "")
+                                .Replace("event", "")
+                                .Replace("activation", "");
+
+        // Add website-specific terms
+        if (!transformed.Contains("website") && !transformed.Contains("web"))
+        {
+            transformed = "website design for " + transformed;
+        }
+
+        // Add layout/UI terms
+        if (!transformed.Contains("layout") && !transformed.Contains("interface") && !transformed.Contains("design"))
+        {
+            transformed += ", modern web layout, responsive design";
+        }
+
+        // Ensure it's for web dimensions
+        if (!transformed.Contains("16:9") && !transformed.Contains("aspect ratio"))
+        {
+            transformed += ", 16:9 aspect ratio";
+        }
+
+        return transformed.Trim();
+    }
+
+    private void ToggleSelection(string url, string id)
+    {
+        // Clear any existing selection first (only allow 1 image)
+        SelectedImageIds.Clear();
+        SelectedImageUrls.Clear();
+
+        // Select the new image
+        SelectedImageIds.Add(id);
+        SelectedImageUrls.Add(url);
+
+        StateHasChanged();
+    }
+
+    private string GetGenerateButtonText()
+    {
+        if (!SelectedImageIds.Any())
+        {
+            return "Select an Image to Generate Website";
+        }
+
+        return $"Generate Website (image selected)";
+    }
+
+    // Add these new properties at the top of your @code block with the other properties
+
+    // Loading state properties for website generation
+    private bool IsGeneratingWebsite = false;
+    private string GenerationStatus = "";
+    private bool websiteQuotaRejected;
+    private int GenerationProgress = 0;
+    private List<string> GenerationSteps = new();
+    private string CurrentStepDetails = "";
+
+    // Add this method to update generation progress
+    private void UpdateGenerationStatus(string step, string details = "", int progress = -1)
+    {
+        GenerationStatus = step;
+        CurrentStepDetails = details;
+        if (progress >= 0)
+        {
+            GenerationProgress = progress;
+        }
+
+        // Add to steps log if it's a new major step
+        if (!string.IsNullOrEmpty(step) && (GenerationSteps.Count == 0 || GenerationSteps.Last() != step))
+        {
+            GenerationSteps.Add(step);
+            // Keep only last 5 steps to prevent overflow
+            if (GenerationSteps.Count > 5)
+            {
+                GenerationSteps.RemoveAt(0);
+            }
+        }
+
+        StateHasChanged();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<string?> ExtractWebsiteBackgroundAsync(string imageUrl,
+        DesignMode.AI.Shared.Models.Attribution.ProjectContextResponse context)
+    {
+        try
+        {
+            var request = new
+            {
+                ImageUrl = imageUrl,
+                ProjectId = context.ProjectId
+            };
+
+            using var message = new HttpRequestMessage(HttpMethod.Post,
+                $"{ApiConfig.ApiBaseUrl}api/ExtractWebsiteBackground?code=REDACTED_FOR_GROOMING")
+            { Content = JsonContent.Create(request) };
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            message.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var response = await Http.SendAsync(message);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"❌ Background extraction failed: {response.StatusCode}");
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+
+            if (data.TryGetProperty("image", out var imageProp))
+            {
+                var imageData = imageProp.GetString();
+
+                if (!string.IsNullOrWhiteSpace(imageData))
+                {
+                    // remove data:image/png;base64,
+                    return imageData.Replace("data:image/png;base64,", "");
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception extracting background: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task<GetWebsitesResponse?> GetWebsitesByCompanyAsync(string companyName)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var urlEndpoint =
+                    $"{ApiConfig.ApiBaseUrl}api/GetWebsitesByCompany" +
+                    "?code=REDACTED_FOR_GROOMING";
+
+                var body = new
+                {
+                    CompanyName = companyName
+                };
+
+                var json = System.Text.Json.JsonSerializer.Serialize(body);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await client.PostAsync(urlEndpoint, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<GetWebsitesResponse>();
+
+                    if (result?.Data != null)
+                    {
+                        result.Data = result.Data
+                            .OrderByDescending(x =>
+                                DateTime.TryParse(x.TimeStamp, out var dt)
+                                    ? dt
+                                    : DateTime.MinValue)
+                            .ToList();
+                    }
+
+                    Console.WriteLine($"✅ Retrieved {result?.Count ?? 0} websites (sorted)");
+
+                    return result;
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"❌ Failed to retrieve websites: {error}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error calling GetWebsitesByCompany: {ex.Message}");
+        }
+
+        return null;
+    }
+    public class WebsiteRecord
+    {
+        public string Id { get; set; }
+        public string WebsiteId { get; set; }
+        public string CompanyName { get; set; }
+        public string Version { get; set; }
+        public string TimeStamp { get; set; }
+    }
+
+    public class GetWebsitesResponse
+    {
+        public string Message { get; set; }
+        public int Count { get; set; }
+        public List<WebsiteRecord> Data { get; set; }
+    }
+
+    private async Task SaveWebsitePreviewAsync(
+    string websiteId,
+    string companyName,
+    string version,
+    string timeStamp)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var urlEndpoint =
+                    $"{ApiConfig.ApiBaseUrl}api/SaveWebsitePreview" +
+                    "?code=REDACTED_FOR_GROOMING";
+
+                var body = new
+                {
+                    WebsiteId = websiteId,
+                    CompanyName = companyName,
+                    Version = version,
+                    TimeStamp = timeStamp
+                };
+
+                var json = System.Text.Json.JsonSerializer.Serialize(body);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await client.PostAsync(urlEndpoint, content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("❌ Failed to save website preview.");
+                }
+                else
+                {
+                    Console.WriteLine("✅ Website preview saved.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Failed to call SaveWebsitePreview function: {ex.Message}");
+        }
+    }
+
+    private async Task<string?> GenerateWebsiteAsync(string imageUrl, string name, string industry, string prompt,
+        string generationJobId, DesignMode.AI.Shared.Models.Attribution.ProjectContextResponse context)
+    {
+        try
+        {
+            var request = new
+            {
+                ImageUrl = imageUrl,
+                Name = name,
+                Industry = industry,
+                Prompt = prompt,
+                GenerationJobId = generationJobId,
+                ProjectId = context?.ProjectId,
+                FunnelId = context?.FunnelId
+            };
+            using var message = new HttpRequestMessage(HttpMethod.Post,
+                $"{ApiConfig.ApiBaseUrl}api/GenerateWebsiteFromImage?code=REDACTED_FOR_GROOMING")
+            { Content = JsonContent.Create(request) };
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+                message.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var response = await Http.SendAsync(message);
+
+            if (await UsageRefresh.HandleResponseAsync(response))
+            {
+                websiteQuotaRejected = true;
+                        UpdateGenerationStatus("Generation limit reached", "You've used all your AI Credits for this billing period.", 0);
+                return null;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"❌ Website generation failed: {response.StatusCode}");
+                return null;
+            }
+
+            await UsageRefresh.RequestRefreshAsync();
+
+            var json = await response.Content.ReadAsStringAsync();
+
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+
+            if (data.TryGetProperty("html", out var htmlProp))
+            {
+                var html = htmlProp.GetString();
+
+                if (!string.IsNullOrWhiteSpace(html))
+                {
+                    return html;
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception generating website: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task GenerateWebsite()
+    {
+        if (IsBusy || IsGeneratingWebsite || isGeneratingWebsiteImages || !GetUniqueWebsiteImages().Any(i => SelectedImageIds.Contains(i.Id))) return;
+        await using var generationOperation = await BeginGenerationAsync();
+
+        // Set loading state and switch to Generated Website tab immediately
+        IsGeneratingWebsite = true;
+        ActiveTab = TabType.GeneratedWebsite;
+        GenerationSteps.Clear();
+        UpdateGenerationStatus("Starting website generation...", "Preparing your website assets", 5);
+        websiteQuotaRejected = false;
+
+        StateHasChanged();
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                UpdateGenerationStatus("Selecting images...", "Choosing the best images for your website", 15);
+
+                var selectedImage = GetUniqueWebsiteImages().FirstOrDefault(img => SelectedImageIds.Contains(img.Id));
+
+                if (selectedImage == null)
+                {
+                    UpdateGenerationStatus("Error", "No suitable image found for website generation", 0);
+                    Console.WriteLine("❌ No image selected.");
+                    return;
+                }
+
+                // 1️⃣ Get image description
+                UpdateGenerationStatus("Analyzing image...", "AI is analyzing your selected image content", 30);
+                var websiteContext = await ResolveWebsiteProject(CompanyIdeaId)
+                    ?? throw new InvalidOperationException("Website generation requires a current project.");
+                var websiteGenerationJobId = Guid.NewGuid().ToString();
+
+                var imageDescription = await GetAIImageDescriptionAsync(
+                    selectedImage.ImageUrl, websiteGenerationJobId, websiteContext);
+
+                if (string.IsNullOrWhiteSpace(imageDescription))
+                {
+                    Console.WriteLine($"❌ Failed to get image description for {selectedImage.ImageUrl}");
+                    UpdateGenerationStatus("Warning", "Using default image description", 40);
+                }
+                else
+                {
+                    UpdateGenerationStatus("Image analyzed", "Successfully extracted image content", 45);
+                }
+
+                // 2️⃣ Extract clean website background
+                UpdateGenerationStatus("Extracting background...", "Separating background elements from the image", 50);
+                backgroundImage = await ExtractWebsiteBackgroundAsync(selectedImage.ImageUrl, websiteContext);
+
+                var username = user.Identity?.Name;
+                var uri = NavigationManager.Uri;
+                var queryString = new Uri(uri).Query;
+                string cid = GetQueryParameter(queryString, "cid", null);
+
+                var promptId = await FetchPromptId(username, cid);
+                var promptText = await FetchPromptText(promptId);
+
+                string[] parts = cid.Split(new string[] { "|~~|@@|^^|" }, StringSplitOptions.None);
+
+                string name = string.Empty;
+                string industry = string.Empty;
+
+                if (parts.Length >= 2)
+                {
+                    // Decode Base64 for company name and industry
+                    try
+                    {
+                        name = Encoding.UTF8.GetString(Convert.FromBase64String(parts[0]));
+                        industry = Encoding.UTF8.GetString(Convert.FromBase64String(parts[1]));
+                        SelectedWebsiteName = name;
+                        SelectedIndustry = industry;
+                        UpdateGenerationStatus("Company data loaded", $"Building website for {name} in {industry}", 75);
+                    }
+                    catch (FormatException ex)
+                    {
+                        Console.WriteLine($"Error decoding Base64 values: {ex.Message}");
+                    }
+                }
+
+                var safeCompanyName = string.Concat(SelectedWebsiteName
+    .Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+    .Replace(" ", "-").Replace("&", "");
+
+                var versionData = await GetNextWebsiteVersionAsync(safeCompanyName);
+                
+                // ✅ Extract numeric version
+                if (versionData.NextVersion > 1)
+                {
+                    var previousVersion = (versionData.NextVersion - 1).ToString();
+
+                    Console.WriteLine($"📁 Copying images from v{previousVersion} → v{versionData.NextVersion}");
+
+                    await CopyImagesToNewVersionAsync(
+                        safeCompanyName,
+                        previousVersion,
+                        versionData.NextVersion.ToString()
+                    );
+                }
+
+                if (string.IsNullOrWhiteSpace(backgroundImage))
+                {
+                    Console.WriteLine($"❌ Failed to extract background from {selectedImage.ImageUrl}");
+                    UpdateGenerationStatus("Background extraction", "Using image as-is for website", 60);
+                }
+                else
+                {
+                    UpdateGenerationStatus("Background extracted", "Successfully extracted website background", 65);
+                }
+
+                UpdateGenerationStatus("Loading company data...", "Retrieving your company information", 70);
+
+                // 3️⃣ Call NEW website generator (AI HTML output)
+                UpdateGenerationStatus("Generating website HTML...", "AI is crafting your custom website layout", 80);
+                //var generatedHtml = "";
+                var generatedHtml = await GenerateWebsiteAsync(
+                    selectedImage.ImageUrl,
+                    SelectedWebsiteName,
+                    SelectedIndustry,
+                    promptText,
+                    websiteGenerationJobId,
+                    websiteContext
+                    );
+
+                // ✅ Extract only the full HTML document
+                var cleanHtml = ExtractFullHtmlDocument(generatedHtml);
+
+                // ✅ Save HTML file
+                await SaveGeneratedHtmlAsync(cleanHtml, SelectedWebsiteName, versionData.NextVersion.ToString());
+
+                if (string.IsNullOrWhiteSpace(generatedHtml))
+                {
+                    if (!websiteQuotaRejected)
+                        UpdateGenerationStatus("Error", "Failed to generate website HTML", 0);
+                    Console.WriteLine("❌ Failed to generate website HTML.");
+                    return;
+                }
+
+                UpdateGenerationStatus("Processing website...", "Optimizing and formatting your website", 95);
+
+                UpdateGenerationStatus("Complete!", "Your website has been successfully generated!", 100);
+
+                await SaveWebsitePreviewAsync(
+                    versionData.WebsiteId,
+                    safeCompanyName,
+                    $"v{versionData.NextVersion}",
+                    DateTime.UtcNow.ToString("o")
+                );
+
+                // ✅ Wait a bit for HTML to be served
+                await Task.Delay(1000);
+
+                await SaveExtractedBackgroundAsync(
+                    selectedImage.ImageUrl,
+                    SelectedWebsiteName,
+                    versionData.NextVersion.ToString()
+                );
+
+                // ✅ Take screenshot
+                await SaveWebsiteScreenshotAsync(
+                    SelectedWebsiteName,
+                    versionData.NextVersion.ToString()
+                );
+
+                // ✅ Refresh the sorted websites after generation (keep all previous versions)
+                var updatedWebsitesResponse = await GetWebsitesByCompanyAsync(safeCompanyName);
+                if (updatedWebsitesResponse?.Data != null)
+                {
+                    sortedWebsites = updatedWebsitesResponse.Data;
+                }
+
+                // Update current version to the new one
+                currentVersion = versionData.NextVersion.ToString();
+                
+                // Set the current screenshot URL
+                GeneratedWebsiteHtml = $"{ApiConfig.StorageBaseUrl}" + safeCompanyName + $"-v{currentVersion}" + "/website-shot.png";
+
+                Console.WriteLine("✅ Website generated successfully!");
+                Console.WriteLine($"📄 HTML Length: {generatedHtml.Length}");
+                Console.WriteLine($"📸 Total versions available: {sortedWebsites.Count}");
+
+                // Optional: trigger UI update / modal close
+                if (OnWebsiteGenerated.HasDelegate)
+                    await OnWebsiteGenerated.InvokeAsync(true);
+            }
+            else
+            {
+                UpdateGenerationStatus("Error", "User not authenticated", 0);
+                Console.WriteLine("⚠️ User not authenticated.");
+            }
+        }
+        catch (Exception ex)
+        {
+            UpdateGenerationStatus("Error", $"Exception: {ex.Message}", 0);
+            Console.WriteLine($"❌ Exception generating website: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+            // Keep IsGeneratingWebsite true for a moment to show completion, then clear after delay
+            await Task.Delay(2000);
+            IsGeneratingWebsite = false;
+            StateHasChanged();
+        }
+    }
+    private async Task SaveWebsiteScreenshotAsync(string companyName, string version)
+    {
+        if (string.IsNullOrWhiteSpace(companyName))
+            return;
+
+        try
+        {
+            var request = new
+            {
+                CompanyName = companyName,
+                Version = version
+            };
+
+            // =========================
+            // 🌍 USE URI-BASED CONFIG
+            // =========================
+            var isLocal = ApiConfig.ApiBaseUrl.Contains("localhost");
+
+            var endpoint = isLocal
+                ? "api/SaveWebsiteScreenshot?code=REDACTED_FOR_GROOMING"
+                : "api/GenerateWebsiteScreenshot?code=REDACTED_FOR_GROOMING";
+
+            var response = await Http.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}{endpoint}",
+                request
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<SaveScreenshotResponse>();
+
+                Console.WriteLine($"✅ Screenshot processed: {result?.ScreenshotUrl}");
+
+                if (!string.IsNullOrWhiteSpace(result?.SourceUrl))
+                    Console.WriteLine($"🌍 Source URL: {result.SourceUrl}");
+
+                if (!string.IsNullOrWhiteSpace(result?.Mode))
+                    Console.WriteLine($"⚙️ Mode: {result.Mode}");
+            }
+            else
+            {
+                var content = await response.Content.ReadAsStringAsync();
+
+                Console.WriteLine("❌ Screenshot failed");
+                Console.WriteLine($"Status: {response.StatusCode}");
+                Console.WriteLine($"Body: {content}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error calling screenshot API: {ex.Message}");
+        }
+    }
+
+    public class SaveScreenshotResponse
+    {
+        public string ScreenshotUrl { get; set; }
+        public string SourceUrl { get; set; }
+        public string Mode { get; set; }
+    }
+    private string ExtractFullHtmlDocument(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+            return string.Empty;
+
+        var startIndex = html.IndexOf("<!DOCTYPE", StringComparison.OrdinalIgnoreCase);
+        var endIndex = html.LastIndexOf("</html>", StringComparison.OrdinalIgnoreCase);
+
+        if (startIndex >= 0 && endIndex > startIndex)
+        {
+            endIndex += "</html>".Length;
+            return html.Substring(startIndex, endIndex - startIndex);
+        }
+
+        // fallback: return original if structure not found
+        return html;
+    }
+    private async Task<string?> GetAIImageDescriptionAsync(string imageUrl, string generationJobId,
+        DesignMode.AI.Shared.Models.Attribution.ProjectContextResponse context)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url =
+                    $"{ApiConfig.ApiBaseUrl}api/GetWorkspaceAIImageDescription" +
+                    "?code=REDACTED_FOR_GROOMING";
+
+                var payload = new
+                {
+                    ImageUrl = imageUrl,
+                    GenerationJobId = generationJobId,
+                    ProjectId = context.ProjectId,
+                    FunnelId = context.FunnelId
+                };
+
+                var content = new StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(payload),
+                    Encoding.UTF8,
+                    "application/json");
+
+                var token = await LocalStorage.GetItemAsync<string>("authToken");
+                if (!string.IsNullOrWhiteSpace(token))
+                    client.DefaultRequestHeaders.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                var response = await client.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine("✅ Image description generated.");
+                    return result;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to generate image description: {response.StatusCode}");
+                    return null;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception generating image description: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        if (GenerationGuard is null && (!Show || IsBusy || IsGeneratingWebsite || isGeneratingWebsiteImages)) return;
+        if (!await ConfirmGenerationCloseAsync()) return;
+        // Prevent closing during generation
+        if (!Show) return;
+
+        Show = false;
+        autoGenerationTriggered = false;
+        var imageToCheck = preparedImageId;
+        preparedImageId = null;
+
+        await ShowChanged.InvokeAsync(false);
+
+        // Reset to Generate New tab when closing
+        ActiveTab = TabType.GenerateNew;
+
+        // Existing-image opens do no work on close. Gen checks whether a prepared image
+        // was already published before deciding whether any reload is necessary.
+        if (!string.IsNullOrWhiteSpace(imageToCheck))
+            await OnModalClosed.InvokeAsync(imageToCheck);
+    }
+
+    private async Task ViewVersion(WebsiteRecord site)
+    {
+        var safeCompanyName = string.Concat(SelectedWebsiteName
+            .Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+            .Replace(" ", "-").Replace("&", "");
+        
+        var versionNumber = site.Version?.Replace("v", "");
+        var screenshotUrl = $"{ApiConfig.StorageBaseUrl}" + safeCompanyName + $"-v{versionNumber}" + "/website-shot.png";
+        
+        // Update the current displayed screenshot
+        GeneratedWebsiteHtml = screenshotUrl;
+        currentVersion = versionNumber;
+        
+        StateHasChanged();
+    }
+
+    private RenderFragment ImageCard(DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel image) => __builder =>
+    {
+        var isSelected = SelectedImageIds.Contains(image.Id);
+        var isNew = image.Id == preparedImageId;
+
+        <div class="image-card @(isSelected ? "website-selected" : "") @(isNew ? "newly-generated" : "")"
+             @onclick="() => ToggleSelection(image.ImageUrl, image.Id)">
+            <img src="@image.ImageUrl" alt="Website asset" class="image-thumb" />
+            <div class="image-controls">
+                <div class="website-selection-indicator @(isSelected ? "selected" : "")"
+                     @onclick="() => ToggleSelection(image.ImageUrl, image.Id)"
+                @onclick:stopPropagation>
+                    @if (isSelected)
+                    {
+                        <span class="indicator-icon" title="Selected for website">✓</span>
+                    }
+                    else
+                    {
+                        <span class="indicator-icon" title="Select for website">+</span>
+                    }
+                </div>
+            </div>
+            @if (isSelected)
+            {
+                <div class="website-selection-badge">
+                    <span class="badge-icon">🌐</span>
+                    For Website
+                </div>
+            }
+            @if (isNew)
+            {
+                <div class="new-image-badge">
+                    <span class="badge-icon">🆕</span>
+                    New
+                </div>
+            }
+        </div>
+    };
+
+    public class WebsiteGenerationResult
+    {
+        public bool Success { get; set; }
+        public string PreviewUrl { get; set; }
+        public string DownloadUrl { get; set; }
+        public string WebsiteId { get; set; }
+    }
+    private async Task<MakeVideoModal.ImageIdeaCountResult?> GetImageIdeaCountsAsync(string companyIdeaId)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var url =
+                    $"{ApiConfig.ApiBaseUrl}api/GetImageIdeaCountsByCompanyId?companyIdeaId={companyIdeaId}" +
+                    "&code=REDACTED_FOR_GROOMING";
+
+                var response = await client.GetAsync(url);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<MakeVideoModal.ImageIdeaCountResult>();
+                    if (result == null)
+                        return null;
+
+                    Console.WriteLine("✅ Retrieved image idea counts + idea info + deliverable types.");
+                    return result;
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to retrieve image idea counts: {response.StatusCode}");
+                    return null;
+                }
+            }
+
+            Console.WriteLine("⚠️ User not authenticated.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Exception retrieving image idea counts: {ex.Message}");
+            return null;
+        }
+    }
+    private async Task CopyImagesToNewVersionAsync(string companyName, string oldVersion, string newVersion)
+    {
+        try
+        {
+            var request = new
+            {
+                CompanyName = companyName,
+                OldVersion = oldVersion,
+                NewVersion = newVersion
+            };
+
+            var response = await Http.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/CopyImagesToNewVersion?code=REDACTED_FOR_GROOMING",
+                request
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<dynamic>();
+
+                Console.WriteLine("✅ Images copied successfully");
+                Console.WriteLine($"📁 New Folder: {result?.DestinationFolder}");
+                Console.WriteLine($"🌐 Url: {result?.Url}");
+            }
+            else
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"❌ Failed copying images: {content}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error copying images: {ex.Message}");
+        }
+    }
+    private async Task SaveExtractedBackgroundAsync(string imageUrl, string companyName, string version)
+    {
+        var base64 = backgroundImage; //await ExtractWebsiteBackgroundAsync(imageUrl);
+
+        if (string.IsNullOrWhiteSpace(base64))
+            return;
+
+        try
+        {
+            var request = new
+            {
+                Base64Image = base64,
+                CompanyName = companyName,
+                Version = version
+            };
+
+            var response = await Http.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/SaveHeroBackgroundFromBase64?code=REDACTED_FOR_GROOMING",
+                request
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                Console.WriteLine("✅ Background image saved from base64");
+            }
+            else
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"❌ Failed saving base64 image: {content}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error saving base64 image: {ex.Message}");
+        }
+    }
+
+    private async Task<WebsiteVersionResponse> GetNextWebsiteVersionAsync(string companyName)
+    {
+        try
+        {
+            HttpClient client = new HttpClient();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity != null && user.Identity.IsAuthenticated)
+            {
+                var urlEndpoint =
+                    $"{ApiConfig.ApiBaseUrl}api/GetNextWebsiteVersion" +
+                    "?code=REDACTED_FOR_GROOMING";
+
+                var body = new
+                {
+                    CompanyName = companyName
+                };
+
+                var json = System.Text.Json.JsonSerializer.Serialize(body);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await client.PostAsync(urlEndpoint, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync();
+
+                    var result = System.Text.Json.JsonSerializer.Deserialize<WebsiteVersionResponse>(
+                        responseContent,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    return result ?? new WebsiteVersionResponse
+                        {
+                            CompanyName = companyName,
+                            WebsiteId = Guid.NewGuid().ToString(),
+                            ExistingCount = 0,
+                            NextVersion = 1
+                        };
+                }
+                else
+                {
+                    Console.WriteLine("❌ Failed to get website version.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error calling GetNextWebsiteVersion: {ex.Message}");
+        }
+
+        // fallback
+        return new WebsiteVersionResponse
+            {
+                CompanyName = companyName,
+                WebsiteId = Guid.NewGuid().ToString(),
+                ExistingCount = 0,
+                NextVersion = 1
+            };
+    }
+
+    public class WebsiteVersionResponse
+    {
+        public string CompanyName { get; set; }
+        public string WebsiteId { get; set; }
+        public int ExistingCount { get; set; }
+        public int NextVersion { get; set; }
+    }
+    public class NextVersionResponse
+    {
+        public string CompanyName { get; set; }
+        public int ExistingCount { get; set; }
+        public int NextVersion { get; set; }
+    }
+
+    private async Task SaveGeneratedHtmlAsync(string htmlContent, string companyName, string version)
+    {
+        if (string.IsNullOrWhiteSpace(htmlContent) || string.IsNullOrWhiteSpace(companyName))
+            return;
+
+        try
+        {
+            var request = new
+            {
+                HtmlContent = htmlContent,
+                CompanyName = companyName,
+                Version = version
+            };
+
+            var response = await Http.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/SaveHtmlToCompanyFolder?code=REDACTED_FOR_GROOMING",
+                request
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<SaveHtmlResponse>();
+                Console.WriteLine($"✅ HTML saved successfully: {result?.WebUrl}");
+            }
+            else
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"❌ Failed to save HTML: {response.StatusCode} - {content}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error calling SaveHtmlToCompanyFolder: {ex.Message}");
+        }
+    }
+
+    public class SaveHtmlResponse
+    {
+        public string WebUrl { get; set; }
+    }
+
+    private async Task DownloadWebsiteAsync(string companyName, string version)
+    {
+        if (string.IsNullOrWhiteSpace(companyName) || string.IsNullOrWhiteSpace(version))
+            return;
+
+        try
+        {
+            // ✅ Match backend sanitization
+            var safeCompanyName = string.Concat(companyName
+                .Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+                .Replace(" ", "-")
+                .Replace("&", "");
+
+            var safeVersion = string.Concat(version
+                .Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+                .Replace(" ", "")
+                .ToLower();
+
+            // ✅ Build URL
+            var url = $"{ApiConfig.ApiBaseUrl}api/DownloadWebsite" +
+                      $"?code=REDACTED_FOR_GROOMING" +
+                      $"&safecompanyname={Uri.EscapeDataString(safeCompanyName)}" +
+                      $"&version={Uri.EscapeDataString(safeVersion)}";
+
+            // ✅ Trigger download in new tab
+            await JSRuntime.InvokeVoidAsync("open", url, "_blank");
+
+            Console.WriteLine($"⬇️ Download triggered: {url}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error downloading website: {ex.Message}");
+        }
+    }
+}
+
+<style>
+    /* Reuse existing modal styles and add website-specific styles */
+    .website-selected {
+        border: 2px solid #4CAF50 !important;
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3) !important;
+    }
+
+    .website-selection-indicator {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: rgba(255, 255, 255, 0.95);
+        border: 2px solid #ddd;
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+        .website-selection-indicator.selected {
+            background: #4CAF50;
+            border-color: #4CAF50;
+            color: white;
+        }
+
+        .website-selection-indicator:hover {
+            transform: scale(1.1);
+            border-color: #4CAF50;
+        }
+
+    .website-selection-badge {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        background: #4CAF50;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+    }
+
+    .new-image-badge {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: #ff9800;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+    }
+
+    .brand-kit-status {
+        margin-bottom: 20px;
+        padding: 12px 16px;
+        background-color: #e8f5e9;
+        border-radius: 8px;
+        border-left: 4px solid #4CAF50;
+    }
+
+    .brand-kit-count {
+        font-weight: 600;
+        color: #2e7d32;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .brand-kit-icon {
+        font-size: 16px;
+    }
+
+    .website-config-section {
+        border: 1px solid #e0e0e0;
+    }
+
+    .config-select {
+        font-family: inherit;
+        font-size: 14px;
+    }
+
+    .save-button {
+        background-color: #4CAF50 !important;
+        color: white !important;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+        .save-button:disabled {
+            background-color: #eee !important;
+            color: #ababab !important;
+            cursor: not-allowed;
+        }
+
+    /* Loading styles */
+    .website-generating-spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: white;
+        animation: spin 1s linear infinite;
+    }
+
+    .image-card-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+
+    .loading-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        color: #666;
+        font-size: 14px;
+        text-align: center;
+    }
+
+    .loading-spinner-small {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #244d88;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .image-generating-section {
+        margin-bottom: 30px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+    }
+
+    /* New styles for versions grid */
+    .versions-screenshots-section {
+        margin: 24px 0;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+
+    .versions-screenshots-section h4 {
+        margin: 0 0 16px 0;
+        color: #333;
+        font-size: 18px;
+        font-weight: 600;
+    }
+
+    .versions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .version-card {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .version-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .version-card.current-version {
+            max-width: 295px;
+        border: 2px solid #4CAF50;
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+    }
+
+    .version-header {
+        padding: 12px 16px;
+        background: #f5f5f5;
+        border-bottom: 1px solid #e0e0e0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .version-number {
+        font-weight: 600;
+        color: #244d88;
+        font-size: 14px;
+    }
+
+    .version-date {
+        font-size: 12px;
+        color: #666;
+    }
+
+    .version-screenshot {
+        height: 160px;
+        overflow: hidden;
+        background: #f0f0f0;
+    }
+
+    .version-thumbnail {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.2s ease;
+    }
+
+    .version-card:hover .version-thumbnail {
+        transform: scale(1.05);
+    }
+
+    .version-actions {
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid #e0e0e0;
+    }
+
+    .view-version-button {
+        background: #244d88;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+    .view-version-button:hover {
+        background: #1a3a66;
+    }
+
+    .current-badge {
+        background: #4CAF50;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 10px;
+        font-weight: 600;
+    }
+
+    .empty-versions {
+        text-align: center;
+        padding: 40px 20px;
+        color: #666;
+        background: #f9f9f9;
+        border-radius: 8px;
+    }
+
+    .preview-placeholder {
+        text-align: center;
+        padding: 60px 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        color: #666;
+    }
+
+    @@keyframes loading {
+        0% {
+            background-position: 200% 0;
+        }
+
+        100% {
+            background-position: -200% 0;
+        }
+    }
+
+    /* Rest of your existing CSS remains the same */
+    .vertical-modal-wrapper {
+        padding-top: 14px;
+        padding-left: 36px;
+        padding-bottom: 83px;
+        position: relative;
+        width: 100%;
+        max-width: 800px;
+        height: 90vh;
+        background: white;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal-scroll-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px;
+    }
+
+    .modal-header {
+        text-align: left;
+        margin: 33px 0 -4px 0px;
+        padding-right: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+        .modal-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+            margin-top: 0;
+            margin-bottom: 30px;
+        }
+
+    .image-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+    }
+
+    .empty-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 40px 0;
+        color: #666;
+    }
+
+    .generated-empty-state {
+        padding: 80px 20px;
+    }
+
+    .footer-actions {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: white;
+        border-top: 1px solid #ccc;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 32px;
+        z-index: 1050;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .discard-button {
+        font-size: 1rem;
+        padding: 10px 20px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        background-color: transparent;
+        border: 2px solid #ddd;
+        color: #333;
+        transition: all 0.3s ease;
+    }
+
+        .discard-button:hover {
+            border-color: #999;
+            color: #000;
+        }
+
+    .deliverable-section {
+        padding-bottom: 24px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .image-col {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        overflow-x: auto;
+        padding-bottom: 8px;
+    }
+
+    .image-card {
+        position: relative;
+        width: 300px !important;
+        height: 200px;
+        border-radius: 16px;
+        overflow: hidden;
+        background-color: #fff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        border: 1px solid #eee;
+        transition: border-color 0.2s ease;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        cursor: pointer;
+    }
+
+        .image-card:hover {
+            border: 1px solid #4CAF50;
+        }
+
+    .image-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        flex-grow: 1;
+    }
+
+    .image-controls {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #222;
+        margin-bottom: 12px;
+    }
+
+    .modal-close {
+        padding-top: 7px !important;
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.4);
+        border: none;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        color: #000;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(6px);
+        z-index: 10;
+    }
+
+        .modal-close:hover {
+            background-color: rgba(255, 255, 255, 0.6);
+            color: #000;
+        }
+
+    @@keyframes zoomFadeIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @@keyframes blurIn {
+        0% {
+            backdrop-filter: blur(0px);
+            background-color: rgba(0, 0, 0, 0);
+        }
+
+        100% {
+            backdrop-filter: blur(5px);
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+    }
+
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh !important;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        backdrop-filter: blur(5px);
+        background-color: rgba(0, 0, 0, 0.7);
+        animation: blurIn 0.3s ease-out forwards;
+    }
+
+    /* Mobile adjustments */
+    @@media (max-width: 767px) {
+        // .modal-overlay {
+            // position: fixed;
+            // top: 0;
+            // left: 0;
+            // width: 100vw;
+            // height: 1113vh !important;
+            // display: flex;
+            // justify-content: center;
+            // align-items: center;
+            // z-index: 1000;
+            // backdrop-filter: blur(5px);
+            // background-color: rgba(0, 0, 0, 0.7);
+            // animation: blurIn 0.3s ease-out forwards;
+            //
+        }
+    }
+
+    .vertical-modal-wrapper {
+        animation: zoomFadeIn 0.3s ease-out forwards;
+    }
+
+    .modal-busy-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.7);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #4CAF50;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+    }
+
+    /* New Tab Styles */
+    .modal-tabs {
+        display: flex;
+        gap: 8px;
+        padding: 20px 24px 0 24px;
+        border-bottom: 1px solid #e0e0e0;
+        background: white;
+        position: relative;
+        z-index: 5;
+        margin-top: 30px;
+    }
+
+    .tab-button {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #666;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+        .tab-button:hover:not(:disabled) {
+            color: #244d88;
+        }
+
+        .tab-button.active {
+            color: #244d88;
+            border-bottom-color: #244d88;
+        }
+
+        .tab-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+    .tab-icon {
+        font-size: 20px;
+    }
+
+    .tab-badge {
+        position: absolute;
+        top: 4px;
+        right: 8px;
+        background: #4CAF50;
+        color: white;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 12px;
+    }
+
+    .tab-content {
+        min-height: 100%;
+    }
+
+    /* Generated Website Tab Styles */
+    .website-actions {
+        display: flex;
+        gap: 12px;
+    }
+
+    .action-button {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border: 1px solid #ddd;
+        background: white;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+        .action-button:hover {
+            background: #f5f5f5;
+            border-color: #999;
+        }
+
+    .download-button {
+        color: #244d88;
+        border-color: #244d88;
+    }
+
+    .copy-button {
+        color: #4CAF50;
+        border-color: #4CAF50;
+    }
+
+    .button-icon {
+        font-size: 18px;
+    }
+
+    .website-preview-container {
+        margin-top: 24px;
+    }
+
+    .website-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        padding: 16px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin-bottom: 24px;
+    }
+
+    .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .info-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .info-value {
+        font-size: 14px;
+        font-weight: 500;
+        color: #333;
+    }
+
+    .background-preview {
+        margin-bottom: 24px;
+        padding: 16px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+
+        .background-preview h4 {
+            margin: 0 0 16px 0;
+            color: #333;
+            font-size: 16px;
+        }
+
+    .background-image {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+    }
+
+    .website-preview {
+        margin-bottom: 24px;
+    }
+
+        .website-preview h4 {
+            margin: 0 0 16px 0;
+            color: #333;
+            font-size: 16px;
+        }
+
+    .website-iframe {
+        width: 100%;
+        height: 500px;
+        border: none;
+    }
+
+    .generate-button {
+        background: #244d88;
+        color: white;
+        border: none;
+        padding: 12px 32px;
+        border-radius: 999px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 16px;
+        transition: background-color 0.3s ease;
+    }
+
+        .generate-button:hover {
+            background: #1a3a66;
+        }
+
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+    /* Add these styles at the end of your <style> section */
+
+.generation-loading-container {
+    padding: 20px;
+    animation: fadeIn 0.5s ease;
+}
+
+.generation-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.generation-header h3 {
+    color: #244d88;
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+
+.generation-status {
+    font-size: 18px;
+    color: #666;
+    font-weight: 500;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 8px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    margin: 20px 0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #244d88, #4CAF50);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+    );
+    animation: shimmer 1.5s infinite;
+}
+
+.current-step-details {
+    text-align: center;
+    font-size: 16px;
+    color: #333;
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #244d88;
+}
+
+.generation-steps-log {
+    margin: 30px 0;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.generation-steps-log h4 {
+    color: #333;
+    margin-bottom: 15px;
+    font-size: 16px;
+}
+
+.steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.step-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    background: white;
+    animation: slideIn 0.3s ease;
+}
+
+.step-item.current {
+    background: #e3f2fd;
+    border-left: 3px solid #244d88;
+}
+
+.step-check {
+    color: #4CAF50;
+    font-weight: bold;
+    font-size: 18px;
+    min-width: 24px;
+}
+
+.step-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #244d88;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    min-width: 18px;
+}
+
+.step-text {
+    color: #333;
+    font-size: 14px;
+}
+
+.generation-visual {
+    margin: 30px 0;
+}
+
+.website-skeleton {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-header {
+    height: 40px;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    width: 200px;
+}
+
+.skeleton-hero {
+    height: 200px;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.skeleton-content {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.skeleton-row {
+    height: 20px;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    border-radius: 4px;
+}
+
+.skeleton-row:last-child {
+    width: 80%;
+}
+
+.skeleton-footer {
+    height: 60px;
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+    border-radius: 4px;
+    margin-top: 20px;
+}
+
+.generation-tip {
+    text-align: center;
+    padding: 15px;
+    background: #e8f5e9;
+    border-radius: 8px;
+    color: #2e7d32;
+    font-size: 14px;
+    margin-top: 20px;
+}
+
+@@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+@@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+/* Enhanced Tab Styles */
+.modal-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 20px 24px 0 24px;
+    border-bottom: 2px solid #eaeef2;
+    background: white;
+    position: relative;
+    z-index: 5;
+    margin-top: 30px;
+}
+
+.tab-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #a0aec0;  /* Muted gray for inactive tabs */
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    margin-bottom: -2px; /* Align with border bottom */
+    letter-spacing: 0.3px;
+}
+
+    /* Inactive tab hover effect */
+    .tab-button:hover:not(:disabled):not(.active) {
+        color: #718096;  /* Slightly darker gray on hover */
+        background: linear-gradient(to bottom, transparent 95%, #e2e8f0 95%);
+    }
+
+    /* Active tab styling - prominently highlighted */
+    .tab-button.active {
+        color: #244d88;  /* Brand color for active tab */
+        border-bottom-color: #244d88;
+        background: linear-gradient(to bottom, rgba(36, 77, 136, 0.03), transparent);
+        font-weight: 700;
+        text-shadow: 0 1px 2px rgba(36, 77, 136, 0.1);
+    }
+
+        /* Active tab icon styling */
+        .tab-button.active .tab-icon {
+            transform: scale(1.1);
+            filter: drop-shadow(0 2px 4px rgba(36, 77, 136, 0.2));
+        }
+
+    /* Disabled tab styling (when no website generated) */
+    .tab-button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        background: repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 5px,
+            rgba(0, 0, 0, 0.02) 5px,
+            rgba(0, 0, 0, 0.02) 10px
+        );
+        pointer-events: none;  /* Prevent clicking when disabled */
+    }
+
+        /* Remove hover effects for disabled tabs */
+        .tab-button:disabled:hover {
+            color: #a0aec0;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 5px,
+                rgba(0, 0, 0, 0.02) 5px,
+                rgba(0, 0, 0, 0.02) 10px
+            );
+        }
+
+/* Icon animations */
+.tab-icon {
+    font-size: 20px;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+/* Badge styling for new website indicator */
+.tab-badge {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    background: #4CAF50;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 16px;
+    box-shadow: 0 2px 6px rgba(76, 175, 80, 0.3);
+    animation: pulse 2s infinite;
+}
+
+/* Additional visual enhancement for the active tab indicator */
+.tab-button.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #244d88, #4CAF50);
+    border-radius: 3px 3px 0 0;
+    animation: slideInWidth 0.3s ease;
+}
+
+/* Active tab shine effect */
+.tab-button.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+    opacity: 0.5;
+}
+
+/* Animation for the active tab indicator */
+@@keyframes slideInWidth {
+    from {
+        width: 0;
+        left: 50%;
+    }
+    to {
+        width: 100%;
+        left: 0;
+    }
+}
+
+/* Enhanced pulse animation for badge */
+@@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 2px 6px rgba(76, 175, 80, 0.3);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+    }
+}
+
+    /* Subtle overlay for inactive tabs to make them appear more disabled */
+    .tab-button:not(.active):not(:disabled) {
+        position: relative;
+        overflow: hidden;
+    }
+
+        .tab-button:not(.active):not(:disabled)::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            transition: background 0.3s ease;
+        }
+
+        /* Remove overlay on hover for better UX */
+        .tab-button:not(.active):not(:disabled):hover::before {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        /* Add to your existing tab-badge styles */
+.tab-badge.generating {
+    background: #ff9800;
+    animation: pulse 1.5s infinite;
+    white-space: nowrap;
+}
+
+@@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 2px 6px rgba(255, 152, 0, 0.3);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
+    }
+}
+/* Mobile-specific adjustments */
+@@media (max-width: 767px) {
+    /* Optional: Adjust modal overlay to accommodate the new margin */
+    .modal-overlay {
+        align-items: flex-start !important;
+        padding-top: 0 !important;
+    }
+    
+}
+</style>
+</style>
+<script>
+    window.downloadFile = (filename, contentType, content) => {
+        const blob = new Blob([new Uint8Array(content)], { type: contentType });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    };
+</script>

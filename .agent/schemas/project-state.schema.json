@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DesignMode Project State",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "projectStatus",
+    "approvedProject",
+    "workItems"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "projectStatus": {
+      "enum": [
+        "APPROVED",
+        "RUNNING",
+        "BLOCKED",
+        "HUMAN_REQUIRED",
+        "READY_FOR_HUMAN_REVIEW",
+        "COMPLETED"
+      ]
+    },
+    "approvedProject": {
+      "type": "string"
+    },
+    "currentWorkItem": {
+      "type": ["string", "null"]
+    },
+    "humanAction": {
+      "type": ["string", "null"]
+    },
+    "workItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "dependsOn",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^WORK-[0-9]+$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "enum": [
+              "WAITING",
+              "ELIGIBLE",
+              "PLANNING",
+              "AWAITING_APPROVAL",
+              "RUNNING",
+              "BLOCKED",
+              "HUMAN_REQUIRED",
+              "READY_FOR_HUMAN_REVIEW",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "taskId": {
+            "type": ["string", "null"]
+          },
+          "branch": {
+            "type": ["string", "null"]
+          },
+          "result": {
+            "type": ["string", "null"]
+          },
+          "humanAction": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1719 @@
+@inherits DesignMode.AI.Client.Components.GenerationAwareComponent
+@using System.Collections.Generic
+@using System.IO
+@using System.Net.Http.Json
+@using DesignMode.AI.Shared.Models
+@using DesignMode.AI.Client.Services
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@using System.Net.Http.Headers
+@using System.Text
+@using System.Text.RegularExpressions
+
+@if (IsBusy)
+{
+    <div class="modal-busy-overlay"><div class="loader"></div></div>
+}
+
+@if (Show)
+{
+    <div class="modal-overlay generation-workspace-overlay" @onclick="CloseModal">
+        <div class="vertical-modal-wrapper generation-workspace" @onclick:stopPropagation>
+            <button class="modal-close" @onclick="CloseModal">×</button>
+
+            <div class="modal-tabs">
+                <button class="tab-button @(ActiveTab == TabType.GenerateNew ? "active" : "")"
+                        @onclick="() => SetActiveTab(TabType.GenerateNew)">
+                    <span class="tab-icon">✨</span> Generate New
+                </button>
+                <button class="tab-button @(ActiveTab == TabType.GeneratedPdf ? "active" : "")"
+                        aria-label="Generated PDFs"
+                        @onclick="() => SetActiveTab(TabType.GeneratedPdf)"
+                        disabled="@(!IsGeneratingPdf && !HasExistingPrintMaterials && string.IsNullOrWhiteSpace(GeneratedPdfUrl))">
+                    <span class="tab-icon">📄</span> Results
+                    @if (IsGeneratingPdf)
+                    {
+                        <span class="tab-badge generating">Generating...</span>
+                    }
+                    else if (HasExistingPrintMaterials)
+                    {
+                        <span class="tab-badge">@sortedPrintMaterials.Count</span>
+                    }
+                </button>
+            </div>
+
+            <div class="modal-scroll-content">
+                @if (ActiveTab == TabType.GenerateNew)
+                {
+                    <div class="tab-content generate-new-tab">
+                        <div class="modal-header"><h2>Generate Print Material PDF</h2></div>
+                        <details><summary>Print Materials instructions</summary><p style="white-space: pre-wrap">@MainPromptText</p></details>
+                        @if (string.IsNullOrWhiteSpace(MainPromptText))
+                        {
+                            <p role="alert">This project has no Print Materials instructions. Generate its Print Materials AI idea before continuing.</p>
+                        }
+                        <div class="modal-intro">
+                            Select <strong>one image</strong>. OpenAI will analyze that image as a visual brand reference, create a completely new print-material design, and then the generated artwork will be placed into a print-ready PDF.
+                        </div>
+
+                        <div class="print-material-status">
+                            <span class="print-material-count">
+                                <span class="print-material-icon">📄</span>
+                                @if (HasPrintImages())
+                                {
+                                    <span>Print images ready</span>
+                                    @if (SelectedImageIds.Any())
+                                    {
+                                        <span class="selection-count">1 selected</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span style="font-weight:bold;">No images available</span>
+                                    <span style="font-weight:normal;"> – Generate images first to unlock PDF creation</span>
+                                }
+                            </span>
+                        </div>
+
+                        @if (isGeneratingPrintImages)
+                        {
+                            <AIRecommendationGenerationLoader IsVisible="true" Message="Generating print source image..." />
+                        }
+                        else
+                        {
+                            <div class="image-grid">
+                                @if (GetUniquePrintImages().Any())
+                                {
+                                    var groupedImages = GetUniquePrintImages()
+                                    .GroupBy(img => img.SubCategory?.ToLower() == "generic" ? img.DeliverableType : img.SubCategory);
+
+                                    @foreach (var group in groupedImages)
+                                    {
+                                        var firstImage = group.First();
+                                        var sectionTitle = firstImage.SubCategory?.ToLower() == "generic"
+                                        ? firstImage.DeliverableType
+                                        : group.Key;
+                                        var validImages = group
+                                        .Where(i => !string.IsNullOrWhiteSpace(i.ImageUrl))
+                                        .OrderBy(i => i.CountId)
+                                        .ToList();
+
+                                        if (validImages.Any())
+                                        {
+                                            <div class="deliverable-section">
+                                                <h3 class="section-title">@sectionTitle</h3>
+                                                <div class="image-col">
+                                                    @foreach (var image in validImages)
+                                                    {
+                                                        @ImageCard(image)
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="empty-state">
+                                        <div class="empty-icon">📄</div>
+                                        <h3>No Print Images Yet</h3>
+                                        <p>Create a print-related reference image first. OpenAI will analyze it and generate a new print-material design from its branding and visual style.</p>
+                                        <button class="generate-images-button" @onclick="GoToGenerateImages" disabled="@(isGeneratingPrintImages || string.IsNullOrWhiteSpace(MainPromptText))">
+                                            Generate Print Image
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <div class="print-config-section">
+                            <h3>Print Material Configuration</h3>
+                            <div class="config-options two-col">
+                                <div class="config-option">
+                                    <label>Material Type</label>
+                                    <select @bind="SelectedPrintType" class="config-select">
+                                        <option value="Brochure">Brochure</option>
+                                        <option value="Flyer">Flyer</option>
+                                        <option value="Poster">Poster</option>
+                                        <option value="BusinessCard">Business Cards</option>
+                                        <option value="Letterhead">Letterhead</option>
+                                        <option value="Presentation">Presentation</option>
+                                        <option value="Catalog">Product Catalog</option>
+                                    </select>
+                                </div>
+                                <div class="config-option">
+                                    <label>Paper Size</label>
+                                    <select @bind="SelectedPaperSize" class="config-select">
+                                        <option value="A4">A4 (210×297mm)</option>
+                                        <option value="Letter">Letter (8.5×11in)</option>
+                                        <option value="A3">A3 (297×420mm)</option>
+                                        <option value="Legal">Legal (8.5×14in)</option>
+                                        <option value="Square">Square (8×8in)</option>
+                                        <option value="Tabloid">Tabloid (11×17in)</option>
+                                    </select>
+                                </div>
+                                <div class="config-option">
+                                    <label>Orientation</label>
+                                    <select @bind="SelectedOrientation" class="config-select">
+                                        <option value="Portrait">Portrait</option>
+                                        <option value="Landscape">Landscape</option>
+                                    </select>
+                                </div>
+                                <div class="config-option">
+                                    <label>Color Mode</label>
+                                    <select @bind="SelectedColorMode" class="config-select">
+                                        <option value="CMYK">CMYK (Print)</option>
+                                        <option value="RGB">RGB (Digital View)</option>
+                                        <option value="Grayscale">Grayscale</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="checkbox-row">
+                                <label><input type="checkbox" @bind="IncludeBleedArea" /> Include Bleed Area</label>
+                                <label><input type="checkbox" @bind="IncludeCropMarks" /> Include Crop Marks</label>
+                                <label><input type="checkbox" @bind="AddPageNumbers" /> Add Page Numbers</label>
+                                <label><input type="checkbox" @bind="IncludeCompanyLogo" /> Include Company Logo</label>
+                                <label><input type="checkbox" @bind="IncludeContactInfo" /> Include Contact Info</label>
+                                <label><input type="checkbox" @bind="HighResolutionOutput" /> High Resolution</label>
+                            </div>
+
+                            <div class="print-content-section">
+                                <label>Print Content</label>
+                                <textarea @bind="PrintContent"
+                                          class="config-textarea"
+                                          placeholder="Enter text/content to use in the generated print material. Leave blank to let the design use minimal brand-appropriate copy."></textarea>
+                            </div>
+
+                            @if (IncludeBleedArea)
+                            {
+                                <div class="bleed-options">
+                                    <label>Bleed Area Size</label>
+                                    <div class="range-row">
+                                        <input type="range" min="1" max="10" @bind="BleedAreaSize" />
+                                        <span>@BleedAreaSize mm</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="tab-content generated-pdf-tab">
+                        <div class="modal-header"><h2>Generated Print Material PDF</h2></div>
+
+                        @if (IsGeneratingPdf)
+                        {
+                            <div class="generation-loading-container">
+                                <div class="generation-header">
+                                    <h3>Creating Your Print Material</h3>
+                                    <div class="generation-status">@GenerationStatus</div>
+                                </div>
+                                <div class="progress-bar-container"><div class="progress-bar" style="width: @(GenerationProgress)%;"></div></div>
+                                <div class="current-step-details">@CurrentStepDetails</div>
+                                <div class="generation-steps-log">
+                                    @foreach (var step in GenerationSteps)
+                                    {
+                                        <div class="step-item"><span class="step-check">✓</span><span>@step</span></div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(GenerationError))
+                        {
+                            <div class="generation-error">
+                                <h3>Print-material generation failed</h3>
+                                <p>@GenerationError</p>
+                                <button class="save-button" @onclick="() => SetActiveTab(TabType.GenerateNew)">Back to Generate New</button>
+                            </div>
+                        }
+                        else if (ActiveGeneratedPdf != null && !string.IsNullOrWhiteSpace(GeneratedPdfUrl))
+                        {
+                            <div class="generated-pdf-preview">
+                                <div class="preview-toolbar">
+                                    <div>
+                                        <strong>Current Print Material</strong>
+                                        <span class="preview-meta">@GetActivePreviewMeta()</span>
+                                    </div>
+                                    <div class="preview-actions">
+                                        <button class="toolbar-button" @onclick="OpenGeneratedPdf">↗ Open</button>
+                                        <button class="toolbar-button primary" @onclick="DownloadGeneratedPdf">📥 Download</button>
+                                    </div>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(GeneratedPreviewImageUrl))
+                                {
+                                    <div class="artwork-preview-stage">
+                                        <img src="@GeneratedPreviewImageUrl" alt="Generated print material artwork" />
+                                    </div>
+                                }
+
+                                <div class="pdf-preview-stage">
+                                    <iframe src="@GeneratedPdfUrl" title="Generated print material PDF"></iframe>
+                                </div>
+                            </div>
+
+                            @if (GeneratedPdfs.Any())
+                            {
+                                <div class="generated-history">
+                                    <div class="generated-history-header">
+                                        <div><h4>Saved Print PDFs</h4><p>Click a version to preview it above.</p></div>
+                                        <span class="generated-count">@GeneratedPdfs.Count</span>
+                                    </div>
+                                    <div class="history-grid">
+                                        @foreach (var item in GeneratedPdfs.OrderByDescending(x => x.CreatedAt))
+                                        {
+                                            var isActive = ActiveGeneratedPdf != null &&
+                                            string.Equals(item.PrintMaterialsId, ActiveGeneratedPdf.PrintMaterialsId, StringComparison.OrdinalIgnoreCase) &&
+                                            string.Equals(item.Version, ActiveGeneratedPdf.Version, StringComparison.OrdinalIgnoreCase);
+                                            <button type="button" class="history-card @(isActive ? "active" : "")" @onclick="() => ViewGeneratedPdf(item)">
+                                                @if (!string.IsNullOrWhiteSpace(item.PreviewUrl))
+                                                {
+                                                    <img class="history-artwork-thumb" src="@item.PreviewUrl" alt="Saved print artwork @item.Version" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="pdf-card-icon">PDF</div>
+                                                }
+                                                <div class="history-card-info">
+                                                    <strong>@item.PrintType</strong>
+                                                    <span>@item.PaperSize · @item.Orientation · @item.Version</span>
+                                                    <small>@item.CreatedAt.ToLocalTime().ToString("MM/dd/yyyy h:mm tt")</small>
+                                                </div>
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="empty-state generated-empty-state">
+                                <div class="empty-icon">📄</div>
+                                <h3>No PDF Generated Yet</h3>
+                                <p>Go to Generate New, select one image, and create the PDF.</p>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (ActiveTab == TabType.GenerateNew)
+            {
+                <div class="footer-actions sticky-footer">
+                    <button class="discard-button" @onclick="CloseModal">Cancel</button>
+                    <button class="save-button"
+                            @onclick="GeneratePrintMaterials"
+                            disabled="@(!SelectedImageIds.Any() || IsGeneratingPdf || isGeneratingPrintImages || string.IsNullOrWhiteSpace(MainPromptText))"
+                            style="@(!SelectedImageIds.Any() ? "background-color:#eee; color:#ababab;" : null)">
+                        @GetGenerateButtonText()
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="footer-actions sticky-footer">
+                    <button class="discard-button" disabled="@IsGeneratingPdf" @onclick="() => SetActiveTab(TabType.GenerateNew)">← Back to Generate New PDF</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Inject] private ApiConfigService ApiConfig { get; set; } = default!;
+    [Inject] private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject] private HttpClient Http { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private AttributionContextService AttributionContext { get; set; } = default!;
+    [Inject] private Blazored.LocalStorage.ILocalStorageService LocalStorage { get; set; } = default!;
+    [Inject] private AIUsageRefreshService UsageRefresh { get; set; } = default!;
+
+    [Parameter] public EventCallback<bool> ShowChanged { get; set; }
+    [Parameter] public DesignMode.AI.Client.Pages.Init.MakeVideoModal.ImageIdeaCountResult AllIdeas { get; set; }
+    [Parameter] public List<DesignMode.AI.Client.Pages.Init.Gen.ImageIdeaModel> SelectedImages { get; set; } = new();
+    [Parameter] public EventCallback<List<string>> OnImagesSelected { get; set; }
+    [Parameter] public EventCallback<bool> OnPrintMaterialsGenerated { get; set; }
+    [Parameter] public Func<string, int, int, int, Task<string>> CallRunwareImageFunction { get; set; }
+    [Parameter] public Func<string, string, string, string, string, string, string, Task<string>> CallSaveImageIdeaFunction { get; set; }
+    [Parameter] public string CompanyIdeaId { get; set; } = "";
+    [Parameter] public string CompanyDescription { get; set; } = "";
+    [Parameter] public string PromptIdFromCID { get; set; } = "";
+    [Parameter] public string MainPromptText { get; set; } = "";
+    [Parameter] public EventCallback OnModalClosed { get; set; }
+
+    private enum TabType { GenerateNew, GeneratedPdf }
+    private TabType ActiveTab { get; set; } = TabType.GenerateNew;
+
+    private bool IsBusy;
+    private bool IsGeneratingPdf;
+    private bool isGeneratingPrintImages;
+    private bool wasImageGenerated;
+    private bool hasLoadedVersions;
+    private string SelectedCompanyName = "";
+    private string SelectedIndustry = "General";
+    private string currentVersion = "1";
+
+    private string GenerationStatus = "";
+    private string CurrentStepDetails = "";
+    private int GenerationProgress;
+    private string GenerationError = "";
+    private List<string> GenerationSteps = new();
+
+    private string GeneratedPreviewImageUrl = "";
+    private string GeneratedPdfUrl = "";
+    private string GeneratedPdfDownloadUrl = "";
+    private List<GeneratedPrintPdfRecord> GeneratedPdfs = new();
+    private GeneratedPrintPdfRecord? ActiveGeneratedPdf;
+    private List<PrintMaterialRecord> sortedPrintMaterials = new();
+    private bool HasExistingPrintMaterials => sortedPrintMaterials.Any();
+
+    private HashSet<string> SelectedImageIds = new();
+    private HashSet<string> SelectedImageUrls = new();
+    private List<Gen.ImageIdeaModel> newlyGeneratedImages = new();
+
+    private string SelectedPrintType = "Brochure";
+    private string SelectedPaperSize = "A4";
+    private string SelectedOrientation = "Portrait";
+    private string SelectedColorMode = "CMYK";
+    private bool IncludeBleedArea = true;
+    private bool IncludeCropMarks = true;
+    private bool AddPageNumbers = false;
+    private bool IncludeCompanyLogo = true;
+    private bool IncludeContactInfo = true;
+    private bool HighResolutionOutput = true;
+    private int BleedAreaSize = 3;
+    private string PrintContent = "";
+
+    public string promptText { get; set; } = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Show)
+            return;
+
+        ResolveCompanyName();
+
+        if (!hasLoadedVersions && !string.IsNullOrWhiteSpace(SelectedCompanyName))
+        {
+            await LoadExistingPrintMaterialVersionsAsync(SelectedCompanyName);
+            hasLoadedVersions = true;
+        }
+    }
+
+    private void ResolveCompanyName()
+    {
+        var queryString = new Uri(NavigationManager.Uri).Query;
+        var cid = GetQueryParameter(queryString, "cid", CompanyIdeaId ?? "");
+
+        if (string.IsNullOrWhiteSpace(cid))
+            return;
+
+        var parts = cid.Split(new[] { "|~~|@@|^^|" }, StringSplitOptions.None);
+        if (parts.Length < 1)
+            return;
+
+        try
+        {
+            SelectedCompanyName = SanitizeCompanyName(
+                Encoding.UTF8.GetString(Convert.FromBase64String(parts[0])));
+
+            if (parts.Length >= 2 && !string.IsNullOrWhiteSpace(parts[1]))
+            {
+                SelectedIndustry = Encoding.UTF8.GetString(Convert.FromBase64String(parts[1]));
+            }
+        }
+        catch (FormatException ex)
+        {
+            Console.WriteLine($"Error decoding company information: {ex.Message}");
+        }
+    }
+
+    private void SetActiveTab(TabType tab)
+    {
+        ActiveTab = tab;
+        GenerationError = "";
+    }
+
+    private bool HasPrintImages() => GetUniquePrintImages().Any();
+
+    private List<Gen.ImageIdeaModel> GetUniquePrintImages()
+    {
+        var allImages = new List<Gen.ImageIdeaModel>();
+        if (SelectedImages != null) allImages.AddRange(SelectedImages);
+        if (newlyGeneratedImages != null) allImages.AddRange(newlyGeneratedImages);
+
+        return allImages
+            .Where(img => !string.IsNullOrWhiteSpace(img.ImageUrl) && IsPrintImage(img))
+            .GroupBy(img => img.ImageUrl)
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    private static bool IsPrintImage(Gen.ImageIdeaModel img)
+    {
+        var text = $"{img.DeliverableType} {img.SubCategory}";
+        var keys = new[] { "print", "flyer", "brochure", "poster", "business card", "letterhead", "catalog", "stationery", "marketing material", "document", "report", "presentation", "banner", "signage" };
+        return keys.Any(k => text.Contains(k, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ToggleSelection(string url, string id)
+    {
+        // Print PDF generation is intentionally single-select.
+        if (SelectedImageIds.Contains(id))
+        {
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+        }
+        else
+        {
+            SelectedImageIds.Clear();
+            SelectedImageUrls.Clear();
+            SelectedImageIds.Add(id);
+            SelectedImageUrls.Add(url);
+        }
+
+        if (OnImagesSelected.HasDelegate)
+            _ = OnImagesSelected.InvokeAsync(SelectedImageIds.ToList());
+
+        StateHasChanged();
+    }
+
+    private string GetGenerateButtonText() =>
+        SelectedImageIds.Any()
+            ? "Generate Print Material + PDF"
+            : "Select One Image to Generate Print Material";
+
+    private void UpdateGenerationStatus(string status, string details, int progress)
+    {
+        GenerationStatus = status;
+        CurrentStepDetails = details;
+        GenerationProgress = progress;
+        if (!string.IsNullOrWhiteSpace(status) && !GenerationSteps.Contains(status))
+            GenerationSteps.Add(status);
+        StateHasChanged();
+    }
+
+    private async Task GeneratePrintMaterials()
+    {
+        if (string.IsNullOrWhiteSpace(MainPromptText) || IsGeneratingPdf || IsBusy || SelectedImageIds.Count != 1)
+            return;
+        await using var generationOperation = await BeginGenerationAsync();
+
+        GenerationError = "";
+        GenerationSteps.Clear();
+        IsGeneratingPdf = true;
+        ActiveTab = TabType.GeneratedPdf;
+        StateHasChanged();
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated != true)
+                throw new InvalidOperationException("You must be signed in to create print materials.");
+
+            ResolveCompanyName();
+
+            var companyName = SelectedCompanyName;
+            if (string.IsNullOrWhiteSpace(companyName))
+                throw new InvalidOperationException("Company name could not be determined.");
+
+            var selectedImage = GetUniquePrintImages()
+                .FirstOrDefault(x => SelectedImageIds.Contains(x.Id));
+
+            if (selectedImage == null || string.IsNullOrWhiteSpace(selectedImage.ImageUrl))
+                throw new InvalidOperationException("The selected image could not be found.");
+
+            if (!hasLoadedVersions)
+            {
+                UpdateGenerationStatus(
+                    "Loading saved versions...",
+                    "Checking existing PrintMaterials versions for this company",
+                    8);
+
+                await LoadExistingPrintMaterialVersionsAsync(companyName);
+                hasLoadedVersions = true;
+            }
+
+            var nextVersion = GetNextPrintMaterialVersion();
+            var versionText = $"v{nextVersion}";
+            var logicalPrintMaterialsId = GetLogicalPrintMaterialsId();
+
+            var attribution = await AttributionContext.AuthorizeGenerationAsync(CompanyIdeaId);
+            var request = new GeneratePrintMaterialRequest
+                {
+                    ImageUrl = selectedImage.ImageUrl,
+                    Name = companyName,
+                    Industry = SelectedIndustry,
+                    CompanyDescription = CompanyDescription,
+                    Prompt = MainPromptText,
+                    PrintType = SelectedPrintType,
+                    PaperSize = SelectedPaperSize,
+                    Orientation = SelectedOrientation,
+                    ColorMode = SelectedColorMode,
+                    IncludeBleedArea = IncludeBleedArea,
+                    BleedAreaSize = BleedAreaSize,
+                    IncludeCropMarks = IncludeCropMarks,
+                    AddPageNumbers = AddPageNumbers,
+                    IncludeCompanyLogo = IncludeCompanyLogo,
+                    IncludeContactInfo = IncludeContactInfo,
+                    HighResolutionOutput = HighResolutionOutput,
+                    Content = PrintContent,
+                    GenerationJobId = Guid.NewGuid().ToString(),
+                    ProjectId = attribution?.ProjectId,
+                    FunnelId = attribution?.FunnelId
+                };
+
+            UpdateGenerationStatus(
+                "Generating print artwork...",
+                "OpenAI is analyzing the selected image and creating a new branded print design",
+                20);
+
+            // Use a dedicated HttpClient for the long-running generation call.
+            // The injected WASM HttpClient may still be configured with the
+            // default 100-second timeout, while OpenAI image generation can
+            // legitimately take longer. Keep the normal injected HttpClient
+            // for the short save/history calls below.
+            using var generationClient = new HttpClient
+                {
+                    Timeout = TimeSpan.FromSeconds(220)
+                };
+            var token = await LocalStorage.GetItemAsync<string>("authToken");
+            if (!string.IsNullOrWhiteSpace(token))
+                generationClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            using var response = await generationClient.PostAsJsonAsync(
+                $"{ApiConfig.ApiBaseUrl}api/GeneratePrintMaterialPdf?code=REDACTED_FOR_GROOMING",
+                request);
+            if (await UsageRefresh.HandleResponseAsync(response)) return;
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(
+                    $"GeneratePrintMaterialPdf returned {(int)response.StatusCode}: {error}");
+            }
+            await UsageRefresh.RequestRefreshAsync();
+
+            UpdateGenerationStatus(
+                "Artwork generated...",
+                "OpenAI returned the new print-material artwork; preparing the PDF",
+                48);
+
+            var result = await response.Content.ReadFromJsonAsync<PrintMaterialGenerationResult>();
+
+            if (result == null ||
+                !result.Success ||
+                string.IsNullOrWhiteSpace(result.PreviewUrl) ||
+                string.IsNullOrWhiteSpace(result.PdfDataUrl))
+            {
+                throw new InvalidOperationException(
+                    result?.Error ?? "The generation function did not return artwork and a PDF.");
+            }
+
+            GeneratedPreviewImageUrl = result.PreviewUrl;
+            GeneratedPdfUrl = result.PdfDataUrl;
+            GeneratedPdfDownloadUrl = result.PdfDataUrl;
+
+            UpdateGenerationStatus(
+                "Creating print PDF...",
+                "The OpenAI-generated artwork has been placed into the configured PDF",
+                68);
+
+            UpdateGenerationStatus(
+                "Saving print files...",
+                $"Saving {versionText} artwork and PDF under SavedImages",
+                78);
+
+            var savedFiles = await SaveGeneratedPrintMaterialFilesAsync(
+                result.PreviewUrl,
+                result.PdfDataUrl,
+                companyName,
+                nextVersion.ToString());
+
+            if (savedFiles == null ||
+                string.IsNullOrWhiteSpace(savedFiles.ImageUrl) ||
+                string.IsNullOrWhiteSpace(savedFiles.PdfUrl))
+            {
+                throw new InvalidOperationException(
+                    "The generated print-material image/PDF could not be saved.");
+            }
+
+            UpdateGenerationStatus(
+                "Saving version...",
+                $"Adding {versionText} to the PrintMaterials table",
+                90);
+
+            await SavePrintMaterialAsync(
+                logicalPrintMaterialsId,
+                companyName,
+                versionText,
+                DateTime.UtcNow.ToString("o"));
+
+            await LoadExistingPrintMaterialVersionsAsync(companyName);
+            currentVersion = nextVersion.ToString();
+
+            var record = GeneratedPdfs.FirstOrDefault(x =>
+                x.Version.Equals(versionText, StringComparison.OrdinalIgnoreCase));
+
+            if (record == null)
+            {
+                record = new GeneratedPrintPdfRecord
+                    {
+                        PreviewUrl = savedFiles.ImageUrl,
+                        PdfUrl = savedFiles.PdfUrl,
+                        DownloadUrl = savedFiles.PdfUrl,
+                        PrintMaterialsId = logicalPrintMaterialsId,
+                        Version = versionText,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                GeneratedPdfs.Insert(0, record);
+            }
+
+            record.PreviewUrl = savedFiles.ImageUrl;
+            record.PdfUrl = savedFiles.PdfUrl;
+            record.DownloadUrl = savedFiles.PdfUrl;
+            record.PrintType = SelectedPrintType;
+            record.PaperSize = SelectedPaperSize;
+            record.Orientation = SelectedOrientation;
+            record.ColorMode = SelectedColorMode;
+            record.CreatedAt = DateTime.UtcNow;
+
+            ViewGeneratedPdf(record);
+
+            UpdateGenerationStatus(
+                "Complete!",
+                $"{versionText} artwork and PDF were generated and saved",
+                100);
+
+            if (OnPrintMaterialsGenerated.HasDelegate)
+                await OnPrintMaterialsGenerated.InvokeAsync(true);
+        }
+        catch (TaskCanceledException ex)
+        {
+            GenerationError =
+                "Print-material generation timed out before the Azure Function returned. " +
+                "The OpenAI artwork generation may still have been processing. Please try again.";
+            GenerationStatus = "Generation timed out";
+            CurrentStepDetails = "The long-running generation request exceeded the client timeout.";
+            GenerationProgress = 0;
+            Console.WriteLine($"❌ GeneratePrintMaterials timeout: {ex}");
+        }
+        catch (Exception ex)
+        {
+            GenerationError = ex.Message;
+            GenerationStatus = "Generation failed";
+            CurrentStepDetails = ex.Message;
+            GenerationProgress = 0;
+            Console.WriteLine($"❌ GeneratePrintMaterials: {ex}");
+        }
+        finally
+        {
+            IsGeneratingPdf = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<SavePrintMaterialFilesResponse?> SaveGeneratedPrintMaterialFilesAsync(
+        string imageDataUrl,
+        string pdfDataUrl,
+        string companyName,
+        string version)
+    {
+        var request = new SavePrintMaterialFilesRequest
+            {
+                ImageDataUrl = imageDataUrl,
+                PdfDataUrl = pdfDataUrl,
+                CompanyName = companyName,
+                Version = version
+            };
+
+        var response = await Http.PostAsJsonAsync(
+            $"{ApiConfig.ApiBaseUrl}api/SavePrintMaterialFiles?code=REDACTED_FOR_GROOMING",
+            request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"SavePrintMaterialFiles returned {(int)response.StatusCode}: " +
+                await response.Content.ReadAsStringAsync());
+        }
+
+        return await response.Content.ReadFromJsonAsync<SavePrintMaterialFilesResponse>();
+    }
+
+    private async Task SavePrintMaterialAsync(string printMaterialsId, string companyName, string version, string timeStamp)
+    {
+        var request = new PrintMaterialRecord
+            {
+                PrintMaterialsId = printMaterialsId,
+                CompanyName = companyName,
+                Version = version,
+                TimeStamp = timeStamp
+            };
+
+        var response = await Http.PostAsJsonAsync(
+            $"{ApiConfig.ApiBaseUrl}api/SavePrintMaterial?code=REDACTED_FOR_GROOMING",
+            request);
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"SavePrintMaterial returned {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+    }
+
+    private async Task<GetPrintMaterialsResponse?> GetPrintMaterialsByCompanyAsync(string companyName)
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated != true)
+            return null;
+
+        var response = await Http.PostAsJsonAsync(
+            $"{ApiConfig.ApiBaseUrl}api/GetPrintMaterialsByCompany?code=REDACTED_FOR_GROOMING",
+            new { CompanyName = companyName });
+
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"❌ GetPrintMaterialsByCompany: {await response.Content.ReadAsStringAsync()}");
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<GetPrintMaterialsResponse>();
+    }
+
+    private async Task LoadExistingPrintMaterialVersionsAsync(string companyName)
+    {
+        var result = await GetPrintMaterialsByCompanyAsync(companyName);
+        sortedPrintMaterials = result?.Data?
+            .OrderByDescending(x => DateTime.TryParse(x.TimeStamp, out var dt) ? dt : DateTime.MinValue)
+            .ToList() ?? new List<PrintMaterialRecord>();
+
+        GeneratedPdfs.Clear();
+        ActiveGeneratedPdf = null;
+        GeneratedPreviewImageUrl = "";
+        GeneratedPdfUrl = "";
+        GeneratedPdfDownloadUrl = "";
+
+        foreach (var row in sortedPrintMaterials)
+        {
+            var versionNumber = (row.Version ?? "v1").Trim().TrimStart('v', 'V');
+            var previewUrl = GetPrintMaterialPreviewUrl(companyName, versionNumber);
+            var pdfUrl = GetPrintMaterialPdfUrl(companyName, versionNumber);
+            GeneratedPdfs.Add(new GeneratedPrintPdfRecord
+                {
+                    PreviewUrl = previewUrl,
+                    PdfUrl = pdfUrl,
+                    DownloadUrl = pdfUrl,
+                    PrintMaterialsId = row.PrintMaterialsId ?? "",
+                    Version = string.IsNullOrWhiteSpace(row.Version) ? $"v{versionNumber}" : row.Version,
+                    PrintType = "Print Material",
+                    PaperSize = "",
+                    Orientation = "",
+                    ColorMode = "",
+                    CreatedAt = DateTime.TryParse(row.TimeStamp, out var created) ? created : DateTime.MinValue
+                });
+        }
+
+        if (GeneratedPdfs.Any())
+        {
+            ViewGeneratedPdf(GeneratedPdfs.OrderByDescending(x => x.CreatedAt).First());
+            currentVersion = ActiveGeneratedPdf?.Version.TrimStart('v', 'V') ?? "1";
+        }
+        else
+        {
+            currentVersion = "1";
+        }
+    }
+
+    private int GetNextPrintMaterialVersion()
+    {
+        if (!sortedPrintMaterials.Any()) return 1;
+        return sortedPrintMaterials
+            .Select(x => int.TryParse((x.Version ?? "").Trim().TrimStart('v', 'V'), out var v) ? v : 0)
+            .DefaultIfEmpty(0)
+            .Max() + 1;
+    }
+
+    private string GetLogicalPrintMaterialsId()
+    {
+        var existingId = sortedPrintMaterials
+            .Where(x => !string.IsNullOrWhiteSpace(x.PrintMaterialsId))
+            .OrderByDescending(x => DateTime.TryParse(x.TimeStamp, out var dt) ? dt : DateTime.MinValue)
+            .Select(x => x.PrintMaterialsId)
+            .FirstOrDefault();
+        return string.IsNullOrWhiteSpace(existingId) ? Guid.NewGuid().ToString() : existingId;
+    }
+
+    private string GetPrintMaterialFolderName(string companyName, string version)
+    {
+        var safeCompany = SanitizeCompanyName(companyName);
+        var safeVersion = (version ?? "1").Replace("v", "", StringComparison.OrdinalIgnoreCase).Trim();
+        return $"{safeCompany}-print-material-v{safeVersion}";
+    }
+
+    private string GetPrintMaterialPreviewUrl(string companyName, string version)
+    {
+        var baseUrl = (ApiConfig.StorageBaseUrl ?? "").TrimEnd('/');
+        //if (!baseUrl.EndsWith("/SavedImages", StringComparison.OrdinalIgnoreCase))
+            //baseUrl += "/SavedImages";
+
+        return $"{baseUrl}/{GetPrintMaterialFolderName(companyName, version)}/print-material.png";
+    }
+
+    private string GetPrintMaterialPdfUrl(string companyName, string version)
+    {
+        var baseUrl = (ApiConfig.StorageBaseUrl ?? "").TrimEnd('/');
+        //if (!baseUrl.EndsWith("/SavedImages", StringComparison.OrdinalIgnoreCase))
+            //baseUrl += "/SavedImages";
+
+        return $"{baseUrl}/{GetPrintMaterialFolderName(companyName, version)}/print-material.pdf";
+    }
+
+    private void ViewGeneratedPdf(GeneratedPrintPdfRecord item)
+    {
+        ActiveGeneratedPdf = item;
+        GeneratedPreviewImageUrl = item.PreviewUrl;
+        GeneratedPdfUrl = item.PdfUrl;
+        GeneratedPdfDownloadUrl = string.IsNullOrWhiteSpace(item.DownloadUrl) ? item.PdfUrl : item.DownloadUrl;
+        if (!string.IsNullOrWhiteSpace(item.Version))
+            currentVersion = item.Version.TrimStart('v', 'V');
+        StateHasChanged();
+    }
+
+    private string GetActivePreviewMeta()
+    {
+        if (ActiveGeneratedPdf == null) return $"v{currentVersion}";
+        return string.Join(" · ", new[] { ActiveGeneratedPdf.PrintType, ActiveGeneratedPdf.PaperSize, ActiveGeneratedPdf.Orientation, ActiveGeneratedPdf.Version }
+            .Where(x => !string.IsNullOrWhiteSpace(x)));
+    }
+
+    private async Task OpenGeneratedPdf()
+    {
+        if (!string.IsNullOrWhiteSpace(GeneratedPdfUrl))
+            await JS.InvokeVoidAsync("open", GeneratedPdfUrl, "_blank");
+    }
+
+    private async Task DownloadGeneratedPdf()
+    {
+        var url = string.IsNullOrWhiteSpace(GeneratedPdfDownloadUrl) ? GeneratedPdfUrl : GeneratedPdfDownloadUrl;
+        if (!string.IsNullOrWhiteSpace(url))
+            await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private RenderFragment ImageCard(Gen.ImageIdeaModel image) => __builder =>
+    {
+        var isSelected = SelectedImageIds.Contains(image.Id);
+        var isNew = newlyGeneratedImages.Contains(image);
+        <div class="image-card @(isSelected ? "print-selected" : "") @(isNew ? "newly-generated" : "")" @onclick="() => ToggleSelection(image.ImageUrl, image.Id)">
+            <img src="@image.ImageUrl" alt="Print asset" class="image-thumb" />
+            <div class="image-controls">
+                <div class="print-selection-indicator @(isSelected ? "selected" : "")" @onclick="() => ToggleSelection(image.ImageUrl, image.Id)" @onclick:stopPropagation>
+                    <span class="indicator-icon">@(isSelected ? "✓" : "+")</span>
+                </div>
+            </div>
+            @if (isSelected)
+            {
+                <div class="print-selection-badge">✨ OpenAI Reference</div>
+            }
+            @if (isNew)
+            {
+                <div class="new-image-badge">🆕 New</div>
+            }
+        </div>
+    };
+
+    private async Task GoToGenerateImages()
+    {
+        if (string.IsNullOrWhiteSpace(MainPromptText) || isGeneratingPrintImages || CallRunwareImageFunction == null || CallSaveImageIdeaFunction == null)
+            return;
+        await using var generationOperation = await BeginGenerationAsync();
+
+        isGeneratingPrintImages = true;
+        IsBusy = true;
+        StateHasChanged();
+
+        try
+        {
+            promptText = MainPromptText;
+
+            var imageUrl = await CallRunwareImageFunction(promptText, 1344, 768, 1);
+            if (string.IsNullOrWhiteSpace(imageUrl)) return;
+
+            var newCountId = GetAllImages()
+                .Select(img => int.TryParse(img.CountId, out var val) ? val : 0)
+                .DefaultIfEmpty(0).Max() + 1;
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
+            var imageId = await CallSaveImageIdeaFunction("Secondary", "Print Materials", promptText, imageUrl, PromptIdFromCID, timestamp, newCountId.ToString());
+            if (string.IsNullOrWhiteSpace(imageId)) imageId = Guid.NewGuid().ToString();
+
+            var newImage = new Gen.ImageIdeaModel
+                {
+                    Id = imageId,
+                    ImageUrl = imageUrl,
+                    ImagePrompt = promptText,
+                    DeliverableType = "Secondary",
+                    SubCategory = "Print Materials",
+                    CountId = newCountId.ToString()
+                };
+
+            newlyGeneratedImages.Clear();
+            newlyGeneratedImages.Add(newImage);
+            if (SelectedImages != null && !SelectedImages.Any(x => x.ImageUrl == imageUrl))
+                SelectedImages.Add(newImage);
+
+            ToggleSelection(newImage.ImageUrl, newImage.Id);
+            wasImageGenerated = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ GoToGenerateImages: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+            isGeneratingPrintImages = false;
+            StateHasChanged();
+        }
+    }
+
+    private List<Gen.ImageIdeaModel> GetAllImages()
+    {
+        var result = new List<Gen.ImageIdeaModel>();
+        if (SelectedImages != null) result.AddRange(SelectedImages);
+        if (newlyGeneratedImages != null) result.AddRange(newlyGeneratedImages);
+        return result;
+    }
+
+    private async Task<string> FetchDeliverableDetail(string deliverable)
+    {
+        var response = await Http.PostAsync(
+            $"{ApiConfig.ApiBaseUrl}api/GetDeliverableDetail?code=REDACTED_FOR_GROOMING",
+            new StringContent($"\"{deliverable}\"", Encoding.UTF8, "application/json"));
+        if (!response.IsSuccessStatusCode) return "Print Materials";
+        return Regex.Replace(await response.Content.ReadAsStringAsync(), @"\s*\r?\n\s*", " ").Trim();
+    }
+
+    private static string GetQueryParameter(string queryString, string key, string defaultValue)
+    {
+        if (string.IsNullOrWhiteSpace(queryString)) return defaultValue;
+        var query = queryString.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var item in query)
+        {
+            var parts = item.Split('=', 2);
+            if (parts.Length == 2 && parts[0].Equals(key, StringComparison.OrdinalIgnoreCase))
+                return Uri.UnescapeDataString(parts[1]);
+        }
+        return defaultValue;
+    }
+
+    private static string SanitizeCompanyName(string companyName)
+    {
+        if (string.IsNullOrWhiteSpace(companyName)) return "Company";
+        var safe = string.Concat(companyName.Where(c => !Path.GetInvalidFileNameChars().Contains(c)))
+            .Replace(" ", "-")
+            .Replace("&", "and");
+        return Regex.Replace(safe, @"[^A-Za-z0-9._-]", "-").Trim('-');
+    }
+
+    private async Task CloseModal()
+    {
+        if (GenerationGuard is null && (IsBusy || IsGeneratingPdf || isGeneratingPrintImages)) return;
+        if (!await ConfirmGenerationCloseAsync()) return;
+
+        Show = false;
+        await ShowChanged.InvokeAsync(false);
+        if (OnModalClosed.HasDelegate && wasImageGenerated)
+            await OnModalClosed.InvokeAsync();
+        newlyGeneratedImages.Clear();
+        wasImageGenerated = false;
+        ActiveTab = TabType.GenerateNew;
+        hasLoadedVersions = false;
+        SelectedImageIds.Clear();
+        SelectedImageUrls.Clear();
+    }
+
+    public class GeneratePrintMaterialRequest
+    {
+        public string GenerationJobId { get; set; } = "";
+        public string? ProjectId { get; set; }
+        public string? FunnelId { get; set; }
+        public string ImageUrl { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Industry { get; set; } = "";
+        public string CompanyDescription { get; set; } = "";
+        public string Prompt { get; set; } = "";
+        public string PrintType { get; set; } = "Brochure";
+        public string PaperSize { get; set; } = "A4";
+        public string Orientation { get; set; } = "Portrait";
+        public string ColorMode { get; set; } = "CMYK";
+        public bool IncludeBleedArea { get; set; } = true;
+        public int BleedAreaSize { get; set; } = 3;
+        public bool IncludeCropMarks { get; set; } = true;
+        public bool AddPageNumbers { get; set; }
+        public bool IncludeCompanyLogo { get; set; } = true;
+        public bool IncludeContactInfo { get; set; } = true;
+        public bool HighResolutionOutput { get; set; } = true;
+        public string Content { get; set; } = "";
+    }
+
+    public class PrintMaterialGenerationResult
+    {
+        public bool Success { get; set; }
+        public string PreviewUrl { get; set; } = "";
+        public string ImageDataUrl { get; set; } = "";
+        public string PdfDataUrl { get; set; } = "";
+        public string DownloadUrl { get; set; } = "";
+        public string PrintReadyPdfUrl { get; set; } = "";
+        public string FileName { get; set; } = "";
+        public string Error { get; set; } = "";
+    }
+
+    public class SavePrintMaterialFilesRequest
+    {
+        public string ImageDataUrl { get; set; } = "";
+        public string PdfDataUrl { get; set; } = "";
+        public string CompanyName { get; set; } = "";
+        public string Version { get; set; } = "";
+    }
+
+    public class SavePrintMaterialFilesResponse
+    {
+        public bool Success { get; set; }
+        public string ImageUrl { get; set; } = "";
+        public string PreviewUrl { get; set; } = "";
+        public string PdfUrl { get; set; } = "";
+        public string DownloadUrl { get; set; } = "";
+        public string FolderName { get; set; } = "";
+    }
+
+    public class PrintMaterialRecord
+    {
+        public string Id { get; set; } = "";
+        public string PrintMaterialsId { get; set; } = "";
+        public string CompanyName { get; set; } = "";
+        public string Version { get; set; } = "";
+        public string TimeStamp { get; set; } = "";
+    }
+
+    public class GetPrintMaterialsResponse
+    {
+        public bool Success { get; set; }
+        public int Count { get; set; }
+        public List<PrintMaterialRecord> Data { get; set; } = new();
+    }
+
+    public class GeneratedPrintPdfRecord
+    {
+        public string PreviewUrl { get; set; } = "";
+        public string PdfUrl { get; set; } = "";
+        public string DownloadUrl { get; set; } = "";
+        public string PrintMaterialsId { get; set; } = "";
+        public string Version { get; set; } = "";
+        public string PrintType { get; set; } = "Print Material";
+        public string PaperSize { get; set; } = "";
+        public string Orientation { get; set; } = "";
+        public string ColorMode { get; set; } = "";
+        public DateTime CreatedAt { get; set; }
+    }
+
+}
+
+<style>
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,.58);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+    }
+
+    .vertical-modal-wrapper {
+        width: min(1180px,96vw);
+        max-height: 94vh;
+        background: #fff;
+        border-radius: 16px;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 24px 80px rgba(0,0,0,.28);
+    }
+
+    .modal-close {
+        position: absolute;
+        right: 18px;
+        top: 14px;
+        z-index: 4;
+        border: 0;
+        background: transparent;
+        font-size: 32px;
+        cursor: pointer;
+        color: #555;
+    }
+
+    .modal-tabs {
+        display: flex;
+        gap: 8px;
+        padding: 18px 60px 0 24px;
+        border-bottom: 1px solid #e8e8e8;
+    }
+
+    @@media (max-width: 768px) {
+        .modal-tabs {
+            display: flex;
+            gap: 8px;
+            padding: 18px 60px 25px 24px;
+            border-bottom: 1px solid #e8e8e8;
+            overflow: hidden;
+        }
+        /* Center footer buttons on mobile */
+        .footer-actions {
+            justify-content: center;
+            align-items: center;
+        }
+
+        .save-button{
+            margin-left: auto !important;
+            margin-right: auto !important;
+        }
+    }
+
+    .tab-button {
+        border: 0;
+        background: transparent;
+        padding: 12px 16px;
+        font-weight: 700;
+        color: #667085;
+        border-bottom: 3px solid transparent;
+        cursor: pointer;
+    }
+
+        .tab-button.active {
+            color: #244d88;
+            border-bottom-color: #244d88;
+        }
+
+        .tab-button:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+        }
+
+    .tab-badge {
+        margin-left: 8px;
+        padding: 2px 8px;
+        background: #eef3fb;
+        border-radius: 999px;
+        font-size: 12px;
+    }
+
+        .tab-badge.generating {
+            background: #fff4db;
+        }
+
+    .modal-scroll-content {
+        overflow: auto;
+        padding: 24px;
+    }
+
+    .modal-header h2 {
+        margin: 0 0 10px;
+        color: #1f2937;
+    }
+
+    .modal-intro {
+        color: #667085;
+        margin-bottom: 22px;
+    }
+
+    .print-material-status {
+        background: #f5f8fc;
+        border: 1px solid #dce6f3;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 18px;
+    }
+
+    .print-material-count {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .selection-count {
+        background: #244d88;
+        color: #fff;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+    }
+
+    .image-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .deliverable-section {
+        padding: 16px;
+        border: 1px solid #e6e9ee;
+        border-radius: 12px;
+    }
+
+    .section-title {
+        margin: 0 0 12px;
+        color: #244d88;
+    }
+
+    .image-col {
+        display: grid;
+        grid-template-columns: repeat(auto-fill,minmax(210px,1fr));
+        gap: 16px;
+    }
+
+    .image-card {
+        position: relative;
+        border: 2px solid transparent;
+        border-radius: 12px;
+        overflow: hidden;
+        cursor: pointer;
+        background: #f7f7f7;
+        transition: .2s ease;
+    }
+
+        .image-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 22px rgba(0,0,0,.12);
+        }
+
+        .image-card.print-selected {
+            border-color: #244d88;
+            box-shadow: 0 0 0 3px rgba(36,77,136,.12);
+        }
+
+    .image-thumb {
+        display: block;
+        width: 100%;
+        aspect-ratio: 4/3;
+        object-fit: cover;
+    }
+
+    .image-controls {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+    }
+
+    .print-selection-indicator {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: rgba(255,255,255,.92);
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        box-shadow: 0 2px 8px rgba(0,0,0,.18);
+    }
+
+        .print-selection-indicator.selected {
+            background: #244d88;
+            color: #fff;
+        }
+
+    .print-selection-badge, .new-image-badge {
+        position: absolute;
+        left: 10px;
+        bottom: 10px;
+        background: #244d88;
+        color: #fff;
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .new-image-badge {
+        left: auto;
+        right: 10px;
+        background: #15803d;
+        height:30px;
+    }
+
+    .print-config-section {
+        margin-top: 26px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 12px;
+    }
+
+        .print-config-section h3 {
+            margin-top: 0;
+            color: #244d88;
+        }
+
+    .config-options.two-col {
+        display: grid;
+        grid-template-columns: repeat(2,minmax(0,1fr));
+        gap: 18px;
+    }
+
+    .config-option label, .bleed-options label {
+        display: block;
+        margin-bottom: 7px;
+        font-weight: 700;
+        color: #344054;
+    }
+
+    .config-select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #d0d5dd;
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .checkbox-row {
+        display: flex;
+        gap: 22px;
+        flex-wrap: wrap;
+        margin-top: 18px;
+    }
+
+        .checkbox-row label {
+            font-weight: 600;
+            color: #344054;
+        }
+
+    .bleed-options {
+        margin-top: 16px;
+        padding: 14px;
+        background: #fff;
+        border: 1px solid #e4e7ec;
+        border-radius: 9px;
+    }
+
+    .range-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+        .range-row input {
+            flex: 1;
+        }
+
+        .range-row span {
+            min-width: 55px;
+            font-weight: 700;
+            color: #244d88;
+        }
+
+    .footer-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 16px 24px;
+        border-top: 1px solid #e8e8e8;
+        background: #fff;
+    }
+
+    .sticky-footer {
+        position: sticky;
+        bottom: 0;
+    }
+
+    .save-button, .discard-button, .generate-images-button, .toolbar-button {
+        border: 0;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+        .save-button, .generate-images-button, .toolbar-button.primary {
+            background: #244d88;
+            color: #fff;
+        }
+
+    .discard-button, .toolbar-button {
+        background: #eef1f5;
+        color: #344054;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #667085;
+    }
+
+    .empty-icon {
+        font-size: 46px;
+    }
+
+    .generation-loading-container, .generation-error, .generated-pdf-preview, .generated-history {
+        border: 1px solid #e4e7ec;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .generation-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: center;
+    }
+
+        .generation-header h3 {
+            margin: 0;
+        }
+
+    .generation-status {
+        font-weight: 700;
+        color: #244d88;
+    }
+
+    .progress-bar-container {
+        height: 10px;
+        border-radius: 999px;
+        background: #edf0f4;
+        overflow: hidden;
+        margin: 16px 0 10px;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: #244d88;
+        transition: width .25s ease;
+    }
+
+    .current-step-details {
+        color: #667085;
+        margin-bottom: 12px;
+    }
+
+    .step-item {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 4px 0;
+        color: #475467;
+    }
+
+    .step-check {
+        color: #15803d;
+        font-weight: 800;
+    }
+
+    .preview-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 14px;
+    }
+
+        .preview-toolbar > div:first-child {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+    .preview-meta {
+        color: #667085;
+        font-size: 13px;
+    }
+
+    .preview-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .print-content-section {
+        margin-top: 18px;
+    }
+
+        .print-content-section label {
+            display: block;
+            margin-bottom: 7px;
+            font-weight: 700;
+            color: #344054;
+        }
+
+    .config-textarea {
+        width: 100%;
+        min-height: 110px;
+        resize: vertical;
+        padding: 11px 12px;
+        border: 1px solid #d0d5dd;
+        border-radius: 8px;
+        font: inherit;
+        background: #fff;
+    }
+
+    .artwork-preview-stage {
+        background: #edf0f4;
+        border-radius: 9px;
+        padding: 16px;
+        margin-bottom: 14px;
+        display: flex;
+        justify-content: center;
+    }
+
+        .artwork-preview-stage img {
+            display: block;
+            max-width: 100%;
+            max-height: 680px;
+            object-fit: contain;
+            border-radius: 6px;
+            box-shadow: 0 5px 20px rgba(0,0,0,.12);
+        }
+
+    .pdf-preview-stage {
+        height: 580px;
+        background: #edf0f4;
+        border-radius: 9px;
+        overflow: hidden;
+    }
+
+        .pdf-preview-stage iframe {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            background: #fff;
+        }
+
+    .generated-history-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+        .generated-history-header h4 {
+            margin: 0;
+        }
+
+        .generated-history-header p {
+            margin: 4px 0 0;
+            color: #667085;
+        }
+
+    .generated-count {
+        background: #eef3fb;
+        color: #244d88;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-weight: 700;
+    }
+
+    .history-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill,minmax(230px,1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .history-card {
+        display: flex;
+        gap: 12px;
+        text-align: left;
+        border: 1px solid #e4e7ec;
+        background: #fff;
+        border-radius: 10px;
+        padding: 12px;
+        cursor: pointer;
+    }
+
+        .history-card.active {
+            border-color: #244d88;
+            box-shadow: 0 0 0 2px rgba(36,77,136,.10);
+        }
+
+    .pdf-card-icon {
+        width: 48px;
+        height: 56px;
+        display: grid;
+        place-items: center;
+        background: #f3f4f6;
+        color: #b42318;
+        font-weight: 900;
+        border-radius: 6px;
+        flex: 0 0 auto;
+    }
+
+    .history-artwork-thumb {
+        width: 64px;
+        height: 64px;
+        object-fit: cover;
+        border-radius: 7px;
+        flex: 0 0 auto;
+    }
+
+    .history-card-info {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+    }
+
+        .history-card-info span, .history-card-info small {
+            color: #667085;
+        }
+
+    .modal-busy-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(255,255,255,.55);
+        z-index: 2000;
+        display: grid;
+        place-items: center;
+    }
+
+    .loader {
+        width: 44px;
+        height: 44px;
+        border: 5px solid #dbe4f0;
+        border-top-color: #244d88;
+        border-radius: 50%;
+        animation: spin .8s linear infinite;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @@media (max-width: 760px) {
+        .modal-overlay {
+            padding: 8px;
+        }
+
+        .vertical-modal-wrapper {
+            width: 100%;
+            max-height: 98vh;
+        }
+
+        .config-options.two-col {
+            grid-template-columns: 1fr;
+        }
+
+        .preview-toolbar {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .pdf-preview-stage {
+            height: 420px;
+        }
+        /* Center footer buttons on mobile */
+        .footer-actions {
+            justify-content: center;
+            align-items: center;
+        }
+    }
+</style>
