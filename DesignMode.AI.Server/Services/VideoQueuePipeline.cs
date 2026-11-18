@@ -15,7 +15,7 @@ public static class VideoQueuePipeline
 
     public static QueueClientOptions CreateClientOptions() => new()
     {
-        MessageEncoding = QueueMessageEncoding.Base64
+        MessageEncoding = QueueMessageEncoding.None
     };
 
     public static string Serialize<T>(T message) =>

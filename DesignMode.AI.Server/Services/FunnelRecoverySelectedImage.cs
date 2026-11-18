@@ -36,6 +36,37 @@ public static class FunnelRecoverySelectedImage
             var invites = await ReadAsync(client, "SELECT Id, ImageId FROM InviteClient WHERE Id = ?", inviteId);
             if (invites.Count != 1 || invites[0].GetValueOrDefault("Id")?.S != inviteId) return null;
             var imageId = invites[0].GetValueOrDefault("ImageId")?.S;
+
+            if (string.IsNullOrWhiteSpace(imageId))
+            {
+                var conceptImages = await ReadAsync(client,
+                    new ExecuteStatementRequest
+                    {
+                        Statement =
+                            "SELECT InviteId, ImageId, CountId FROM InviteClientImages WHERE InviteId = ?",
+                        Parameters = [new() { S = inviteId }],
+                        ConsistentRead = true
+                    });
+
+                var firstConcept = conceptImages
+                    .Where(x =>
+                        x.GetValueOrDefault("InviteId")?.S == inviteId &&
+                        !string.IsNullOrWhiteSpace(x.GetValueOrDefault("ImageId")?.S) &&
+                        (ownedImages == null ||
+                         ownedImages.Contains(x.GetValueOrDefault("ImageId")!.S)))
+                    .OrderBy(x =>
+                        int.TryParse(x.GetValueOrDefault("CountId")?.S, out var n)
+                            ? n
+                            : int.TryParse(x.GetValueOrDefault("CountId")?.N, out n)
+                                ? n
+                                : int.MaxValue)
+                    .FirstOrDefault();
+
+                imageId = firstConcept?.GetValueOrDefault("ImageId")?.S;
+            }
+
+            if (string.IsNullOrWhiteSpace(imageId))
+                return null;
             if (string.IsNullOrWhiteSpace(imageId)) return null;
             if (ownedImages is not null && !ownedImages.Contains(imageId)) return null;
             // Match FunnelEnd.FetchInviteClientImages: MainConcept's selected ImageId
@@ -58,7 +89,7 @@ public static class FunnelRecoverySelectedImage
         }
     }
 
-    private static async Task<(string? InviteId, HashSet<string> Images)> ResolveJobInviteAsync(
+    internal static async Task<(string? InviteId, HashSet<string> Images)> ResolveJobInviteAsync(
         IAmazonDynamoDB client, string userId, IReadOnlyDictionary<string, AttributeValue> project)
     {
         var images = new HashSet<string>(StringComparer.Ordinal);

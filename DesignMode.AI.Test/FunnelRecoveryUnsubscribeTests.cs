@@ -160,6 +160,12 @@ public sealed class FunnelRecoveryUnsubscribeTests
             return Task.FromResult<FunnelRecoveryState?>(Missing ? null :
                 new(Id, "canonical-user", "funnel", "project", DateTimeOffset.UtcNow));
         }
+        public Task<string?> ResolveInviteIdAsync(
+    string userId,
+    string projectId)
+        {
+            return Task.FromResult<string?>(null);
+        }
         public Task<FunnelRecoveryContext?> ResolveAsync(string id) => throw new NotImplementedException();
         public Task<FunnelRecoveryState> RecordReadyAsync(FunnelRecoveryContext context, DateTimeOffset at) => throw new NotImplementedException();
         public Task<bool> ClaimAsync(string id) => throw new NotImplementedException();

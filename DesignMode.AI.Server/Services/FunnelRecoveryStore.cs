@@ -22,6 +22,32 @@ public sealed partial class FunnelRecoveryStore : IFunnelRecoveryStore, IFunnelR
         _routing = routing;
     }
 
+
+    public async Task<string?> ResolveInviteIdAsync(
+        string userId,
+        string projectId)
+    {
+        using var client = _createClient();
+
+        var project = await GetAsync(
+            client, "Projects", projectId);
+
+        if (Value(project, "UserId") != userId)
+            return null;
+
+        string inviteId = Value(project, "LegacyInviteId");
+
+        if (!string.IsNullOrWhiteSpace(inviteId))
+            return inviteId;
+
+        var (resolvedInviteId, _) =
+            await FunnelRecoverySelectedImage.ResolveJobInviteAsync(
+                client, userId, project);
+
+        return resolvedInviteId;
+    }
+
+
     private static AttributeValue S(string value) => new() { S = value };
     private static Dictionary<string, AttributeValue> Key(string id) => new() { ["Id"] = S(id) };
     private static string Value(Dictionary<string, AttributeValue> row, string name) => row.GetValueOrDefault(name)?.S ?? "";
@@ -34,19 +60,93 @@ public sealed partial class FunnelRecoveryStore : IFunnelRecoveryStore, IFunnelR
             TableName = table, Key = new() { [key] = S(id) }, ConsistentRead = true
         })).Item ?? new();
 
+
+
     public async Task<FunnelRecoveryContext?> ResolveAsync(string jobId)
     {
         using var client = _createClient();
-        var job = await GetAsync(client, Environment.GetEnvironmentVariable("DynamoDbTableName") ?? "DesignModeJobs", jobId, "JobId");
-        // New jobs carry the existing generation path's kind. Legacy jobs and
-        // website previews cannot be enrolled by a delayed/replayed completion.
-        if (Value(job, "PreviewKind") != "Social" || Value(job, "Status") != "Completed" ||
-            string.IsNullOrWhiteSpace(Value(job, "VideoUrl"))) return null;
-        var projectId = Value(job, "ProjectId");
-        var funnelId = Value(job, "FunnelId");
-        if (string.IsNullOrWhiteSpace(projectId) || string.IsNullOrWhiteSpace(funnelId)) return null;
-        return await ResolveOwnershipAsync(client, Value(job, "UserId"), funnelId, projectId);
+
+        string tableName =
+            Environment.GetEnvironmentVariable("DynamoDbTableName")
+            ?? "DesignModeJobs";
+
+        var job = await GetAsync(client, tableName, jobId, "JobId");
+
+        if (Value(job, "PreviewKind") != "Social" ||
+            Value(job, "Status") != "Completed" ||
+            string.IsNullOrWhiteSpace(Value(job, "VideoUrl")))
+            return null;
+
+        string userId = Value(job, "UserId");
+        string projectId = Value(job, "ProjectId");
+        string funnelId = Value(job, "FunnelId");
+        string imageId = Value(job, "ImageId");
+
+        if (string.IsNullOrWhiteSpace(userId) ||
+            string.IsNullOrWhiteSpace(projectId) ||
+            string.IsNullOrWhiteSpace(funnelId) ||
+            string.IsNullOrWhiteSpace(imageId))
+            return null;
+
+        var project = await GetAsync(client, "Projects", projectId);
+
+        if (Value(project, "UserId") != userId ||
+            Value(project, "OriginatingFunnelId") != funnelId)
+            return null;
+
+        // Find the invite through the existing owned video jobs.
+        // Works even when LegacyInviteId is missing.
+        var (inviteId, ownedImages) =
+            await FunnelRecoverySelectedImage.ResolveJobInviteAsync(
+                client, userId, project);
+
+        if (string.IsNullOrWhiteSpace(inviteId) ||
+            !ownedImages.Contains(imageId))
+            return null;
+
+        var inviteResult = await client.ExecuteStatementAsync(
+            new ExecuteStatementRequest
+            {
+                Statement =
+                    "SELECT Id, ImageId FROM InviteClient WHERE Id = ?",
+                Parameters =
+                [
+                    new AttributeValue { S = inviteId }
+                ],
+                ConsistentRead = true
+            });
+
+        var invite = inviteResult.Items?.FirstOrDefault();
+
+        if (invite == null || Value(invite, "Id") != inviteId)
+            return null;
+
+        string selectedImageId = Value(invite, "ImageId");
+
+        if (!string.IsNullOrWhiteSpace(selectedImageId))
+        {
+            // User selection takes priority.
+            if (imageId != selectedImageId)
+                return null;
+        }
+        else
+        {
+            // No selection: only Concept 1 triggers the email.
+            var concept = job.GetValueOrDefault("ConceptNumber");
+
+            if (concept?.N != "1" && concept?.S != "1")
+                return null;
+        }
+
+        // Preserve existing canonical ownership and eligibility checks.
+        return await ResolveOwnershipAsync(
+            client,
+            userId,
+            funnelId,
+            projectId);
     }
+
+
 
     private async Task<FunnelRecoveryContext?> ResolveOwnershipAsync(IAmazonDynamoDB client,
         string expectedUserId, string funnelId, string projectId)

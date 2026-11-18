@@ -5166,14 +5166,31 @@
                 {
                     var images = await FetchInviteClientImages(invite.Id);
 
-                    var matchingImage = images.FirstOrDefault(i => i.ImageId == invite.ImageId);
+                    // Use the selected image, or default to Concept 1.
+                    var matchingImage = images.FirstOrDefault(
+                        i => !string.IsNullOrWhiteSpace(invite.ImageId) &&
+                             i.ImageId == invite.ImageId);
+
+                    matchingImage ??= images
+                        .Where(i => !string.IsNullOrWhiteSpace(i.ImageId) &&
+                                    !string.IsNullOrWhiteSpace(i.ImageUrl))
+                        .OrderBy(i => int.TryParse(i.CountId, out var n)
+                            ? n : int.MaxValue)
+                        .FirstOrDefault();
 
                     // Load the other generated directions for section 8.
                     // Their completed video URLs are fetched from the same job-status endpoint.
+
                     var otherImages = images
-                        .Where(i => i.ImageId != invite.ImageId)
+                        .Where(i =>
+                            matchingImage != null &&
+                            !string.IsNullOrWhiteSpace(i.ImageId) &&
+                            i.ImageId != matchingImage.ImageId)
+                        .OrderBy(i => int.TryParse(i.CountId, out var n)
+                            ? n : int.MaxValue)
                         .Take(2)
                         .ToList();
+
 
                     otherDirectionVideos = new List<OtherDirectionVideo>();
                     for (var index = 0; index < otherImages.Count; index++)

@@ -28,6 +28,9 @@ public interface IFunnelRecoveryStore
     Task SuppressAsync(string id);
     Task MarkSentAsync(string id, string messageId);
     Task RejectAsync(string id);
+    Task<string?> ResolveInviteIdAsync(
+    string userId,
+    string projectId);
 }
 
 public interface IFunnelRecoveryEmailSender
@@ -39,8 +42,12 @@ public interface IFunnelRecoveryEmailSender
 // may have happened after SES accepted the email and must retain the claim.
 public sealed class FunnelRecoveryEmailRejectedException : Exception { }
 
-public sealed class FunnelRecoveryService(IFunnelRecoveryStore store, IFunnelRecoveryEmailSender sender,
-    ILogger<FunnelRecoveryService> logger, FunnelRecoveryUnsubscribe? unsubscribe = null)
+public sealed class FunnelRecoveryService(
+    IFunnelRecoveryStore store,
+    IFunnelRecoveryEmailSender sender,
+    ILogger<FunnelRecoveryService> logger,
+    FunnelRecoveryUnsubscribe? unsubscribe = null,
+    FunnelEmailTrackingService? tracking = null)
 {
     public static string RecoveryId(FunnelRecoveryContext context) => Convert.ToHexString(
         SHA256.HashData(Encoding.UTF8.GetBytes($"video-ready:{context.UserId}:{context.FunnelId}:{context.ProjectId}")));
@@ -112,7 +119,28 @@ public sealed class FunnelRecoveryService(IFunnelRecoveryStore store, IFunnelRec
         try
         {
             logger.LogInformation("[RECOVERY EMAIL] selected concept resolved={Resolved}", context!.SelectedImageUrl is not null);
-            var message = FunnelRecoveryEmail.Create(hostUrl, context.CurrentPage, allowLocalLinks, context.SelectedImageUrl,
+            var encryptedEmail = Convert.ToBase64String(
+    Encoding.UTF8.GetBytes(context.Email));
+
+            var inviteId = await store.ResolveInviteIdAsync(
+                context.UserId,
+                context.ProjectId);
+
+            if (string.IsNullOrWhiteSpace(inviteId))
+                throw new InvalidOperationException(
+                    "Cannot generate FunnelEnd link without InviteId.");
+
+            var route =
+                $"/init/funnelend?i=1" +
+                $"&id={Uri.EscapeDataString(inviteId)}" +
+                $"&e={Uri.EscapeDataString(encryptedEmail)}" +
+                $"&eid={Uri.EscapeDataString(encryptedEmail)}";
+
+            var message = FunnelRecoveryEmail.Create(
+                hostUrl,
+                route,
+                allowLocalLinks,
+                context.SelectedImageUrl,
                 unsubscribe?.CreateUrl(hostUrl, state.Id, allowLocalLinks));
             logger.LogInformation("[RECOVERY EMAIL] template rendered");
             logger.LogInformation("[FUNNEL RECOVERY] email send started");
@@ -130,7 +158,29 @@ public sealed class FunnelRecoveryService(IFunnelRecoveryStore store, IFunnelRec
             return;
         }
         // If this write fails, the claim remains held. Never resend an accepted email.
+
         await store.MarkSentAsync(state.Id, messageId);
-        logger.LogInformation("[FUNNEL RECOVERY] video-ready email sent");
+
+        logger.LogInformation(
+            "[FUNNEL RECOVERY] video-ready email sent");
+
+        try
+        {
+            if (tracking is not null)
+                await tracking.TrackAsync(
+                recoveryId: state.Id,
+                campaignId: "video-preview-ready",
+                variant: "A",
+                eventType: "Sent",
+                projectId: context!.ProjectId,
+                funnelId: context.FunnelId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "[EMAIL TRACKING] Failed to record sent event.");
+        }
     }
+
 }

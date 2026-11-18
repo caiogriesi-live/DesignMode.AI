@@ -122,4 +122,25 @@ public sealed class CanonicalUserStore
         bytes[8] = (byte)((bytes[8] & 0x3f) | 0x80);
         return new Guid(bytes).ToString();
     }
+
+    public async Task<CanonicalUser?> FindByIdAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return null;
+
+        using var client = _attributionStore.CreateClient();
+
+        var result = await client.GetItemAsync(
+            new GetItemRequest
+            {
+                TableName = "Users",
+                Key = new()
+                {
+                    ["Id"] = new AttributeValue { S = userId }
+                },
+                ConsistentRead = true
+            });
+
+        return ToUser(result.Item);
+    }
 }

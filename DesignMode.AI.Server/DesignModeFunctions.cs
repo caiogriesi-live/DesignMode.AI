@@ -5,6 +5,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using DesignMode.AI.Common;
 using DesignMode.AI.Shared;
+using DesignMode.AI.Shared.Security;
 using DesignMode.AI.Shared.Interfaces.Data;
 using DesignMode.AI.Shared.Models;
 using DesignMode.AI.Shared.Models.Attribution;
@@ -128,6 +129,1587 @@ namespace DesignMode.AI.Server
             this.creditPurchases = creditPurchases;
             this.funnelRecovery = funnelRecovery;
             this.funnelRecoverySequence = funnelRecoverySequence;
+        }
+
+        private static async Task QueueImageCompletionEmailAsync(
+            string batchId,
+            CancellationToken ct)
+        {
+            var batch = await Read(BKey(batchId), ct)
+                ?? throw new InvalidOperationException("Batch missing.");
+
+            if (V(batch, "EmailStatus") != "Dispatching")
+                throw new InvalidOperationException(
+                    "Email batch is not claimed for dispatch.");
+
+            var images = new List<string>();
+
+            for (int n = 1; n <= 3; n++)
+            {
+                var job = await Read(IKey(batchId, n), ct);
+
+                if (job == null ||
+                    V(job, "Status") != "Completed" ||
+                    !Saved(job) ||
+                    string.IsNullOrWhiteSpace(V(job, "ImageUrl")))
+                    return;
+
+                images.Add(V(job, "ImageUrl"));
+            }
+
+            var queue = new QueueClient(
+                Environment.GetEnvironmentVariable("AzureWebJobsStorage"),
+                "image-completion-emails");
+
+            await queue.CreateIfNotExistsAsync(cancellationToken: ct);
+
+            await queue.SendMessageAsync(
+                JsonConvert.SerializeObject(new
+                {
+                    BatchId = batchId,
+                    UserId = V(batch, "UserId"),
+                    ProjectId = V(batch, "ProjectId"),
+                    ImageUrls = images
+                }),
+                cancellationToken: ct);
+        }
+
+        private const string ImageQueue = "runware-image-batch";
+        private static string Table => Environment.GetEnvironmentVariable("DynamoDbTableName") ?? "DesignModeJobs";
+        private static string BKey(string id) => id + ":batch";
+        private static string IKey(string id, int n) => id + ":image:" + n;
+        private static AttributeValue A(string s) => new() { S = s };
+        private static string V(Dictionary<string, AttributeValue> d, string k) => d.TryGetValue(k, out var v) ? v.S ?? "" : "";
+        private static bool Saved(Dictionary<string, AttributeValue> d) =>
+    d.TryGetValue("InviteSaved", out var v) && v.BOOL == true;
+        private sealed class Direction { public int ConceptNumber { get; set; } public string Prompt { get; set; } = ""; public string Style { get; set; } = ""; public string StylePrompt { get; set; } = ""; }
+        private sealed class Request { public bool UseModelsLabPrimary { get; set; } = true; public string? LandingVariant { get; set; } public string FunnelId { get; set; } = ""; public string InviteId { get; set; } = ""; public string PromptId { get; set; } = ""; public string ProjectId { get; set; } = ""; public string Name { get; set; } = ""; public string Industry { get; set; } = ""; public List<Direction> Directions { get; set; } = new(); }
+        private sealed class Work { public string BatchId { get; set; } = ""; public int ConceptNumber { get; set; } }
+        private static async Task<Dictionary<string, AttributeValue>?> Read(string key, CancellationToken ct)
+        { using var db = DynamoDbClientFactory.CreateClient(); var r = await db.GetItemAsync(new GetItemRequest { TableName = Table, Key = new() { ["JobId"] = A(key) }, ConsistentRead = true }, ct); return r.Item is { Count: > 0 } ? r.Item : null; }
+        private static async Task Update(string key, string expression, Dictionary<string, AttributeValue> vals, CancellationToken ct)
+        { using var db = DynamoDbClientFactory.CreateClient(); await db.UpdateItemAsync(new UpdateItemRequest { TableName = Table, Key = new() { ["JobId"] = A(key) }, UpdateExpression = expression, ConditionExpression = "attribute_exists(JobId)", ExpressionAttributeNames = new() { ["#status"] = "Status" }, ExpressionAttributeValues = vals }, ct); }
+
+        [Function("QueueRunwareImageBatchInit")]
+        public async Task<IActionResult> QueueRunwareImageBatchInit([HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req, CancellationToken ct)
+        {
+            var claim = jwtUserResolver.ResolveUserId(req);
+            if (string.IsNullOrWhiteSpace(claim)) return new UnauthorizedResult();
+            var userId = await attributionStore.ResolveClaimedUserIdAsync(claim);
+            if (string.IsNullOrWhiteSpace(userId)) return new UnauthorizedResult();
+            Request? data;
+            try { using var sr = new StreamReader(req.Body); data = JsonConvert.DeserializeObject<Request>(await sr.ReadToEndAsync()); }
+            catch (System.Text.Json.JsonException) { return new BadRequestObjectResult("Invalid JSON"); }
+            if (data == null || string.IsNullOrWhiteSpace(data.ProjectId) || string.IsNullOrWhiteSpace(data.InviteId) || data.Directions.Count != 3 || !data.Directions.Select(x => x.ConceptNumber).OrderBy(x => x).SequenceEqual(new[] { 1, 2, 3 }) || data.Directions.Any(x => string.IsNullOrWhiteSpace(x.Prompt))) return new BadRequestObjectResult("Three numbered prompts and invite/project required");
+            if (await attributionStore.GetOwnedGenerationProjectAsync(userId, data.ProjectId) == null) return new UnauthorizedResult();
+            // TODO before deployment: validate InviteId ownership, enforce quota, and deduplicate batches by invite.
+            string id = Guid.NewGuid().ToString("N");
+            using (var db = DynamoDbClientFactory.CreateClient())
+            {
+                var items = new List<TransactWriteItem>();
+                void Add(Dictionary<string, AttributeValue> item) => items.Add(new TransactWriteItem { Put = new Put { TableName = Table, Item = item, ConditionExpression = "attribute_not_exists(JobId)" } });
+                Add(new() { ["JobId"] = A(BKey(id)), ["BatchId"] = A(id), ["UserId"] = A(userId), ["Status"] = A("Queued"), ["EmailStatus"] = A("Pending"), ["ProjectId"] = A(data.ProjectId), ["FunnelId"] = A(data.FunnelId) });
+                foreach (var d in data.Directions) Add(new() { ["JobId"] = A(IKey(id, d.ConceptNumber)), ["BatchId"] = A(id), ["ConceptNumber"] = new() { N = d.ConceptNumber.ToString() }, ["Status"] = A("Queued"), ["InviteId"] = A(data.InviteId), ["PromptId"] = A(data.PromptId), ["PositivePrompt"] = A(d.Prompt), ["Style"] = A(d.Style), ["StylePrompt"] = A(d.StylePrompt), ["PromptText"] = A(data.Name + " — " + data.Industry),
+                    ["Name"] = A(data.Name ?? ""),
+                    ["Industry"] = A(data.Industry ?? ""),
+                    ["InviteSaved"] = new() { BOOL = false }, ["ProjectId"] = A(data.ProjectId), ["FunnelId"] = A(data.FunnelId), ["UserId"] = A(userId), ["UseModelsLabPrimary"] = new() { BOOL = data.UseModelsLabPrimary }, ["LandingVariant"] = A(data.LandingVariant ?? "") });
+                await db.TransactWriteItemsAsync(new TransactWriteItemsRequest { TransactItems = items }, ct);
+            }
+            var enqueueTimer = System.Diagnostics.Stopwatch.StartNew();
+
+            _logger.LogInformation(
+                "[IMAGE TIMING] Batch {BatchId}: About to create queue and enqueue jobs at {TimeUtc}",
+                id, DateTimeOffset.UtcNow);
+
+            var queue = new QueueClient(
+                Environment.GetEnvironmentVariable("AzureWebJobsStorage"), ImageQueue);
+
+            await queue.CreateIfNotExistsAsync(cancellationToken: ct);
+
+            _logger.LogInformation(
+                "[IMAGE TIMING] Batch {BatchId}: Queue ready after {Elapsed}ms",
+                id, enqueueTimer.ElapsedMilliseconds);
+
+            foreach (var d in data.Directions)
+            {
+                var sendTimer = System.Diagnostics.Stopwatch.StartNew();
+
+                await queue.SendMessageAsync(
+                    JsonConvert.SerializeObject(new Work
+                    {
+                        BatchId = id,
+                        ConceptNumber = d.ConceptNumber
+                    }),
+                    cancellationToken: ct);
+
+                _logger.LogInformation(
+                    "[IMAGE TIMING] Batch {BatchId}: Concept {Concept} enqueued after {Elapsed}ms at {TimeUtc}",
+                    id, d.ConceptNumber, sendTimer.ElapsedMilliseconds,
+                    DateTimeOffset.UtcNow);
+            }
+
+            _logger.LogInformation(
+                "[IMAGE TIMING] Batch {BatchId}: All jobs enqueued. Total {Elapsed}ms",
+                id, enqueueTimer.ElapsedMilliseconds);
+            // TODO: transactional outbox for failures between database writes and queue sends.
+            return new ObjectResult(new { batchId = id, status = "Queued" }) { StatusCode = 202 };
+        }
+
+        [Function("ProcessRunwareImageInit")]
+        public async Task ProcessRunwareImageInit([QueueTrigger(ImageQueue, Connection = "AzureWebJobsStorage")] string body, CancellationToken ct)
+        {
+            _logger.LogInformation("[IMAGE TIMING] Worker STARTED at {TimeUtc}. Body: {Body}", DateTimeOffset.UtcNow, body);
+            var msg = JsonConvert.DeserializeObject<Work>(body) ?? throw new InvalidOperationException("Invalid queue message");
+            var key = IKey(msg.BatchId, msg.ConceptNumber);
+            var job = await Read(key, ct) ?? throw new InvalidOperationException("Job missing");
+            if (V(job, "Status") == "Completed")
+            {
+                await EnsureVideoJobAsync(
+                    msg.BatchId,
+                    msg.ConceptNumber,
+                    V(job, "ImageId"),
+                    V(job, "ImageUrl"),
+                    ct);
+
+                await CompleteBatch(msg.BatchId, ct);
+                return;
+            }
+            string url = V(job, "ImageUrl");
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                // Reuse the EXACT original provider implementation: prompt rewriting,
+                // 1.5-second Runware/ModelsLab hedge, ModelsLab fetch polling,
+                // Runware parameters, and AI usage tracking.
+                // The trusted user identity comes from the persisted, validated job.
+                var context = new DefaultHttpContext();
+                context.RequestAborted = ct;
+                context.Items["InternalImageBatchUserId"] = V(job, "UserId");
+                context.Request.Method = "POST";
+                context.Request.ContentType = "application/json";
+                var originalRequest = new
+                {
+                    positivePrompt = V(job, "PositivePrompt"),
+                    useModelsLabPrimary = job.TryGetValue("UseModelsLabPrimary", out var flag) && flag.BOOL == true,
+                    landingVariant = V(job, "LandingVariant"),
+                    projectId = V(job, "ProjectId"),
+                    funnelId = V(job, "FunnelId"),
+                    generationJobId = key,
+                    width = 1344,
+                    height = 768,
+                    numberResults = 1
+                };
+                context.Request.Body = new MemoryStream(
+                    Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(originalRequest)));
+                var apiTimer = System.Diagnostics.Stopwatch.StartNew();
+
+                _logger.LogInformation(
+                    "[IMAGE TIMING] Runware API STARTED at {TimeUtc}. Batch {BatchId}, Concept {Concept}",
+                    DateTimeOffset.UtcNow, msg.BatchId, msg.ConceptNumber);
+
+                var providerResult = await CallRunwareAPIInit(context.Request, _logger);
+
+                _logger.LogInformation(
+                    "[IMAGE TIMING] Runware API FINISHED. Batch {BatchId}, Concept {Concept}, Duration {Elapsed}ms",
+                    msg.BatchId, msg.ConceptNumber, apiTimer.ElapsedMilliseconds);
+                if (providerResult is not OkObjectResult ok || ok.Value == null)
+                {
+                    _logger.LogError(
+                        "[IMAGE JOB] Provider returned {ResultType}: {Details}",
+                        providerResult?.GetType().Name,
+                        JsonConvert.SerializeObject(providerResult));
+
+                    throw new InvalidOperationException(
+                        "Image generation provider returned an unsuccessful result.");
+                }
+                var json = JToken.FromObject(ok.Value);
+                url = json.SelectTokens("$..ImageURL")
+                   .Concat(json.SelectTokens("$..imageURL"))
+                   .Select(x => x.Value<string>())
+                   .FirstOrDefault(x => Uri.TryCreate(x, UriKind.Absolute, out var u) &&
+                       u.Scheme == Uri.UriSchemeHttps) ?? "";
+                if (string.IsNullOrWhiteSpace(url))
+                    throw new InvalidOperationException("Providers returned no usable HTTPS image URL.");
+                // TODO: copy Runware image to permanent storage.
+                await Update(key, "SET ImageUrl=:url, #status=:status", new() { [":url"] = A(url), [":status"] = A("Saving") }, ct);
+            }
+            _logger.LogInformation("[IMAGE JOB] Saving image idea");
+            string imageId = await SaveImageIdeaInBackgroundAsync(msg.BatchId, msg.ConceptNumber, V(job, "PromptId"), V(job, "PositivePrompt"), url, ct);
+            _logger.LogInformation("[IMAGE JOB] Saving invite image");
+            string inviteImageId = await SaveInviteImageInBackgroundAsync(msg.BatchId, msg.ConceptNumber, V(job, "InviteId"), imageId, url, V(job, "Style"), V(job, "StylePrompt"), V(job, "PromptText"), ct);
+            await Update(key, "SET #status=:status, ImageId=:image, InviteImageId=:invite, InviteSaved=:saved", new() { [":status"] = A("Completed"), [":image"] = A(imageId), [":invite"] = A(inviteImageId), [":saved"] = new() { BOOL = true } }, ct);
+            await EnsureVideoJobAsync(
+    msg.BatchId,
+    msg.ConceptNumber,
+    imageId,
+    url,
+    ct);
+            await CompleteBatch(msg.BatchId, ct);
+        }
+        private async Task EnsureVideoJobAsync(
+    string batchId,
+    int conceptNumber,
+    string imageId,
+    string imageUrl,
+    CancellationToken ct)
+        {
+            var imageJob = await Read(IKey(batchId, conceptNumber), ct)
+                ?? throw new InvalidOperationException("Image job missing.");
+
+            string userId = V(imageJob, "UserId");
+            string projectId = V(imageJob, "ProjectId");
+            string funnelId = V(imageJob, "FunnelId");
+
+            if (string.IsNullOrWhiteSpace(userId) ||
+                string.IsNullOrWhiteSpace(projectId) ||
+                string.IsNullOrWhiteSpace(funnelId))
+                throw new InvalidOperationException("Video generation context missing.");
+
+            byte[] hash = System.Security.Cryptography.SHA256.HashData(
+                Encoding.UTF8.GetBytes($"{batchId}:video:{conceptNumber}"));
+
+            string jobId = new Guid(hash.Take(16).ToArray()).ToString();
+
+            var request = new OpenAIIdeaRequestQueue
+            {
+                JobId = jobId,
+                GenerationJobId = jobId,
+                ImageId = imageId,
+                ImageUrl = imageUrl,
+                ConceptNumber = conceptNumber,
+                UserId = userId,
+                ProjectId = projectId,
+                FunnelId = funnelId,
+                Name = V(imageJob, "Name"),
+                Industry = V(imageJob, "Industry"),
+                LandingVariant = V(imageJob, "LandingVariant")
+            };
+
+            string tableName =
+                Environment.GetEnvironmentVariable("DynamoDbTableName")
+                ?? "DesignModeJobs";
+
+            using var dynamoDb =
+                DesignMode.AI.Server.Services.DynamoDbClientFactory.CreateClient();
+
+            bool created = false;
+
+            try
+            {
+                string now = DateTimeOffset.UtcNow.ToString("O");
+
+                await dynamoDb.PutItemAsync(
+                    new PutItemRequest
+                    {
+                        TableName = tableName,
+                        ConditionExpression = "attribute_not_exists(JobId)",
+                        Item = new Dictionary<string, AttributeValue>
+                        {
+                            ["JobId"] = new() { S = jobId },
+                            ["GenerationJobId"] = new() { S = jobId },
+                            ["ImageId"] = new() { S = imageId },
+                            ["ImageUrl"] = new() { S = imageUrl },
+                            ["UserId"] = new() { S = userId },
+                            ["ProjectId"] = new() { S = projectId },
+                            ["FunnelId"] = new() { S = funnelId },
+                            ["Name"] = new() { S = request.Name ?? "" },
+                            ["Industry"] = new() { S = request.Industry ?? "" },
+                            ["PreviewKind"] = new()
+                            {
+                                S = WebsiteFunnelPromptResolver.IsWebsite(
+                                    request.LandingVariant) ? "Website" : "Social"
+                            },
+                            ["ConceptNumber"] = new()
+                            {
+                                N = conceptNumber.ToString()
+                            },
+                            ["Status"] = new() { S = "Queued" },
+                            ["CurrentStep"] = new() { S = "Queued" },
+                            ["ImageDescription"] = new() { S = "" },
+                            ["Script"] = new() { S = "" },
+                            ["VideoUrl"] = new() { S = "" },
+                            ["Error"] = new() { S = "" },
+                            ["CreatedAtUtc"] = new() { S = now },
+                            ["UpdatedAtUtc"] = new() { S = now }
+                        }
+                    }, ct);
+
+                created = true;
+            }
+            catch (ConditionalCheckFailedException)
+            {
+                _logger.LogInformation(
+                    "[VIDEO QUEUE] Existing job {JobId}", jobId);
+            }
+
+            // Only enqueue newly created jobs.
+            // Existing jobs must not be submitted twice.
+            if (!created)
+                return;
+
+            string storage =
+                Environment.GetEnvironmentVariable("AzureWebJobsStorage")
+                ?? throw new InvalidOperationException("AzureWebJobsStorage missing.");
+
+            var queue = new QueueClient(
+                storage,
+                VideoQueuePipeline.RequestQueueName,
+                VideoQueuePipeline.CreateClientOptions());
+
+            await queue.CreateIfNotExistsAsync(cancellationToken: ct);
+
+            await queue.SendMessageAsync(
+                VideoQueuePipeline.Serialize(request),
+                cancellationToken: ct);
+
+            _logger.LogInformation(
+                "[VIDEO QUEUE] Enqueued job {JobId}, concept {Concept}",
+                jobId,
+                conceptNumber);
+        }
+
+
+
+
+        [Function("SendImageCompletionEmail")]
+        public async Task SendImageCompletionEmail(
+            [QueueTrigger("image-completion-emails",
+        Connection = "AzureWebJobsStorage")] string body,
+            CancellationToken ct)
+        {
+            var message = JsonConvert.DeserializeObject<ImageCompletionMessage>(body)
+                ?? throw new InvalidOperationException("Invalid email message.");
+
+            if (string.IsNullOrWhiteSpace(message.BatchId) ||
+                string.IsNullOrWhiteSpace(message.UserId) ||
+                message.ImageUrls == null ||
+                message.ImageUrls.Length != 3)
+                throw new InvalidOperationException("Invalid email completion data.");
+
+            using var db = DynamoDbClientFactory.CreateClient();
+
+            var batch = await Read(BKey(message.BatchId), ct)
+                ?? throw new InvalidOperationException("Batch not found.");
+
+            if (V(batch, "EmailStatus") == "Sent")
+                return;
+
+            if (V(batch, "EmailStatus") == "Dispatching")
+                throw new InvalidOperationException(
+                    "Email dispatch has not finished.");
+
+            // Resolve the invite associated with this image batch.
+            var imageJob = await Read(IKey(message.BatchId, 1), ct)
+                ?? throw new InvalidOperationException("Image job not found.");
+
+            string inviteId = V(imageJob, "InviteId");
+
+            if (string.IsNullOrWhiteSpace(inviteId))
+                throw new InvalidOperationException("InviteId missing.");
+
+            var user = await canonicalUserStore.FindByIdAsync(
+                V(batch, "UserId"))
+                ?? throw new InvalidOperationException("User not found.");
+
+            string emailAddress = user.Username;
+
+            // Same Base64 encoding used by DesignerIntro.
+            string encryptedEmail = Convert.ToBase64String(
+                Encoding.UTF8.GetBytes(emailAddress));
+
+            string host = Environment.GetEnvironmentVariable("HostUrl")
+                ?? throw new InvalidOperationException("HostUrl missing.");
+
+            string resumeUrl =
+                $"{host.TrimEnd('/')}/init/mainconcept" +
+                $"?i=1&id={Uri.EscapeDataString(inviteId)}" +
+                $"&e={Uri.EscapeDataString(encryptedEmail)}" +
+                $"&eid={Uri.EscapeDataString(encryptedEmail)}";
+
+            // Validate before claiming the SES send.
+            var email = ImageCompletionEmail.Create(
+    message.ImageUrls,
+    resumeUrl);
+
+            string claimId = Guid.NewGuid().ToString("N");
+
+            try
+            {
+                await db.UpdateItemAsync(new UpdateItemRequest
+                {
+                    TableName = Table,
+                    Key = new()
+                    {
+                        ["JobId"] = A(BKey(message.BatchId))
+                    },
+                    UpdateExpression =
+                        "SET EmailStatus = :sending, " +
+                        "EmailSendingAtUtc = :now, " +
+                        "EmailSendingClaimId = :claim",
+                    ConditionExpression =
+                        "EmailStatus = :queued",
+                    ExpressionAttributeValues = new()
+                    {
+                        [":sending"] = A("Sending"),
+                        [":queued"] = A("Queued"),
+                        [":now"] = A(DateTimeOffset.UtcNow.ToString("O")),
+                        [":claim"] = A(claimId)
+                    }
+                }, ct);
+            }
+            catch (ConditionalCheckFailedException)
+            {
+                _logger.LogInformation(
+                    "[IMAGE EMAIL] Batch {BatchId} already claimed.",
+                    message.BatchId);
+                return;
+            }
+
+            try
+            {
+                var sender = new SesFunnelRecoveryEmailSender(
+                    new FunnelRecoveryConfiguration(
+                        new ConfigurationBuilder()
+                            .AddEnvironmentVariables()
+                            .Build()));
+
+                string messageId = await sender.SendAsync(
+                    emailAddress, email);
+
+                await db.UpdateItemAsync(new UpdateItemRequest
+                {
+                    TableName = Table,
+                    Key = new()
+                    {
+                        ["JobId"] = A(BKey(message.BatchId))
+                    },
+                    UpdateExpression =
+                        "SET EmailStatus = :sent, " +
+                        "EmailMessageId = :messageId, " +
+                        "EmailSentAtUtc = :now",
+                    ConditionExpression =
+                        "EmailStatus = :sending AND " +
+                        "EmailSendingClaimId = :claim",
+                    ExpressionAttributeValues = new()
+                    {
+                        [":sent"] = A("Sent"),
+                        [":sending"] = A("Sending"),
+                        [":claim"] = A(claimId),
+                        [":messageId"] = A(messageId),
+                        [":now"] = A(DateTimeOffset.UtcNow.ToString("O"))
+                    }
+                }, ct);
+
+                _logger.LogInformation(
+                    "[IMAGE EMAIL] Sent batch {BatchId}, SES {MessageId}",
+                    message.BatchId,
+                    messageId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "[IMAGE EMAIL] Batch {BatchId} requires reconciliation.",
+                    message.BatchId);
+
+                throw;
+            }
+        }
+
+
+
+        [Function("RecoverImageCompletionEmails")]
+        public async Task RecoverImageCompletionEmails(
+            [TimerTrigger("0 */5 * * * *")] TimerInfo timer,
+            CancellationToken ct)
+        {
+            using var db = DynamoDbClientFactory.CreateClient();
+
+            string cutoff = DateTimeOffset.UtcNow
+                .AddMinutes(-10).ToString("O");
+
+            Dictionary<string, AttributeValue>? lastKey = null;
+
+            do
+            {
+                var result = await db.ScanAsync(new ScanRequest
+                {
+                    TableName = Table,
+                    ExclusiveStartKey = lastKey,
+                    FilterExpression =
+                        "(EmailStatus = :dispatching AND " +
+                        "EmailClaimedAtUtc < :cutoff) OR " +
+                        "(EmailStatus = :sending AND " +
+                        "EmailSendingAtUtc < :cutoff)",
+                    ExpressionAttributeValues = new()
+                    {
+                        [":dispatching"] = A("Dispatching"),
+                        [":sending"] = A("Sending"),
+                        [":cutoff"] = A(cutoff)
+                    }
+                }, ct);
+
+                foreach (var batch in result.Items)
+                {
+                    string batchId = V(batch, "BatchId");
+                    string status = V(batch, "EmailStatus");
+
+                    if (string.IsNullOrWhiteSpace(batchId))
+                        continue;
+
+                    if (status == "Sending")
+                    {
+                        _logger.LogWarning(
+                            "[IMAGE EMAIL] Batch {BatchId} stuck in Sending. " +
+                            "Manual SES reconciliation required.",
+                            batchId);
+                        continue;
+                    }
+
+                    string claimId = V(batch, "EmailClaimId");
+
+                    if (string.IsNullOrWhiteSpace(claimId))
+                        continue;
+
+                    try
+                    {
+                        await db.UpdateItemAsync(new UpdateItemRequest
+                        {
+                            TableName = Table,
+                            Key = new()
+                            {
+                                ["JobId"] = A(BKey(batchId))
+                            },
+                            UpdateExpression =
+                                "SET EmailStatus = :pending",
+                            ConditionExpression =
+                                "EmailStatus = :dispatching AND " +
+                                "EmailClaimId = :claim AND " +
+                                "EmailClaimedAtUtc < :cutoff",
+                            ExpressionAttributeValues = new()
+                            {
+                                [":pending"] = A("Pending"),
+                                [":dispatching"] = A("Dispatching"),
+                                [":claim"] = A(claimId),
+                                [":cutoff"] = A(cutoff)
+                            }
+                        }, ct);
+
+                        _logger.LogWarning(
+                            "[IMAGE EMAIL] Recovered dispatch for batch {BatchId}",
+                            batchId);
+                    }
+                    catch (ConditionalCheckFailedException)
+                    {
+                        // Already handled by another worker.
+                    }
+                }
+
+                lastKey = result.LastEvaluatedKey;
+            }
+            while (lastKey != null && lastKey.Count > 0);
+        }
+
+
+        public sealed class ImageCompletionMessage
+        {
+            public string BatchId { get; set; } = "";
+            public string UserId { get; set; } = "";
+            public string ProjectId { get; set; } = "";
+            public string[] ImageUrls { get; set; } = [];
+        }
+
+
+        private static async Task CompleteBatch(string id, CancellationToken ct)
+        {
+            for (int n = 1; n <= 3; n++)
+            {
+                var j = await Read(IKey(id, n), ct);
+
+                if (j == null ||
+                    V(j, "Status") != "Completed" ||
+                    !Saved(j) ||
+                    string.IsNullOrWhiteSpace(V(j, "ImageId")) ||
+                    string.IsNullOrWhiteSpace(V(j, "ImageUrl")))
+                    return;
+            }
+
+            await Update(
+                BKey(id),
+                "SET #status=:status, EmailStatus=if_not_exists(EmailStatus,:pending)",
+                new()
+                {
+                    [":status"] = A("Completed"),
+                    [":pending"] = A("Pending")
+                },
+                ct);
+        }
+
+
+
+        [Function("DispatchImageCompletionEmails")]
+        public async Task DispatchImageCompletionEmails(
+            [TimerTrigger("0 */1 * * * *")] TimerInfo timer,
+            CancellationToken ct)
+        {
+            using var db = DynamoDbClientFactory.CreateClient();
+
+            Dictionary<string, AttributeValue>? lastKey = null;
+
+            do
+            {
+                var result = await db.ScanAsync(new ScanRequest
+                {
+                    TableName = Table,
+                    ExclusiveStartKey = lastKey,
+                    FilterExpression =
+                        "#status = :completed AND EmailStatus = :pending",
+                    ExpressionAttributeNames = new()
+                    {
+                        ["#status"] = "Status"
+                    },
+                    ExpressionAttributeValues = new()
+                    {
+                        [":completed"] = A("Completed"),
+                        [":pending"] = A("Pending")
+                    }
+                }, ct);
+
+                foreach (var batch in result.Items)
+                {
+                    string batchId = V(batch, "BatchId");
+
+                    if (string.IsNullOrWhiteSpace(batchId))
+                        continue;
+
+                    string claimId = Guid.NewGuid().ToString("N");
+
+                    try
+                    {
+                        await db.UpdateItemAsync(new UpdateItemRequest
+                        {
+                            TableName = Table,
+                            Key = new()
+                            {
+                                ["JobId"] = A(BKey(batchId))
+                            },
+                            UpdateExpression =
+                                "SET EmailStatus = :dispatching, " +
+                                "EmailClaimId = :claim, " +
+                                "EmailClaimedAtUtc = :now",
+                            ConditionExpression =
+                                "#status = :completed AND EmailStatus = :pending",
+                            ExpressionAttributeNames = new()
+                            {
+                                ["#status"] = "Status"
+                            },
+                            ExpressionAttributeValues = new()
+                            {
+                                [":completed"] = A("Completed"),
+                                [":dispatching"] = A("Dispatching"),
+                                [":pending"] = A("Pending"),
+                                [":claim"] = A(claimId),
+                                [":now"] = A(DateTimeOffset.UtcNow.ToString("O"))
+                            }
+                        }, ct);
+                    }
+                    catch (ConditionalCheckFailedException)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        await QueueImageCompletionEmailAsync(batchId, ct);
+
+                        await db.UpdateItemAsync(new UpdateItemRequest
+                        {
+                            TableName = Table,
+                            Key = new()
+                            {
+                                ["JobId"] = A(BKey(batchId))
+                            },
+                            UpdateExpression =
+                                "SET EmailStatus = :queued, " +
+                                "EmailQueuedAtUtc = :now",
+                            ConditionExpression =
+                                "EmailStatus = :dispatching AND EmailClaimId = :claim",
+                            ExpressionAttributeValues = new()
+                            {
+                                [":queued"] = A("Queued"),
+                                [":dispatching"] = A("Dispatching"),
+                                [":claim"] = A(claimId),
+                                [":now"] = A(DateTimeOffset.UtcNow.ToString("O"))
+                            }
+                        }, ct);
+
+                        _logger.LogInformation(
+                            "[IMAGE EMAIL] Queued batch {BatchId}",
+                            batchId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(
+                            ex,
+                            "[IMAGE EMAIL] Dispatch uncertain for batch {BatchId}. " +
+                            "Leaving claim for reconciliation.",
+                            batchId);
+
+                        // Do not immediately reset to Pending.
+                        // Queue send may have succeeded before an exception.
+                        // The recovery worker will handle stale claims.
+                    }
+                }
+
+                lastKey = result.LastEvaluatedKey;
+            }
+            while (lastKey != null && lastKey.Count > 0);
+        }
+
+
+
+        [Function("GetRunwareImageBatchStatus")]
+        public async Task<IActionResult> GetRunwareImageBatchStatus([HttpTrigger(AuthorizationLevel.Function, "get", Route = "GetRunwareImageBatchStatus/{batchId}")] HttpRequest req, string batchId, CancellationToken ct)
+        {
+            var claim = jwtUserResolver.ResolveUserId(req);
+            if (string.IsNullOrWhiteSpace(claim)) return new UnauthorizedResult();
+            var userId = await attributionStore.ResolveClaimedUserIdAsync(claim);
+            if (string.IsNullOrWhiteSpace(userId)) return new UnauthorizedResult();
+            var batch = await Read(BKey(batchId), ct);
+            if (batch == null) return new NotFoundResult();
+            if (V(batch, "UserId") != userId) return new ForbidResult();
+            var images = new List<object>();
+            for (int n = 1; n <= 3; n++) { var j = await Read(IKey(batchId, n), ct); images.Add(new { conceptNumber = n, status = j == null ? "Queued" : V(j, "Status"), imageUrl = j == null ? "" : V(j, "ImageUrl"), imageId = j == null ? "" : V(j, "ImageId"), inviteSaved = j != null && Saved(j) }); }
+            return new OkObjectResult(new { batchId, status = V(batch, "Status"), error = V(batch, "Error"), images });
+        }
+
+        private async Task SendImageCompletionEmailAsync(
+string email,
+string jobId,
+CancellationToken cancellationToken)
+        {
+            var region = RegionEndpoint.GetBySystemName(
+                Environment.GetEnvironmentVariable("AWS_REGION"));
+
+            using var ses = new AmazonSimpleEmailServiceClient(
+                Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID"),
+                Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY"),
+                region);
+
+            string host = Environment.GetEnvironmentVariable("HostUrl")
+                ?? throw new InvalidOperationException("HostUrl missing");
+
+            // Replace with the actual authenticated results page.
+            string resultLink =
+                $"{host.TrimEnd('/')}/images?jobId={Uri.EscapeDataString(jobId)}";
+
+            var request = new SendEmailRequest
+            {
+                Source = Environment.GetEnvironmentVariable("SES_FROM_EMAIL"),
+                Destination = new Amazon.SimpleEmail.Model.Destination
+                {
+                    ToAddresses = new List<string> { email }
+                },
+                Message = new Amazon.SimpleEmail.Model.Message
+                {
+                    Subject = new Amazon.SimpleEmail.Model.Content(
+                        "Your DesignMode images are ready!"),
+                    Body = new Amazon.SimpleEmail.Model.Body
+                    {
+                        Html = new Amazon.SimpleEmail.Model.Content(
+                            "<h2>Your images are ready!</h2>" +
+                            "<p>Your image generation has completed.</p>" +
+                            $"<p><a href=\"{WebUtility.HtmlEncode(resultLink)}\">" +
+                            "View your generated images</a></p>" +
+                            "<p>— DesignMode</p>")
+                    }
+                }
+            };
+
+            await ses.SendEmailAsync(request, cancellationToken);
+        }
+
+
+
+        public sealed class RunwareImagePollMessage
+        {
+            public string JobId { get; set; } = "";
+            public string TaskUUID { get; set; } = "";
+            public int Attempt { get; set; }
+        }
+
+
+        private static async Task CompleteImageJobAsync(
+            string jobId,
+            List<string> imageUrls,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(jobId))
+                throw new ArgumentException("JobId is required.", nameof(jobId));
+
+            if (imageUrls == null || imageUrls.Count == 0)
+                throw new ArgumentException("At least one image URL is required.");
+
+            string tableName =
+                Environment.GetEnvironmentVariable("DynamoDbTableName")
+                ?? "DesignModeJobs";
+
+            string storageConnectionString =
+                Environment.GetEnvironmentVariable("AzureWebJobsStorage")
+                ?? throw new InvalidOperationException(
+                    "AzureWebJobsStorage is missing.");
+
+            string now = DateTimeOffset.UtcNow.ToString("O");
+
+            string imageResultsJson =
+                JsonConvert.SerializeObject(imageUrls);
+
+            using var dynamoDb =
+                DynamoDbClientFactory.CreateClient();
+
+            // Prepare notification queue before marking completion.
+            var emailQueue = new QueueClient(
+                storageConnectionString,
+                "runware-image-email");
+
+            await emailQueue.CreateIfNotExistsAsync(
+                cancellationToken: cancellationToken);
+
+            // Mark the job completed only once.
+            try
+            {
+                await dynamoDb.UpdateItemAsync(
+                    new UpdateItemRequest
+                    {
+                        TableName = tableName,
+
+                        Key = new Dictionary<string, AttributeValue>
+                        {
+                            ["JobId"] = new AttributeValue
+                            {
+                                S = jobId
+                            }
+                        },
+
+                        UpdateExpression =
+                            "SET #status = :completed, " +
+                            "CurrentStep = :currentStep, " +
+                            "ImageResultsJson = :imageResults, " +
+                            "CompletedAtUtc = :completedAtUtc, " +
+                            "UpdatedAtUtc = :updatedAtUtc, " +
+                            "#error = :error",
+
+                        ConditionExpression =
+                            "attribute_exists(JobId) " +
+                            "AND #status <> :completed " +
+                            "AND #status <> :failed",
+
+                        ExpressionAttributeNames =
+                            new Dictionary<string, string>
+                            {
+                                ["#status"] = "Status",
+                                ["#error"] = "Error"
+                            },
+
+                        ExpressionAttributeValues =
+                            new Dictionary<string, AttributeValue>
+                            {
+                                [":completed"] = new AttributeValue
+                                {
+                                    S = "Completed"
+                                },
+
+                                [":failed"] = new AttributeValue
+                                {
+                                    S = "Failed"
+                                },
+
+                                [":currentStep"] = new AttributeValue
+                                {
+                                    S = "Completed"
+                                },
+
+                                [":imageResults"] = new AttributeValue
+                                {
+                                    S = imageResultsJson
+                                },
+
+                                [":completedAtUtc"] = new AttributeValue
+                                {
+                                    S = now
+                                },
+
+                                [":updatedAtUtc"] = new AttributeValue
+                                {
+                                    S = now
+                                },
+
+                                [":error"] = new AttributeValue
+                                {
+                                    S = string.Empty
+                                }
+                            }
+                    },
+                    cancellationToken);
+            }
+            catch (ConditionalCheckFailedException)
+            {
+                // Already completed or failed.
+                // Do not enqueue another email.
+                return;
+            }
+
+            // Queue completion email.
+            // Recipient must be resolved by the email worker
+            // from the authenticated job's stored UserId.
+            var emailMessage = new
+            {
+                JobId = jobId,
+                NotificationType = "ImageGenerationCompleted"
+            };
+
+            await emailQueue.SendMessageAsync(
+                JsonConvert.SerializeObject(emailMessage),
+                cancellationToken: cancellationToken);
+        }
+
+
+        private static async Task MarkImageJobFailedAsync(
+            string jobId,
+            string error,
+            CancellationToken cancellationToken)
+        {
+            string tableName =
+                Environment.GetEnvironmentVariable("DynamoDbTableName")
+                ?? "DesignModeJobs";
+
+            using var dynamoDb =
+                DynamoDbClientFactory.CreateClient();
+
+            string safeError = string.IsNullOrWhiteSpace(error)
+                ? "Image generation failed."
+                : error.Length > 1500
+                    ? error[..1500]
+                    : error;
+
+            try
+            {
+                await dynamoDb.UpdateItemAsync(
+                    new UpdateItemRequest
+                    {
+                        TableName = tableName,
+
+                        Key = new Dictionary<string, AttributeValue>
+                        {
+                            ["JobId"] = new AttributeValue
+                            {
+                                S = jobId
+                            }
+                        },
+
+                        UpdateExpression =
+                            "SET #status = :status, " +
+                            "CurrentStep = :currentStep, " +
+                            "#error = :error, " +
+                            "UpdatedAtUtc = :updatedAtUtc",
+
+                        ConditionExpression =
+                            "attribute_exists(JobId) " +
+                            "AND #status <> :completed " +
+                            "AND #status <> :failed",
+
+                        ExpressionAttributeNames =
+                            new Dictionary<string, string>
+                            {
+                                ["#status"] = "Status",
+                                ["#error"] = "Error"
+                            },
+
+                        ExpressionAttributeValues =
+                            new Dictionary<string, AttributeValue>
+                            {
+                                [":status"] = new AttributeValue
+                                {
+                                    S = "Failed"
+                                },
+
+                                [":currentStep"] = new AttributeValue
+                                {
+                                    S = "ImageFailed"
+                                },
+
+                                [":error"] = new AttributeValue
+                                {
+                                    S = safeError
+                                },
+
+                                [":updatedAtUtc"] = new AttributeValue
+                                {
+                                    S = DateTimeOffset.UtcNow.ToString("O")
+                                },
+
+                                [":completed"] = new AttributeValue
+                                {
+                                    S = "Completed"
+                                },
+
+                                [":failed"] = new AttributeValue
+                                {
+                                    S = "Failed"
+                                }
+                            }
+                    },
+                    cancellationToken);
+            }
+            catch (ConditionalCheckFailedException)
+            {
+                // Job is already in a terminal state.
+            }
+        }
+
+
+        [Function("PollRunwareImageInit")]
+        public async Task PollRunwareImageInit(
+            [QueueTrigger(
+    "runware-image-poll",
+    Connection = "AzureWebJobsStorage")]
+string body,
+            CancellationToken cancellationToken)
+        {
+            var message =
+                JsonConvert.DeserializeObject<RunwareImagePollMessage>(body)
+                ?? throw new InvalidOperationException("Invalid poll message.");
+
+            using var db = DynamoDbClientFactory.CreateClient();
+
+            string tableName =
+                Environment.GetEnvironmentVariable("DynamoDbTableName")
+                ?? "DesignModeJobs";
+
+            var jobResult = await db.GetItemAsync(
+                new GetItemRequest
+                {
+                    TableName = tableName,
+                    Key = new Dictionary<string, AttributeValue>
+                    {
+                        ["JobId"] = new() { S = message.JobId }
+                    },
+                    ConsistentRead = true
+                },
+                cancellationToken);
+
+            var job = jobResult.Item;
+
+            if (job == null || job.Count == 0)
+                throw new InvalidOperationException("Job not found.");
+
+            string status = job.TryGetValue("Status", out var value)
+                ? value.S ?? ""
+                : "";
+
+            if (status is "Completed" or "Failed")
+                return;
+
+            string storedTaskId =
+                job.TryGetValue("RunwareTaskUuid", out var task)
+                    ? task.S ?? ""
+                    : "";
+
+            if (storedTaskId != message.TaskUUID)
+                throw new InvalidOperationException("Task UUID mismatch.");
+
+            string apiUrl =
+                Environment.GetEnvironmentVariable("RUNWARE_API_URL")
+                ?? "https://api.runware.ai/v1";
+
+            string apiKey =
+                Environment.GetEnvironmentVariable("RUNWARE_API_KEY")
+                ?? throw new InvalidOperationException("Missing Runware API key.");
+
+            var payload = new[]
+            {
+    new
+    {
+        taskType = "getResponse",
+        taskUUID = message.TaskUUID
+    }
+};
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                apiUrl);
+
+            request.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", apiKey);
+
+            request.Content = new StringContent(
+                JsonConvert.SerializeObject(payload),
+                Encoding.UTF8,
+                "application/json");
+
+            using var response = await Http.SendAsync(
+                request,
+                cancellationToken);
+
+            string responseBody =
+                await response.Content.ReadAsStringAsync(cancellationToken);
+
+            response.EnsureSuccessStatusCode();
+
+            var result = JToken.Parse(responseBody);
+
+            var images = result.SelectTokens("$..imageURL")
+                .Concat(result.SelectTokens("$..imageUrl"))
+                .Select(x => x.Value<string>())
+                .Where(x =>
+                    Uri.TryCreate(x, UriKind.Absolute, out var uri)
+                    && uri.Scheme == Uri.UriSchemeHttps)
+                .Distinct()
+                .ToList();
+
+            if (images.Count > 0)
+            {
+                // Read the image-generation context saved with the job.
+                string batchId = job.TryGetValue("BatchId", out var batchValue)
+                    ? batchValue.S ?? ""
+                    : "";
+
+                int conceptNumber =
+                    job.TryGetValue("ConceptNumber", out var conceptValue)
+                    && int.TryParse(conceptValue.N, out var number)
+                        ? number
+                        : 0;
+
+                string promptId = job.TryGetValue("PromptId", out var promptValue)
+                    ? promptValue.S ?? ""
+                    : "";
+
+                string positivePrompt =
+                    job.TryGetValue("PositivePrompt", out var positiveValue)
+                        ? positiveValue.S ?? ""
+                        : "";
+
+                string inviteId = job.TryGetValue("InviteId", out var inviteValue)
+                    ? inviteValue.S ?? ""
+                    : "";
+
+                string style = job.TryGetValue("Style", out var styleValue)
+                    ? styleValue.S ?? ""
+                    : "";
+
+                string stylePrompt =
+                    job.TryGetValue("StylePrompt", out var stylePromptValue)
+                        ? stylePromptValue.S ?? ""
+                        : "";
+
+                string promptText =
+                    job.TryGetValue("PromptText", out var promptTextValue)
+                        ? promptTextValue.S ?? ""
+                        : "";
+
+                if (string.IsNullOrWhiteSpace(batchId) ||
+                    conceptNumber <= 0 ||
+                    string.IsNullOrWhiteSpace(promptId) ||
+                    string.IsNullOrWhiteSpace(inviteId) ||
+                    string.IsNullOrWhiteSpace(positivePrompt))
+                {
+                    throw new InvalidOperationException(
+                        "Image job is missing required background-save information.");
+                }
+
+                // Each polling job represents one creative direction.
+                string imageUrl = images[0];
+
+                // Save generated URL before the two database saves.
+                // This makes the URL recoverable after a worker restart.
+                await db.UpdateItemAsync(
+                    new UpdateItemRequest
+                    {
+                        TableName = tableName,
+                        Key = new Dictionary<string, AttributeValue>
+                        {
+                            ["JobId"] = new() { S = message.JobId }
+                        },
+                        UpdateExpression =
+                            "SET ImageUrl = :url, " +
+                            "CurrentStep = :step, " +
+                            "UpdatedAtUtc = :updated",
+                        ConditionExpression =
+                            "attribute_exists(JobId) AND " +
+                            "#status <> :completed AND #status <> :failed",
+                        ExpressionAttributeNames = new()
+                        {
+                            ["#status"] = "Status"
+                        },
+                        ExpressionAttributeValues = new()
+                        {
+                            [":url"] = new() { S = imageUrl },
+                            [":step"] = new() { S = "SavingImage" },
+                            [":updated"] = new()
+                            {
+                                S = DateTimeOffset.UtcNow.ToString("O")
+                            },
+                            [":completed"] = new() { S = "Completed" },
+                            [":failed"] = new() { S = "Failed" }
+                        }
+                    },
+                    cancellationToken);
+
+                // SAVE IMAGE IDEA
+                string imageId = await SaveImageIdeaInBackgroundAsync(
+                    batchId,
+                    conceptNumber,
+                    promptId,
+                    positivePrompt,
+                    imageUrl,
+                    cancellationToken);
+
+                // SAVE INVITE IMAGE
+                string inviteImageId = await SaveInviteImageInBackgroundAsync(
+                    batchId,
+                    conceptNumber,
+                    inviteId,
+                    imageId,
+                    imageUrl,
+                    style,
+                    stylePrompt,
+                    promptText,
+                    cancellationToken);
+
+                // Save IDs and completion status only after both saves succeed.
+                await db.UpdateItemAsync(
+                    new UpdateItemRequest
+                    {
+                        TableName = tableName,
+                        Key = new Dictionary<string, AttributeValue>
+                        {
+                            ["JobId"] = new() { S = message.JobId }
+                        },
+                        UpdateExpression =
+                            "SET #status = :completed, " +
+                            "CurrentStep = :step, " +
+                            "ImageId = :imageId, " +
+                            "InviteImageId = :inviteImageId, " +
+                            "InviteSaved = :saved, " +
+                            "ImageUrl = :url, " +
+                            "CompletedAtUtc = :now, " +
+                            "UpdatedAtUtc = :now",
+                        ConditionExpression =
+                            "attribute_exists(JobId) AND " +
+                            "#status <> :completed AND #status <> :failed",
+                        ExpressionAttributeNames = new()
+                        {
+                            ["#status"] = "Status"
+                        },
+                        ExpressionAttributeValues = new()
+                        {
+                            [":completed"] = new() { S = "Completed" },
+                            [":failed"] = new() { S = "Failed" },
+                            [":step"] = new() { S = "Completed" },
+                            [":imageId"] = new() { S = imageId },
+                            [":inviteImageId"] = new() { S = inviteImageId },
+                            [":saved"] = new() { BOOL = true },
+                            [":url"] = new() { S = imageUrl },
+                            [":now"] = new()
+                            {
+                                S = DateTimeOffset.UtcNow.ToString("O")
+                            }
+                        }
+                    },
+                    cancellationToken);
+
+                _logger.LogInformation(
+                    "Background image saved. JobId={JobId}, ImageId={ImageId}, InviteImageId={InviteImageId}",
+                    message.JobId,
+                    imageId,
+                    inviteImageId);
+
+                return;
+            }
+
+
+            var errors = result["errors"] as JArray;
+
+            if (errors?.Count > 0)
+            {
+                await MarkImageJobFailedAsync(
+                    message.JobId,
+                    errors.ToString(Formatting.None),
+                    cancellationToken);
+
+                return;
+            }
+
+            string? providerStatus = result
+                .SelectTokens("$..status")
+                .Select(x => x.Value<string>())
+                .FirstOrDefault();
+
+            if (IsTerminalFailure(providerStatus))
+            {
+                await MarkImageJobFailedAsync(
+                    message.JobId,
+                    $"Runware returned {providerStatus}",
+                    cancellationToken);
+
+                return;
+            }
+
+            if (message.Attempt >= 90)
+            {
+                await MarkImageJobFailedAsync(
+                    message.JobId,
+                    "Image generation exceeded the polling limit.",
+                    cancellationToken);
+
+                return;
+            }
+
+            var next = new RunwareImagePollMessage
+            {
+                JobId = message.JobId,
+                TaskUUID = message.TaskUUID,
+                Attempt = message.Attempt + 1
+            };
+
+            TimeSpan delay = next.Attempt <= 10
+                ? TimeSpan.FromSeconds(15)
+                : next.Attempt <= 30
+                    ? TimeSpan.FromSeconds(30)
+                    : TimeSpan.FromMinutes(1);
+
+            var queue = new QueueClient(
+                Environment.GetEnvironmentVariable("AzureWebJobsStorage"),
+                "runware-image-poll");
+
+            await queue.SendMessageAsync(
+                JsonConvert.SerializeObject(next),
+                visibilityTimeout: delay,
+                timeToLive: TimeSpan.FromHours(6),
+                cancellationToken: cancellationToken);
+        }
+
+        private static async Task<string> SaveImageIdeaInBackgroundAsync(
+    string batchId,
+    int conceptNumber,
+    string promptId,
+    string positivePrompt,
+    string imageUrl,
+    CancellationToken ct)
+        {
+            // Stable ID makes repeated queue deliveries idempotent.
+            string id = $"{batchId}-idea-{conceptNumber}";
+
+            using var db =
+                global::DesignMode.AI.Server.Services
+                    .DynamoDbClientFactory.CreateClient();
+
+            try
+            {
+                await db.PutItemAsync(
+                    new PutItemRequest
+                    {
+                        TableName = "ImageIdeas",
+
+                        Item = new Dictionary<string, AttributeValue>
+                        {
+                            ["Id"] = new() { S = id },
+
+                            ["DeliverableType"] = new()
+                            {
+                                S = "Social Media Content"
+                            },
+
+                            ["SubCategory"] = new()
+                            {
+                                S = "Generic"
+                            },
+
+                            ["ImagePrompt"] = new()
+                            {
+                                S = positivePrompt
+                            },
+
+                            ["ImageUrl"] = new()
+                            {
+                                S = imageUrl
+                            },
+
+                            ["PromptId"] = new()
+                            {
+                                S = promptId
+                            },
+
+                            ["TimeStamp"] = new()
+                            {
+                                S = DateTimeOffset.UtcNow.ToString("O")
+                            },
+
+                            ["CountId"] = new()
+                            {
+                                S = "1"
+                            }
+                        },
+
+                        ConditionExpression = "attribute_not_exists(Id)"
+                    },
+                    ct);
+            }
+            catch (ConditionalCheckFailedException)
+            {
+                // Existing record is expected on a retry.
+                // Verify its contents before reuse.
+
+                var existing = await db.GetItemAsync(
+                    new GetItemRequest
+                    {
+                        TableName = "ImageIdeas",
+
+                        Key = new()
+                        {
+                            ["Id"] = new() { S = id }
+                        },
+
+                        ConsistentRead = true
+                    },
+                    ct);
+
+                if (existing.Item == null ||
+                    !existing.Item.TryGetValue("ImageUrl", out var url) ||
+                    url.S != imageUrl)
+                {
+                    throw new InvalidOperationException(
+                        "Conflicting image idea retry.");
+                }
+            }
+
+            return id;
+        }
+
+        private static async Task<string> SaveInviteImageInBackgroundAsync(
+            string batchId,
+            int conceptNumber,
+            string inviteId,
+            string imageId,
+            string imageUrl,
+            string style,
+            string stylePrompt,
+            string promptText,
+            CancellationToken ct)
+        {
+            string id = $"{batchId}-invite-{conceptNumber}";
+
+            string important =
+                "IMPORTANT: The style directive above is highest priority. " +
+                "Strongly emphasize the specified style. " +
+                "Create a visually distinct interpretation.";
+
+            string requirements =
+                "OUTPUT REQUIREMENTS: Professional quality. " +
+                "Unique creative direction. " +
+                "Visually memorable. High detail.";
+
+            using var db =
+                global::DesignMode.AI.Server.Services
+                    .DynamoDbClientFactory.CreateClient();
+
+            try
+            {
+                await db.PutItemAsync(
+                    new PutItemRequest
+                    {
+                        TableName = "InviteClientImages",
+
+                        Item = new Dictionary<string, AttributeValue>
+                        {
+                            ["Id"] = new() { S = id },
+
+                            ["InviteId"] = new()
+                            {
+                                S = inviteId
+                            },
+
+                            ["ImageId"] = new()
+                            {
+                                S = imageId
+                            },
+
+                            ["ImageUrl"] = new()
+                            {
+                                S = imageUrl
+                            },
+
+                            ["CountId"] = new()
+                            {
+                                S = conceptNumber.ToString()
+                            },
+
+                            ["TimeStamp"] = new()
+                            {
+                                S = DateTimeOffset.UtcNow.ToString("O")
+                            },
+
+                            ["Style"] = new()
+                            {
+                                S = style
+                            },
+
+                            ["StylePrompt"] = new()
+                            {
+                                S = stylePrompt
+                            },
+
+                            ["Important"] = new()
+                            {
+                                S = important
+                            },
+
+                            ["Project"] = new()
+                            {
+                                S = "PROJECT: " + promptText
+                            },
+
+                            ["OutputRequirements"] = new()
+                            {
+                                S = requirements
+                            }
+                        },
+
+                        ConditionExpression = "attribute_not_exists(Id)"
+                    },
+                    ct);
+            }
+            catch (ConditionalCheckFailedException)
+            {
+                var existing = await db.GetItemAsync(
+                    new GetItemRequest
+                    {
+                        TableName = "InviteClientImages",
+
+                        Key = new()
+                        {
+                            ["Id"] = new() { S = id }
+                        },
+
+                        ConsistentRead = true
+                    },
+                    ct);
+
+                if (existing.Item == null ||
+                    !existing.Item.TryGetValue(
+                        "ImageId",
+                        out var storedImageId) ||
+                    storedImageId.S != imageId ||
+                    !existing.Item.TryGetValue(
+                        "InviteId",
+                        out var storedInviteId) ||
+                    storedInviteId.S != inviteId)
+                {
+                    throw new InvalidOperationException(
+                        "Conflicting invite image retry.");
+                }
+            }
+
+            return id;
         }
 
         [Function("QueueApiCall")]
@@ -1846,6 +3428,7 @@ namespace DesignMode.AI.Server
                 dynamoDb?.Dispose();
             }
         }
+
         private static async Task EnqueueNextVideoPollAsync(
     string jobId,
     string taskUuid,
@@ -4467,147 +6050,333 @@ Example:
 
             public string? UpdatedAtUtc { get; set; }
         }
+
         [Function("GetAIIdeaResponse")]
-        public async Task<IActionResult> GetAIIdeaResponse([HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req)
+        public async Task<IActionResult> GetAIIdeaResponse(
+            [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req)
         {
-            // Get the Origin header
+            // Validate Origin header
             string referer = req.Headers["Origin"].FirstOrDefault();
 
-            // Check if the Origin header exists and if it contains the allowed host URL
-            if (referer != null)
+            if (referer == null ||
+                referer != Environment.GetEnvironmentVariable("HostUrl"))
             {
-                if (!(referer == Environment.GetEnvironmentVariable("HostUrl")))
-                {
-                    return new UnauthorizedResult(); // Return Unauthorized if the origin is invalid
-                }
-            }
-            else
-            {
-                return new UnauthorizedResult(); // Return Unauthorized if no Origin header is present
+                return new UnauthorizedResult();
             }
 
+            // Read request body
             string requestBodyData = await new StreamReader(req.Body).ReadToEndAsync();
-            var getData = JsonConvert.DeserializeObject<OpenAIIdeaRequest>(requestBodyData);
-            if (getData is null || string.IsNullOrWhiteSpace(getData.Name) || string.IsNullOrWhiteSpace(getData.Industry))
-                return new BadRequestObjectResult("Name and industry are required.");
 
+            var getData = JsonConvert.DeserializeObject<OpenAIIdeaRequest>(requestBodyData);
+
+            if (getData is null ||
+                string.IsNullOrWhiteSpace(getData.Name) ||
+                string.IsNullOrWhiteSpace(getData.Industry))
+            {
+                return new BadRequestObjectResult("Name and industry are required.");
+            }
+
+            var industry = getData.Industry.Trim();
+            var name = getData.Name.Trim();
+
+            // Resolve user
             var claimedIdeaUserId = jwtUserResolver.ResolveUserId(req);
-            var ideaUserId = string.IsNullOrWhiteSpace(claimedIdeaUserId) ? null : await attributionStore.ResolveClaimedUserIdAsync(claimedIdeaUserId);
-            var hasGenerationContext = !string.IsNullOrWhiteSpace(ideaUserId) &&
+
+            var ideaUserId = string.IsNullOrWhiteSpace(claimedIdeaUserId)
+                ? null
+                : await attributionStore.ResolveClaimedUserIdAsync(claimedIdeaUserId);
+
+            var hasGenerationContext =
+                !string.IsNullOrWhiteSpace(ideaUserId) &&
                 !string.IsNullOrWhiteSpace(getData.ProjectId) &&
                 !string.IsNullOrWhiteSpace(getData.FunnelId);
-            if (hasGenerationContext && !await attributionStore.ValidateGenerationContextAsync(ideaUserId!, getData.ProjectId!, getData.FunnelId!))
-                return new UnauthorizedResult();
 
-            var industry = getData.Industry; var name = getData.Name;
-            var ideaJobId = Guid.TryParse(getData.GenerationJobId, out _) ? getData.GenerationJobId! : Guid.NewGuid().ToString();
-            var ideaModel = Environment.GetEnvironmentVariable("OpenAISettings:Model") ?? string.Empty;
+            if (hasGenerationContext &&
+                !await attributionStore.ValidateGenerationContextAsync(
+                    ideaUserId!,
+                    getData.ProjectId!,
+                    getData.FunnelId!))
+            {
+                return new UnauthorizedResult();
+            }
+
+            // Generation tracking
+            var ideaJobId = Guid.TryParse(getData.GenerationJobId, out _)
+                ? getData.GenerationJobId!
+                : Guid.NewGuid().ToString();
+
+            var ideaModel =
+                Environment.GetEnvironmentVariable("OpenAISettings:Model") ?? string.Empty;
+
             string? ideaUsageId = null;
+
             if (hasGenerationContext)
             {
                 try
                 {
-                    ideaUsageId = await aiUsage.CreateStartedAsync(new AIGenerationUsage { UserId = ideaUserId, ProjectId = getData.ProjectId, FunnelId = getData.FunnelId, GenerationJobId = ideaJobId, GenerationCategory = "SocialFunnel", DeliverableType = "CreativeDirections", Operation = "TextGeneration", Provider = "OpenAI", Model = ideaModel, PricingVersion = AIProviderPricingService.CurrentVersion });
+                    ideaUsageId = await aiUsage.CreateStartedAsync(
+                        new AIGenerationUsage
+                        {
+                            UserId = ideaUserId,
+                            ProjectId = getData.ProjectId,
+                            FunnelId = getData.FunnelId,
+                            GenerationJobId = ideaJobId,
+                            GenerationCategory = "SocialFunnel",
+                            DeliverableType = "CreativeDirections",
+                            Operation = "TextGeneration",
+                            Provider = "OpenAI",
+                            Model = ideaModel,
+                            PricingVersion = AIProviderPricingService.CurrentVersion
+                        });
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "[AI USAGE] idea generation tracking unavailable; generation will continue");
+                    _logger.LogWarning(
+                        ex,
+                        "[AI USAGE] idea generation tracking unavailable; generation will continue");
                 }
             }
             else
             {
-                _logger.LogWarning("[AI USAGE] idea generation context unavailable; generation will continue");
+                _logger.LogWarning(
+                    "[AI USAGE] idea generation context unavailable; generation will continue");
             }
 
-            var q1 = $"Generate a list of 9 prompts in random order for creative deliverables like Branding Identity and Logo, Print Materials, Social Media Content, Digital Marketing, Web & UX/UI Website, Video & Photography, Events & Activations, Packaging Label to get work done for a company in the {industry} industry named {name}. " +
-                $"For each idea, provide a short, one or two-word creative design idea followed by a more detailed sentence that elaborates on the idea with 15 words or less. " +
-                $"The sentence should describe the creative direction, or any relevant marketing aspects for each concept. only have 1 colon in the response. Add company name the sentence. " +
-                $"Add the name of the company if the name was provided. " +
-                $"Don't add influencer ideas to the list. Don't have quotes.";
+            // AI PROMPT
 
+
+            var q1 = $@"
+Generate exactly 8 creative deliverable ideas for a company named {name} in the {industry} industry.
+
+IMPORTANT: You MUST use the following 8 deliverable titles EXACTLY as written below. Do not rename, shorten, reword, modify, or create alternative titles.
+
+THE 8 REQUIRED DELIVERABLE TITLES:
+
+1. Branding Identity and Logo
+2. Print Materials
+3. Social Media Content
+4. Digital Marketing
+5. Web & UX/UI Website
+6. Video & Photography
+7. Events & Activations
+8. Package Label
+
+DELIVERABLE GUIDANCE:
+
+- Branding Identity and Logo: brand identity, logo concepts, brand guidelines.
+- Print Materials: brochures, business cards, flyers, posters.
+- Social Media Content: Instagram posts, Facebook graphics, social campaigns, social templates.
+- Digital Marketing: email campaigns, digital ads, landing page campaigns.
+- Web & UX/UI Website: website design, homepage concepts, website landing pages, UI/UX.
+- Video & Photography: brand videos, product photography, promotional videos.
+- Events & Activations: event branding, promotional activations, trade show materials.
+- Package Label: product packaging, label design, product presentation.
+
+REQUIREMENTS:
+
+1. Generate exactly 8 ideas, one for each deliverable title.
+2. Every title MUST match the exact title provided above.
+3. Do not use alternative titles or creative variations.
+4. Each description must be unique and specific to the {industry} industry.
+5. Each description must contain 15 words or fewer.
+6. Include the company name {name} naturally in every description.
+7. Describe an actual creative deliverable or marketing asset the company could use.
+8. Do not include influencer marketing ideas.
+9. Do not use quotation marks.
+10. Do not use Markdown bold formatting or asterisks.
+11. Do not add introductory or concluding text.
+12. Do not add, remove, or combine categories.
+13. Return the titles in the exact order provided.
+
+IMPORTANT OUTPUT FORMAT:
+
+Return exactly 8 numbered lines using this format:
+
+1. Branding Identity and Logo: Description of the deliverable.
+2. Print Materials: Description of the deliverable.
+3. Social Media Content: Description of the deliverable.
+4. Digital Marketing: Description of the deliverable.
+5. Web & UX/UI Website: Description of the deliverable.
+6. Video & Photography: Description of the deliverable.
+7. Events & Activations: Description of the deliverable.
+8. Package Label: Description of the deliverable.
+
+Use exactly one colon per line, separating the title from its description.
+
+Return ONLY these 8 lines.
+";
+
+
+
+            // OpenAI request
             using var client = new HttpClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Environment.GetEnvironmentVariable("OpenAISettings:ApiKey"));
+
+            client.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue(
+                    "Bearer",
+                    Environment.GetEnvironmentVariable("OpenAISettings:ApiKey"));
 
             var requestBody = new
             {
-                model = Environment.GetEnvironmentVariable("OpenAISettings:Model"),
-                messages = new[] {
-                    new { role = "user", content = $"{q1}" },
-                },
-                max_tokens = Int32.Parse(Environment.GetEnvironmentVariable("OpenAISettings:MaxTokensIdea"))
+                model = ideaModel,
+                messages = new[]
+                {
+            new
+            {
+                role = "user",
+                content = q1
+            }
+        },
+                temperature = 0.8,
+                max_tokens = int.Parse(
+                    Environment.GetEnvironmentVariable("OpenAISettings:MaxTokensIdea")!)
             };
 
             HttpResponseMessage response;
-            try { response = await client.PostAsync(Environment.GetEnvironmentVariable("OpenAISettings:BaseUrl"), new StringContent(System.Text.Json.JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json")); }
-            catch (TaskCanceledException) { if (ideaUsageId is not null) await aiUsage.CompleteFailureAsync(ideaUsageId, "Timeout"); throw; }
-            catch { if (ideaUsageId is not null) await aiUsage.CompleteFailureAsync(ideaUsageId, "ProviderError"); throw; }
+
+            try
+            {
+                response = await client.PostAsync(
+                    Environment.GetEnvironmentVariable("OpenAISettings:BaseUrl"),
+                    new StringContent(
+                        System.Text.Json.JsonSerializer.Serialize(requestBody),
+                        Encoding.UTF8,
+                        "application/json"));
+            }
+            catch (TaskCanceledException)
+            {
+                if (ideaUsageId is not null)
+                    await aiUsage.CompleteFailureAsync(ideaUsageId, "Timeout");
+
+                throw;
+            }
+            catch
+            {
+                if (ideaUsageId is not null)
+                    await aiUsage.CompleteFailureAsync(ideaUsageId, "ProviderError");
+
+                throw;
+            }
 
             if (!response.IsSuccessStatusCode)
             {
-                if (ideaUsageId is not null) await aiUsage.CompleteFailureAsync(ideaUsageId, response.StatusCode == System.Net.HttpStatusCode.BadRequest ? "InvalidRequest" : "ProviderError");
-                throw new HttpRequestException("Failed to fetch from OpenAI API");
+                if (ideaUsageId is not null)
+                {
+                    await aiUsage.CompleteFailureAsync(
+                        ideaUsageId,
+                        response.StatusCode == System.Net.HttpStatusCode.BadRequest
+                            ? "InvalidRequest"
+                            : "ProviderError");
+                }
+
+                throw new HttpRequestException(
+                    "Failed to fetch from OpenAI API");
             }
 
+            // Read OpenAI response
             var jsonResponse = await response.Content.ReadAsStringAsync();
-            var data = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(jsonResponse);
-            var parsedIdeaUsage = OpenAIUsageParser.ParseChatCompletions(data, ideaModel);
-            var openAiRequestId = response.Headers.TryGetValues("x-request-id", out var ids) ? ids.FirstOrDefault() : null;
+
+            var data = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(
+                jsonResponse);
+
+            // Track usage
+            var parsedIdeaUsage = OpenAIUsageParser.ParseChatCompletions(
+                data,
+                ideaModel);
+
+            var openAiRequestId =
+                response.Headers.TryGetValues("x-request-id", out var ids)
+                    ? ids.FirstOrDefault()
+                    : null;
+
             if (ideaUsageId is not null)
             {
-                try { await aiUsage.CompleteOpenAiSuccessAsync(ideaUsageId, parsedIdeaUsage, aiPricing, "TextGeneration", openAiRequestId); }
-                catch (Exception ex) { _logger.LogWarning(ex, "[AI USAGE] idea generation completion tracking unavailable"); }
+                try
+                {
+                    await aiUsage.CompleteOpenAiSuccessAsync(
+                        ideaUsageId,
+                        parsedIdeaUsage,
+                        aiPricing,
+                        "TextGeneration",
+                        openAiRequestId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "[AI USAGE] idea generation completion tracking unavailable");
+                }
             }
 
-            // Assuming the response content is a list of ideas
-            var ideasText = data.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString().Trim();
+            // Extract AI response
+            var ideasText = data
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString() ?? string.Empty;
 
-            // Split the response by lines, removing the "1.", "2.", etc., and storing them in a list
+            // Parse deliverables
             List<string> items = new List<string>();
-            var lines = ideasText.Split(new[] { "\n", "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
 
-            if (lines.Length > 6)
+            var lines = ideasText.Split(
+                new[] { '\r', '\n' },
+                StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var line in lines)
             {
-                StringBuilder currentItem = new StringBuilder();
-                foreach (var line in lines)
-                {
-                    int dotIndex = line.IndexOf(".");
-                    if (char.IsDigit(line[0]) && line.Contains("."))
-                    {
-                        if (currentItem.Length > 0)
-                        {
-                            items.Add(currentItem.ToString().Trim());
-                        }
+                string cleanedLine = line.Trim();
 
-                        // Start a new item
-                        currentItem.Clear();
-                        currentItem.Append(line.Substring(dotIndex + 1).Trim() + ":");
-                    }
-                    else
-                    {
-                        // Append to the current item to maintain single-line format
-                        currentItem.Append(" " + line.Trim());
-                    }
+                // Remove numbered prefixes (1., 2., 3., etc.)
+                cleanedLine = System.Text.RegularExpressions.Regex.Replace(
+                    cleanedLine,
+                    @"^\s*\d+[\.\)]\s*",
+                    "");
+
+                if (string.IsNullOrWhiteSpace(cleanedLine))
+                    continue;
+
+                // Remove bullet characters if present
+                cleanedLine = System.Text.RegularExpressions.Regex.Replace(
+                    cleanedLine,
+                    @"^[\-\*\•]\s*",
+                    "");
+
+                // Find the separator between deliverable name and description
+                int colonIndex = cleanedLine.IndexOf(':');
+
+                if (colonIndex < 0)
+                    continue;
+
+                string deliverableName = cleanedLine
+                    .Substring(0, colonIndex)
+                    .Trim();
+
+                string description = cleanedLine
+                    .Substring(colonIndex + 1)
+                    .Trim();
+
+                // Remove Markdown bold/asterisks from beginning and end
+                deliverableName = System.Text.RegularExpressions.Regex.Replace(
+                    deliverableName,
+                    @"^\*+|\*+$",
+                    "").Trim();
+
+                // Remove any remaining wrapping Markdown bold markers
+                deliverableName = deliverableName
+                    .Trim('*')
+                    .Trim();
+
+                if (string.IsNullOrWhiteSpace(deliverableName) ||
+                    string.IsNullOrWhiteSpace(description))
+                {
+                    continue;
                 }
 
-                // Add the last item to the list
-                if (currentItem.Length > 0)
-                {
-                    items.Add(currentItem.ToString().Trim());
-                }
+                // Ensure clean output
+                items.Add($"{deliverableName}: {description}");
             }
-            else
-            {
-                foreach (var line in lines)
-                {
-                    if (line.Contains("."))
-                    {
-                        // Remove the numeric prefix and add it to the list
-                        string item = line.Substring(line.IndexOf('.') + 2).Trim(); // Trims the number and the dot
-                        items.Add(item);
-                    }
-                }
-            }
 
+            // Return deliverables
             return new OkObjectResult(items);
         }
 
@@ -5387,89 +7156,234 @@ Using this scene script, generate a character voice script.  Scene script: {scen
         }
 
 
+
         [Function("ExtractWebsiteBackground")]
         public async Task<IActionResult> ExtractWebsiteBackground(
             [HttpTrigger(AuthorizationLevel.Function, "post")] HttpRequest req)
         {
             try
             {
+                // Validate Origin
                 string referer = req.Headers["Origin"].FirstOrDefault();
-                if (referer == null || referer != Environment.GetEnvironmentVariable("HostUrl"))
+
+                if (referer == null ||
+                    referer != Environment.GetEnvironmentVariable("HostUrl"))
                 {
                     return new UnauthorizedResult();
                 }
 
+                // Read request
                 string requestBodyData = await new StreamReader(req.Body).ReadToEndAsync();
-                var getData = JsonConvert.DeserializeObject<AIImageDescriptionRequest>(requestBodyData);
+
+                var getData = JsonConvert.DeserializeObject<AIImageDescriptionRequest>(
+                    requestBodyData);
 
                 if (string.IsNullOrWhiteSpace(getData?.ImageUrl))
                 {
                     return new BadRequestObjectResult("Missing image URL.");
                 }
 
+                // Validate image URL
+                if (!Uri.TryCreate(getData.ImageUrl, UriKind.Absolute, out var imageUri) ||
+                    (imageUri.Scheme != Uri.UriSchemeHttps &&
+                     imageUri.Scheme != Uri.UriSchemeHttp))
+                {
+                    return new BadRequestObjectResult("Invalid image URL.");
+                }
+
+                // Resolve user
                 var claimedId = jwtUserResolver.ResolveUserId(req);
-                var userId = string.IsNullOrWhiteSpace(claimedId) ? await ResolveLegacyJwtUserIdAsync(req) :
-                    await attributionStore.ResolveClaimedUserIdAsync(claimedId);
-                var project = string.IsNullOrWhiteSpace(userId) ? null :
-                    await attributionStore.GetOwnedGenerationProjectAsync(userId, getData.ProjectId ?? string.Empty);
-                if (project is null) return new UnauthorizedResult();
-                var quota = await aiUsageSummary!.EvaluateAsync(userId!, "website_generation");
+
+                var userId = string.IsNullOrWhiteSpace(claimedId)
+                    ? await ResolveLegacyJwtUserIdAsync(req)
+                    : await attributionStore.ResolveClaimedUserIdAsync(claimedId);
+
+                // Validate project ownership
+                var project = string.IsNullOrWhiteSpace(userId)
+                    ? null
+                    : await attributionStore.GetOwnedGenerationProjectAsync(
+                        userId,
+                        getData.ProjectId ?? string.Empty);
+
+                if (project is null)
+                {
+                    return new UnauthorizedResult();
+                }
+
+                // Check AI generation quota
+                var quota = await aiUsageSummary!.EvaluateAsync(
+                    userId!,
+                    "website_generation");
+
                 if (!quota.Allowed)
-                    return new ObjectResult(new { code = "ai_generation_limit_exhausted" }) { StatusCode = StatusCodes.Status429TooManyRequests };
+                {
+                    return new ObjectResult(new
+                    {
+                        code = "ai_generation_limit_exhausted"
+                    })
+                    {
+                        StatusCode = StatusCodes.Status429TooManyRequests
+                    };
+                }
 
-                using var client = new HttpClient();
+                // Download source image WITHOUT OpenAI authorization header
+                byte[] imageBytes;
+                string contentType;
 
-                var apiKey = Environment.GetEnvironmentVariable("OpenAISettings:ApiKey");
+                using (var downloadClient = new HttpClient())
+                {
+                    var imageResponse = await downloadClient.GetAsync(imageUri);
 
-                client.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", apiKey);
+                    imageResponse.EnsureSuccessStatusCode();
 
-                // Download the image
-                var imageBytes = await client.GetByteArrayAsync(getData.ImageUrl);
+                    contentType = imageResponse.Content.Headers.ContentType?.MediaType
+                        ?.ToLowerInvariant() ?? string.Empty;
 
+                    // Validate supported image formats
+                    if (contentType != "image/png" &&
+                        contentType != "image/jpeg" &&
+                        contentType != "image/webp")
+                    {
+                        return new BadRequestObjectResult(
+                            "Unsupported image format. Use PNG, JPG, or WebP.");
+                    }
+
+                    imageBytes = await imageResponse.Content.ReadAsByteArrayAsync();
+                }
+
+                if (imageBytes.Length == 0)
+                {
+                    return new BadRequestObjectResult("The downloaded image is empty.");
+                }
+
+                // Image editing prompt
                 var prompt = @"
 Extract the background image that appears inside the computer screen.
 
 Instructions:
 - Remove the computer frame, keyboard, and surrounding devices.
-- Remove all UI including text, menus, buttons, and icons.
+- Remove all UI including text, menus, buttons, icons, and navigation.
 - Reconstruct only the clean background image.
 - Extend the scene naturally so it becomes a full standalone background.
+- Preserve the original visual style, colors, lighting, textures, and overall aesthetic.
+- Do not introduce unnecessary objects or visual elements.
+- Make the result look like an original professionally designed website background.
 
 Result must be:
-clean background only, seamless, high resolution, modern website hero background.
+A clean standalone background image only, seamless, high resolution,
+suitable for a modern website hero background.
 ";
 
+                // OpenAI API key
+                var apiKey = Environment.GetEnvironmentVariable(
+                    "OpenAISettings:ApiKey");
+
+                if (string.IsNullOrWhiteSpace(apiKey))
+                {
+                    throw new InvalidOperationException(
+                        "OpenAI API key is not configured.");
+                }
+
+                // Prepare image edit request
                 using var form = new MultipartFormDataContent();
 
-                form.Add(new StringContent("gpt-image-1"), "model");
-                form.Add(new StringContent(prompt), "prompt");
-                form.Add(new StringContent("auto"), "size");
+                // Current image editing model
+                form.Add(
+                    new StringContent("gpt-image-2.5-sunburst"),
+                    "model");
 
+                form.Add(
+                    new StringContent(prompt),
+                    "prompt");
+
+                // Automatically determine output dimensions
+                form.Add(
+                    new StringContent("auto"),
+                    "size");
+
+                // Medium quality to control image generation costs
+                form.Add(
+                    new StringContent("medium"),
+                    "quality");
+
+                // Attach original image
                 var imageContent = new ByteArrayContent(imageBytes);
-                imageContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
 
-                form.Add(imageContent, "image", "input.png");
+                imageContent.Headers.ContentType =
+                    new MediaTypeHeaderValue(contentType);
 
-                var response = await client.PostAsync(
+                string fileName = contentType switch
+                {
+                    "image/jpeg" => "input.jpg",
+                    "image/webp" => "input.webp",
+                    _ => "input.png"
+                };
+
+                form.Add(
+                    imageContent,
+                    "image",
+                    fileName);
+
+                // Call OpenAI Images API
+                using var openAiClient = new HttpClient();
+
+                openAiClient.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", apiKey);
+
+                var response = await openAiClient.PostAsync(
                     "https://api.openai.com/v1/images/edits",
-                    form
-                );
+                    form);
 
+                // Handle OpenAI errors
                 if (!response.IsSuccessStatusCode)
                 {
                     var error = await response.Content.ReadAsStringAsync();
-                    return new BadRequestObjectResult(error);
+
+                    _logger.LogError(
+                        "OpenAI image editing failed. Status: {StatusCode}. Response: {Error}",
+                        (int)response.StatusCode,
+                        error);
+
+                    return new ObjectResult(error)
+                    {
+                        StatusCode = (int)response.StatusCode
+                    };
                 }
 
+                // Read OpenAI response
                 var jsonResponse = await response.Content.ReadAsStringAsync();
-                var data = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(jsonResponse);
 
-                string imageBase64 = data
-                    .GetProperty("data")[0]
-                    .GetProperty("b64_json")
-                    .GetString();
+                var data = System.Text.Json.JsonSerializer.Deserialize<JsonElement>(
+                    jsonResponse);
 
+                // Extract generated image
+                if (!data.TryGetProperty("data", out var imageData) ||
+                    imageData.GetArrayLength() == 0 ||
+                    !imageData[0].TryGetProperty("b64_json", out var base64Element))
+                {
+                    _logger.LogError(
+                        "OpenAI image editing returned an unexpected response: {Response}",
+                        jsonResponse);
+
+                    return new ObjectResult(
+                        "OpenAI did not return a valid edited image.")
+                    {
+                        StatusCode = StatusCodes.Status502BadGateway
+                    };
+                }
+
+                string? imageBase64 = base64Element.GetString();
+
+                if (string.IsNullOrWhiteSpace(imageBase64))
+                {
+                    return new ObjectResult(
+                        "OpenAI returned an empty image.")
+                    {
+                        StatusCode = StatusCodes.Status502BadGateway
+                    };
+                }
+
+                // Return edited background image
                 return new OkObjectResult(new
                 {
                     Image = $"data:image/png;base64,{imageBase64}"
@@ -5477,9 +7391,15 @@ clean background only, seamless, high resolution, modern website hero background
             }
             catch (Exception ex)
             {
-                return new BadRequestObjectResult($"Exception: {ex.Message}");
+                _logger.LogError(
+                    ex,
+                    "Error extracting website background.");
+
+                return new BadRequestObjectResult(
+                    $"Exception: {ex.Message}");
             }
         }
+
 
         [Function("GenerateWebsiteFromImage")]
         public async Task<IActionResult> GenerateWebsiteFromImage(
@@ -7230,147 +9150,35 @@ Do not include any extra text outside the JSON.
                     }
                 }
 
-                // Same polling approach as CallRunwareFinalizeSceneVideo.
-                var pollDeadline =
-                    DateTime.UtcNow.AddMinutes(6);
-
-                JToken latestRunwareResponse =
-                    submitRunwareResponse;
-
-                while (DateTime.UtcNow < pollDeadline)
+                // The background PollRunwareVideo queue worker owns completion polling.
+                // A successful HTTP submission alone is not sufficient if Runware reports errors.
+                var submissionErrors = submitRunwareResponse["errors"] as JArray;
+                if (submissionErrors != null && submissionErrors.Count > 0)
                 {
-                    await Task.Delay(
-                        TimeSpan.FromSeconds(3));
-
-                    var pollTask =
-                        new object[]
-                        {
-                        new
-                        {
-                            taskType = "getResponse",
-                            taskUUID = taskUuid
-                        }
-                        };
-
-                    using var pollContent =
-                        new StringContent(
-                            JsonConvert.SerializeObject(pollTask),
-                            Encoding.UTF8,
-                            "application/json");
-
-                    using var pollResponse =
-                        await httpClient.PostAsync(
-                            apiUrl,
-                            pollContent);
-
-                    string pollBody =
-                        await pollResponse.Content.ReadAsStringAsync();
-
-                    if (!pollResponse.IsSuccessStatusCode)
+                    log.LogError("Runware rejected video task {TaskUUID}: {Errors}",
+                        taskUuid, submissionErrors.ToString(Formatting.None));
+                    return new ObjectResult(new
                     {
-                        log.LogWarning(
-                            "Runware poll for {TaskUUID} returned HTTP {Status}: {Response}",
-                            taskUuid,
-                            (int)pollResponse.StatusCode,
-                            pollBody);
-
-                        continue;
-                    }
-
-                    JToken parsed =
-                        SafeParseJson(pollBody);
-
-                    latestRunwareResponse =
-                        parsed;
-
-                    var errors =
-                        parsed["errors"] as JArray;
-
-                    if (errors != null &&
-                        errors.Count > 0)
-                    {
-                        log.LogError(
-                            "Runware task {TaskUUID} failed: {Errors}",
-                            taskUuid,
-                            errors.ToString(Formatting.None));
-
-                        return new ObjectResult(new
-                        {
-                            success = false,
-                            taskUUID = taskUuid,
-                            deliveryMethod = "async",
-                            requestedDeliveryMethod,
-                            errors,
-                            runwareResponse = parsed
-                        })
-                        {
-                            StatusCode =
-                                StatusCodes.Status502BadGateway
-                        };
-                    }
-
-                    var videoResult =
-                        FindVideoResult(parsed);
-
-                    if (videoResult != null)
-                    {
-                        string videoUrl =
-                            videoResult.Value<string>("videoURL")
-                            ?? videoResult.Value<string>("videoUrl");
-
-                        if (!string.IsNullOrWhiteSpace(videoUrl))
-                        {
-                            return new OkObjectResult(new
-                            {
-                                success = true,
-                                taskUUID = taskUuid,
-
-                                // Preserve the response fields older callers already
-                                // receive from CallRunwareVideoAPI.
-                                deliveryMethod = "async",
-                                requestedDeliveryMethod,
-                                runwareResponse = parsed,
-
-                                // Also expose the completed video just like the
-                                // finalize-scene endpoint.
-                                videoUrl,
-                                videoUUID =
-                                    videoResult.Value<string>("videoUUID")
-                                    ?? string.Empty,
-                                cost =
-                                    videoResult.Value<double?>("cost")
-                            });
-                        }
-                    }
-
-                    string status =
-                        parsed
-                            .SelectToken("data[0].status")
-                            ?.Value<string>()
-                        ?? string.Empty;
-
-                    log.LogInformation(
-                        "Runware video task {TaskUUID} status: {Status}",
-                        taskUuid,
-                        string.IsNullOrWhiteSpace(status)
-                            ? "processing"
-                            : status);
+                        success = false,
+                        taskUUID = taskUuid,
+                        deliveryMethod = "async",
+                        requestedDeliveryMethod,
+                        errors = submissionErrors,
+                        runwareResponse = submitRunwareResponse
+                    })
+                    { StatusCode = StatusCodes.Status502BadGateway };
                 }
 
-                return new ObjectResult(new
+                log.LogInformation("Runware video submitted for background polling: {TaskUUID}", taskUuid);
+                return new OkObjectResult(new
                 {
-                    success = false,
+                    success = true,
                     taskUUID = taskUuid,
+                    status = "submitted",
                     deliveryMethod = "async",
                     requestedDeliveryMethod,
-                    runwareResponse = latestRunwareResponse,
-                    error =
-                        "Runware video generation did not finish before the polling timeout."
-                })
-                {
-                    StatusCode =
-                        StatusCodes.Status504GatewayTimeout
-                };
+                    runwareResponse = submitRunwareResponse
+                });
             }
             catch (TaskCanceledException ex)
             {
@@ -8231,19 +10039,21 @@ Do not include any extra text outside the JSON.
             // Keep provider fallback operational by using the injected logger.
             log ??= _logger;
 
-            // Validate Origin
-            string referer = req.Headers["Origin"].FirstOrDefault();
+            // Only trusted server-side queue jobs may bypass HTTP Origin validation.
+            bool isBackgroundJob =
+                req.HttpContext.Items.TryGetValue("InternalImageBatchUserId", out var internalId)
+                && internalId is string internalUserId
+                && !string.IsNullOrWhiteSpace(internalUserId);
 
-            if (referer != null)
+            if (!isBackgroundJob)
             {
-                if (!(referer == Environment.GetEnvironmentVariable("HostUrl")))
+                string? origin = req.Headers["Origin"].FirstOrDefault();
+
+                if (string.IsNullOrWhiteSpace(origin) ||
+                    origin != Environment.GetEnvironmentVariable("HostUrl"))
                 {
                     return new UnauthorizedResult();
                 }
-            }
-            else
-            {
-                return new UnauthorizedResult();
             }
 
             string apiUrl = Environment.GetEnvironmentVariable("RUNWARE_API_URL");
@@ -8408,8 +10218,20 @@ Do not include any extra text outside the JSON.
 
             string generationJobId = data?.generationJobId ?? Guid.NewGuid().ToString();
             string? projectId = data?.projectId; string? funnelId = data?.funnelId;
-            var claimedImageUserId = jwtUserResolver.ResolveUserId(req);
-            var imageUserId = string.IsNullOrWhiteSpace(claimedImageUserId) ? null : await attributionStore.ResolveClaimedUserIdAsync(claimedImageUserId);
+            string? imageUserId;
+
+            if (isBackgroundJob)
+            {
+                imageUserId = (string)req.HttpContext.Items["InternalImageBatchUserId"]!;
+            }
+            else
+            {
+                var claimedImageUserId = jwtUserResolver.ResolveUserId(req);
+
+                imageUserId = string.IsNullOrWhiteSpace(claimedImageUserId)
+                    ? null
+                    : await attributionStore.ResolveClaimedUserIdAsync(claimedImageUserId);
+            }
             if (string.IsNullOrWhiteSpace(imageUserId) || string.IsNullOrWhiteSpace(projectId) || string.IsNullOrWhiteSpace(funnelId) || !await attributionStore.ValidateGenerationContextAsync(imageUserId, projectId, funnelId)) return new UnauthorizedResult();
 
             bool IsUsableImage(RunwareImageData? image) =>
@@ -8451,12 +10273,21 @@ Do not include any extra text outside the JSON.
 
                 var usageId = await aiUsage.CreateStartedAsync(new AIGenerationUsage
                 {
-                    UserId = imageUserId, ProjectId = projectId, FunnelId = funnelId,
-                    GenerationJobId = generationJobId + ":runware", GenerationCategory = websiteIntro ? "WebsiteFunnel" : "SocialFunnel",
-                    DeliverableType = websiteIntro ? "Website" : "SocialMediaContent", Feature = websiteIntro ? WebsiteFunnelPromptResolver.Feature : null,
-                    UsageScope = websiteIntro ? WebsiteFunnelPromptResolver.UsageScope : null, Operation = "ImageGeneration",
-                    Provider = "Runware", Model = "runware:101@1", ProviderTaskId = generationJobId,
-                    ImageCount = numberResults, ImageWidth = width, ImageHeight = height
+                    UserId = imageUserId,
+                    ProjectId = projectId,
+                    FunnelId = funnelId,
+                    GenerationJobId = generationJobId + ":runware",
+                    GenerationCategory = websiteIntro ? "WebsiteFunnel" : "SocialFunnel",
+                    DeliverableType = websiteIntro ? "Website" : "SocialMediaContent",
+                    Feature = websiteIntro ? WebsiteFunnelPromptResolver.Feature : null,
+                    UsageScope = websiteIntro ? WebsiteFunnelPromptResolver.UsageScope : null,
+                    Operation = "ImageGeneration",
+                    Provider = "Runware",
+                    Model = "runware:101@1",
+                    ProviderTaskId = generationJobId,
+                    ImageCount = numberResults,
+                    ImageWidth = width,
+                    ImageHeight = height
                 });
                 try
                 {
@@ -8465,7 +10296,7 @@ Do not include any extra text outside the JSON.
                         new { taskType = "authentication", apiKey },
                         new
                         {
-                            taskType = "imageInference", taskUUID = generationJobId, positivePrompt = finalPrompt,
+                            taskType = "imageInference", taskUUID = Guid.NewGuid().ToString(), positivePrompt = finalPrompt,
                             width, height, model = "runware:101@1", numberResults,
                             outputType = new[] { "dataURI", "URL" }, outputFormat = "JPEG", CFGScale = 3.5,
                             steps = 28, seed = GenerateRandomSeed(), scheduler = "FlowMatchEulerDiscreteScheduler",
@@ -8477,6 +10308,19 @@ Do not include any extra text outside the JSON.
                     using var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
                     using var response = await client.PostAsync(apiUrl, content, cancellationToken);
                     var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                    log.LogWarning(
+    "[RUNWARE DEBUG] HTTP={Status}, Body={Body}",
+    (int)response.StatusCode,
+    responseBody.Length > 2000
+        ? responseBody[..2000]
+        : responseBody);
+                    log.LogInformation(
+    "[RUNWARE] Job={JobId}, HTTP={Status}, Response={Response}",
+    generationJobId,
+    (int)response.StatusCode,
+    responseBody.Length > 2000
+        ? responseBody.Substring(0, 2000)
+        : responseBody);
                     var result = response.IsSuccessStatusCode
                         ? KeepUsableImages(JsonConvert.DeserializeObject<RunwareResponse>(responseBody), numberResults)
                         : null;
@@ -8502,12 +10346,21 @@ Do not include any extra text outside the JSON.
             {
                 var usageId = await aiUsage.CreateStartedAsync(new AIGenerationUsage
                 {
-                    UserId = imageUserId, ProjectId = projectId, FunnelId = funnelId,
-                    GenerationJobId = generationJobId + ":modelslab", GenerationCategory = websiteIntro ? "WebsiteFunnel" : "SocialFunnel",
-                    DeliverableType = websiteIntro ? "Website" : "SocialMediaContent", Feature = websiteIntro ? WebsiteFunnelPromptResolver.Feature : null,
-                    UsageScope = websiteIntro ? WebsiteFunnelPromptResolver.UsageScope : null, Operation = "ImageGeneration",
-                    Provider = "ModelsLab", Model = "flux", ProviderTaskId = generationJobId,
-                    ImageCount = requestedCount, ImageWidth = 1024, ImageHeight = 576
+                    UserId = imageUserId,
+                    ProjectId = projectId,
+                    FunnelId = funnelId,
+                    GenerationJobId = generationJobId + ":modelslab",
+                    GenerationCategory = websiteIntro ? "WebsiteFunnel" : "SocialFunnel",
+                    DeliverableType = websiteIntro ? "Website" : "SocialMediaContent",
+                    Feature = websiteIntro ? WebsiteFunnelPromptResolver.Feature : null,
+                    UsageScope = websiteIntro ? WebsiteFunnelPromptResolver.UsageScope : null,
+                    Operation = "ImageGeneration",
+                    Provider = "ModelsLab",
+                    Model = "flux",
+                    ProviderTaskId = generationJobId,
+                    ImageCount = requestedCount,
+                    ImageWidth = 1024,
+                    ImageHeight = 576
                 });
 
                 List<string> ReadOutputUrls(string json)
@@ -8526,13 +10379,26 @@ Do not include any extra text outside the JSON.
                     client.Timeout = TimeSpan.FromSeconds(90);
                     using var response = await client.PostAsJsonAsync("https://modelslab.com/api/v6/images/text2img", new
                     {
-                        key = modelsLabKey, model_id = "flux", prompt = finalPrompt,
+                        key = modelsLabKey,
+                        model_id = "flux",
+                        prompt = finalPrompt,
                         samples = requestedCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                         negative_prompt = "(worst quality:2), (low quality:2), (normal quality:2), (jpeg artifacts), (blurry), (duplicate), (morbid), (mutilated), (out of frame), (extra limbs), (bad anatomy), (disfigured), (deformed), (cross-eye), (glitch), (oversaturated), (overexposed), (underexposed), (bad proportions), (bad hands), (bad feet), (cloned face), (long neck), (missing arms), (missing legs), (extra fingers), (fused fingers), (poorly drawn hands), (poorly drawn face), (mutation), (deformed eyes), watermark, text, logo, signature, grainy, tiling, censored, nsfw, ugly, blurry eyes, noisy image, bad lighting, unnatural skin, asymmetry",
-                        width = "1024", height = "576", clip_skip = "1", enhance_prompt = false,
-                        guidance_scale = "7.5", safety_checker = false, watermark = "no", base64 = "no", seed = "0",
-                        num_inference_steps = "20", safety_checker_type = (string?)null, webhook = (string?)null,
-                        track_id = (string?)null, lora_model = Array.Empty<string>(), lora_strength = "1"
+                        width = "1024",
+                        height = "576",
+                        clip_skip = "1",
+                        enhance_prompt = false,
+                        guidance_scale = "7.5",
+                        safety_checker = false,
+                        watermark = "no",
+                        base64 = "no",
+                        seed = "0",
+                        num_inference_steps = "20",
+                        safety_checker_type = (string?)null,
+                        webhook = (string?)null,
+                        track_id = (string?)null,
+                        lora_model = Array.Empty<string>(),
+                        lora_strength = "1"
                     }, cancellationToken);
                     var body = await response.Content.ReadAsStringAsync(cancellationToken);
                     if (!response.IsSuccessStatusCode)
@@ -8572,8 +10438,10 @@ Do not include any extra text outside the JSON.
                         {
                             Data = output.Take(requestedCount).Select((url, index) => new RunwareImageData
                             {
-                                TaskType = "imageInference", TaskUUID = generationJobId,
-                                ImageUUID = $"modelslab-{generationJobId}-{index + 1}", ImageURL = url
+                                TaskType = "imageInference",
+                                TaskUUID = generationJobId,
+                                ImageUUID = $"modelslab-{generationJobId}-{index + 1}",
+                                ImageURL = url
                             }).ToList()
                         };
                     }
@@ -8583,8 +10451,10 @@ Do not include any extra text outside the JSON.
                     {
                         Data = output.Select((url, index) => new RunwareImageData
                         {
-                            TaskType = "imageInference", TaskUUID = generationJobId,
-                            ImageUUID = $"modelslab-{generationJobId}-{index + 1}", ImageURL = url
+                            TaskType = "imageInference",
+                            TaskUUID = generationJobId,
+                            ImageUUID = $"modelslab-{generationJobId}-{index + 1}",
+                            ImageURL = url
                         }).ToList()
                     };
                 }
@@ -8598,7 +10468,9 @@ Do not include any extra text outside the JSON.
 
             // DesignerIntro uses a short hedge: Runware gets a 1.5 second head start,
             // then ModelsLab starts in parallel if Runware has not returned a usable image.
-            if (useModelsLabPrimary)
+            // Background jobs always use Runware first with ModelsLab fallback,
+            // regardless of the client-side primary-provider flag.
+            if (isBackgroundJob || useModelsLabPrimary)
             {
                 using var hedgeCancellation = CancellationTokenSource.CreateLinkedTokenSource(req.HttpContext.RequestAborted);
                 var runwareTask = TryRunwareForDesignerIntroAsync(hedgeCancellation.Token);
@@ -8669,7 +10541,7 @@ Do not include any extra text outside the JSON.
         },
         new {
             taskType = "imageInference",
-            taskUUID = generationJobId,
+            taskUUID = Guid.NewGuid().ToString(),
             positivePrompt = finalPrompt,
             width = width,
             height = height,
@@ -8695,6 +10567,13 @@ Do not include any extra text outside the JSON.
                 if (useModelsLabPrimary) httpClient.Timeout = TimeSpan.FromSeconds(90);
                 var response = await httpClient.PostAsync(apiUrl, content);
                 var responseContent = await response.Content.ReadAsStringAsync();
+
+                log.LogWarning(
+    "[RUNWARE DEBUG] HTTP={Status}, Body={Body}",
+    (int)response.StatusCode,
+    responseContent.Length > 2000
+        ? responseContent[..2000]
+        : responseContent);
 
                 var result = JsonConvert.DeserializeObject<RunwareResponse>(responseContent);
                 if (!response.IsSuccessStatusCode)
@@ -9322,6 +11201,10 @@ Do not include any extra text outside the JSON.
                 return new BadRequestObjectResult(new { Message = "Username and password are required." });
             }
 
+            if (!PhoneNumberValidator.TryNormalize(signupData.PhoneNumber, out var normalizedPhone, out var phoneError))
+                return new BadRequestObjectResult(new { Message = phoneError });
+            signupData.PhoneNumber = normalizedPhone;
+
             // Hash password
             var salt = Guid.NewGuid().ToString();
             var hashedPassword = Utilities.HashPassword(signupData.Password, salt);
@@ -9338,16 +11221,7 @@ Do not include any extra text outside the JSON.
 
                 var userId = CanonicalUserStore.UserIdForEmail(normalizedUsername);
                 using var client = attributionStore.CreateClient();
-                var item = new Dictionary<string, AttributeValue>
-                {
-                    ["Id"] = new() { S = userId }, ["Username"] = new() { S = normalizedUsername },
-                    ["NormalizedUsername"] = new() { S = normalizedUsername }, ["PasswordHash"] = new() { S = hashedPassword },
-                    ["Salt"] = new() { S = salt }, ["Onboarded"] = new() { S = "0" },
-                    ["AuthenticationProvider"] = new() { S = "Password" }, ["CreatedDate"] = new() { S = DateTimeOffset.UtcNow.ToString("O") }
-                };
-
-                if (!string.IsNullOrWhiteSpace(signupData.PhoneNumber))
-                    item["PhoneNumber"] = new() { S = signupData.PhoneNumber };
+                var item = CreateSignupUserItem(userId, normalizedUsername, hashedPassword, salt, signupData.PhoneNumber);
 
                 await client.PutItemAsync(new PutItemRequest { TableName = "Users", Item = item, ConditionExpression = "attribute_not_exists(Id)" });
 
@@ -9368,11 +11242,24 @@ Do not include any extra text outside the JSON.
             }
         }
 
+        public static Dictionary<string, AttributeValue> CreateSignupUserItem(string userId, string username, string passwordHash, string salt, string? phoneNumber)
+        {
+            var item = new Dictionary<string, AttributeValue>
+            {
+                ["Id"] = new() { S = userId }, ["Username"] = new() { S = username },
+                ["NormalizedUsername"] = new() { S = username }, ["PasswordHash"] = new() { S = passwordHash },
+                ["Salt"] = new() { S = salt }, ["Onboarded"] = new() { S = "0" },
+                ["AuthenticationProvider"] = new() { S = "Password" }, ["CreatedDate"] = new() { S = DateTimeOffset.UtcNow.ToString("O") }
+            };
+            if (!string.IsNullOrWhiteSpace(phoneNumber)) item["PhoneNumber"] = new() { S = phoneNumber };
+            return item;
+        }
+
         public class SignupRequest
         {
             public string Username { get; set; }
             public string Password { get; set; }
-            public string PhoneNumber { get; set; } // optional
+            public string? PhoneNumber { get; set; } // optional
         }
 
         [Function("SaveIdea")]

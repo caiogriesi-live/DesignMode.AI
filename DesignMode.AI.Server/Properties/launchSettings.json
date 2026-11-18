@@ -1,9 +1,18 @@
 {
-  "profiles": {
-    "DesignMode.AI.Server": {
-      "commandName": "Project",
-      "commandLineArgs": "--port 7032",
-      "launchBrowser": false
-    }
-  }
+    "profiles":  {
+                     "DesignMode.AI.Server":  {
+                                                  "commandName":  "Project",
+                                                  "commandLineArgs":  "--port 7032",
+                                                  "launchBrowser":  false
+                                              },
+                     "Codex Local Task":  {
+                                              "commandName":  "Project",
+                                              "launchBrowser":  false,
+                                              "applicationUrl":  "http://localhost:7032",
+                                              "commandLineArgs":  "--port 7032",
+                                              "environmentVariables":  {
+                                                                           "AZURE_FUNCTIONS_ENVIRONMENT":  "Development"
+                                                                       }
+                                          }
+                 }
 }

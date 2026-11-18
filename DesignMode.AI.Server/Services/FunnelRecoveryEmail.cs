@@ -31,35 +31,81 @@ public sealed record FunnelRecoveryEmail(string Subject, string Html, string Tex
         return RecoveryEmailLayout.Render(subject, headline, body, "Continue your design", url, selectedImageUrl, unsubscribeUrl);
     }
 
-    public static FunnelRecoveryEmail Create(string? hostUrl, string? currentPage, bool allowLocalLinks = false, string? selectedImageUrl = null, string? unsubscribeUrl = null)
+
+
+    public static FunnelRecoveryEmail Create(
+        string? hostUrl,
+        string? currentPage,
+        bool allowLocalLinks = false,
+        string? selectedImageUrl = null,
+        string? unsubscribeUrl = null)
     {
         if (!Uri.TryCreate(hostUrl, UriKind.Absolute, out var host) ||
-            !string.IsNullOrEmpty(host.UserInfo) || host.AbsolutePath != "/" ||
-            !string.IsNullOrEmpty(host.Query) || !string.IsNullOrEmpty(host.Fragment))
-            throw new InvalidOperationException("Funnel recovery requires a valid application HostUrl origin.");
-        var localOrigin = allowLocalLinks && host.IsLoopback && host.Scheme is "http" or "https";
-        var publicOrigin = host.Scheme == "https" && !host.IsLoopback &&
-            host.HostNameType == UriHostNameType.Dns && host.IsDefaultPort;
+            !string.IsNullOrEmpty(host.UserInfo) ||
+            host.AbsolutePath != "/" ||
+            !string.IsNullOrEmpty(host.Query) ||
+            !string.IsNullOrEmpty(host.Fragment))
+            throw new InvalidOperationException(
+                "Funnel recovery requires a valid application HostUrl origin.");
+
+        var localOrigin =
+            allowLocalLinks &&
+            host.IsLoopback &&
+            host.Scheme is "http" or "https";
+
+        var publicOrigin =
+            host.Scheme == "https" &&
+            !host.IsLoopback &&
+            host.HostNameType == UriHostNameType.Dns &&
+            host.IsDefaultPort;
+
         if (!localOrigin && !publicOrigin)
-            throw new InvalidOperationException("Funnel recovery requires HTTPS; loopback origins are allowed only in local development.");
-        var route = PostAuthDestinationResolver.TryNormalizeResumeRoute(currentPage, out var safe)
-            ? safe : "/designerintro";
+            throw new InvalidOperationException(
+                "Funnel recovery requires HTTPS; loopback origins are allowed only in local development.");
+
+        var route =
+            PostAuthDestinationResolver.TryNormalizeResumeRoute(
+                currentPage, out var safe)
+                ? safe
+                : "/designerintro";
+
         var parts = route.Split('?', 2);
         var path = Uri.UnescapeDataString(parts[0]).TrimEnd('/');
-        if (parts.Length == 2 && (path.Equals("/init/mainconcept", StringComparison.OrdinalIgnoreCase) ||
-            path.Equals("/init/funnelend", StringComparison.OrdinalIgnoreCase)))
+
+        if (parts.Length == 2 &&
+            (path.Equals("/init/mainconcept", StringComparison.OrdinalIgnoreCase) ||
+             path.Equals("/init/funnelend", StringComparison.OrdinalIgnoreCase)))
         {
-            var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(parts[1]);
-            if (query.TryGetValue("id", out var invite) && !string.IsNullOrWhiteSpace(invite) &&
-                query.TryGetValue("e", out var email) && !string.IsNullOrWhiteSpace(email))
-                // Preserve the saved funnel parameters inside the login return URL.
+            var query =
+                Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(parts[1]);
+
+            if (query.TryGetValue("id", out var invite) &&
+                !string.IsNullOrWhiteSpace(invite) &&
+                query.TryGetValue("e", out var email) &&
+                !string.IsNullOrWhiteSpace(email))
+            {
                 route = $"/init/funnelend?{parts[1]}";
+            }
         }
-        var url = $"{host.GetLeftPart(UriPartial.Authority)}/login?returnUrl={Uri.EscapeDataString(route)}";
-        const string body = "Your design preview is ready. Come back to see the generated concept and continue building your brand.";
-        return RecoveryEmailLayout.Render("Your DesignMode preview is ready", "Your preview is ready!",
-            body, "View your preview", url, selectedImageUrl, unsubscribeUrl);
+
+        var url =
+            $"{host.GetLeftPart(UriPartial.Authority)}/login" +
+            $"?returnUrl={Uri.EscapeDataString(route)}";
+
+        const string body =
+            "Your design preview is ready. Come back to see the generated concept and continue building your brand.";
+
+        return RecoveryEmailLayout.Render(
+            "Your DesignMode preview is ready",
+            "Your preview is ready!",
+            body,
+            "View your preview",
+            url,
+            selectedImageUrl,
+            unsubscribeUrl);
     }
+
+
 }
 
 public sealed class SesFunnelRecoveryEmailSender(FunnelRecoveryConfiguration configuration) : IFunnelRecoveryEmailSender

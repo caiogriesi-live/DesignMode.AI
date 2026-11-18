@@ -1,0 +1,17 @@
+[
+  {
+    "Name": "Codex Local Task",
+    "Projects": [
+      {
+        "Path": "DesignMode.AI.Server\\DesignMode.AI.Server.csproj",
+        "Action": "Start",
+        "DebugTarget": "Codex Local Task"
+      },
+      {
+        "Path": "DesignMode.AI.Client\\DesignMode.AI.Client.csproj",
+        "Action": "Start",
+        "DebugTarget": "Codex Local Task"
+      }
+    ]
+  }
+]

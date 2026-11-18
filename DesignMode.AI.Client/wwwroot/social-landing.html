@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Explore Social Content Directions</title>
+    <title>Meet Your Creative Designer – designmode.ai</title>
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="favicon.png">
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@100..900&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
@@ -70,9 +70,14 @@
             vertical-align: middle;
         }
 
+        .avatar-wrap {
+            position: relative;
+            flex: 0 0 auto;
+        }
+
         .dm-copy h1 {
             font-family: "SF Pro Display", "Lexend", Arial, sans-serif;
-            font-size: clamp(48px, 5vw, 74px);
+            font-size: clamp(48px, 5vw, 45px);
             line-height: 1.04;
             letter-spacing: -0.055em;
             margin: 20px 0 24px;
@@ -87,12 +92,69 @@
             }
 
         .dm-copy > p {
-            max-width: 560px;
-            color: #818898;
-            font-size: 24px;
-            line-height: 1.45;
-            font-weight: 650;
-            margin-bottom: 42px;
+            max-width: 600px;
+            margin: 0 0 20px;
+            color: #454464;
+            font-size: 19px;
+            line-height: 1.48;
+            font-weight: 450;
+        }
+
+        .designer-proof {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 14px 18px;
+            margin: 0 0 20px;
+            max-width: 610px;
+            border: 1px solid #e9e2f7;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, .58);
+            box-shadow: 0 5px 20px rgba(74, 45, 130, .035);
+        }
+
+            .designer-proof strong {
+                display: block;
+                font-size: 16px;
+                color: #1f2951;
+                font-weight: 700;
+                margin-bottom: 2px;
+            }
+
+            .designer-proof p {
+                margin: 0;
+                font-size: 14px;
+                color: #5f6889;
+                line-height: 1.4;
+            }
+
+        .designer-photo-wrap {
+            position: relative;
+            flex-shrink: 0;
+            width: 56px;
+            height: 56px;
+            overflow: visible;
+            border-radius: 50%;
+        }
+
+        .designer-photo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            border-radius: 50%;
+        }
+
+        .designer-online {
+            position: absolute;
+            z-index: 2;
+            bottom: 7px;
+            right: 7px;
+            width: 17px;
+            height: 17px;
+            background: #22c55e;
+            border-radius: 50%;
+            border: 3px solid #fff;
         }
 
         .dm-form {
@@ -192,6 +254,16 @@
             margin-top: 28px;
             color: #8b93a5;
             font-size: 15px;
+            text-align: center;
+        }
+
+        .form-reassurance {
+            display: block;
+            margin-top: 16px;
+            color: #73718d;
+            font-size: 14px;
+            line-height: 1.4;
+            text-align: center;
         }
 
         .industry-proof {
@@ -210,85 +282,123 @@
             font-weight: 600;
         }
 
+        /* ---------- RIGHT PREVIEW PANEL ---------- */
         .dm-preview {
-            background: rgba(255,255,255,.82);
+            background: #fff;
             border: 1px solid #ececf1;
-            border-radius: 12px;
-            box-shadow: 0 22px 55px rgba(15,23,42,.09);
-            padding: 34px;
-            text-align: center;
+            border-radius: 24px;
+            box-shadow: 0 22px 55px rgba(15,23,42,.06);
+            padding: 40px 38px 34px;
+            text-align: left;
         }
 
-            .dm-preview h4 {
-                margin: 0 0 15px;
-                font-size: 17px;
-                font-weight: 850;
-            }
+        .preview-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 6px;
+        }
+
+        .preview-header-icon {
+            font-size: 26px;
+            line-height: 1;
+            color: #f59e0b;
+            margin-top: 4px;
+        }
+
+        .preview-header h2 {
+            margin: 0 0 6px;
+            font-family: "SF Pro Display", Arial, sans-serif;
+            font-size: 24px;
+            line-height: 1.15;
+            font-weight: 750;
+            letter-spacing: -0.03em;
+            color: #1f2951;
+        }
+
+        .preview-header p {
+            margin: 0;
+            font-size: 16px;
+            color: #5f6889;
+            line-height: 1.45;
+        }
 
         .dm-direction-row {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 34px;
+            gap: 22px;
+            margin-top: 28px;
         }
 
         .dm-card {
             overflow: hidden;
-            border-radius: 10px;
+            border-radius: 14px;
             border: 1px solid #e7e7ef;
             background: #fff;
-            box-shadow: 0 10px 18px rgba(15,23,42,.08);
+            box-shadow: 0 6px 14px rgba(15,23,42,.04);
         }
 
             .dm-card.active {
                 border: 2px solid #6858f5;
+                box-shadow: 0 14px 32px rgba(90, 85, 244, .18);
             }
 
         .dm-card-image {
             position: relative;
-            height: 278px;
-            padding: 34px 24px;
+            height: 282px;
+            padding: 24px 20px;
             text-align: left;
             overflow: hidden;
         }
 
-            .dm-card-image p,
-            .dm-post p {
+            .dm-card-image p {
                 position: relative;
                 z-index: 2;
                 margin: 0;
-                font-family: Georgia, serif;
-                line-height: 1.15;
+                font-family: Georgia, "Times New Roman", serif;
+                line-height: 1.2;
             }
 
         .minimal .dm-card-image {
-            background: linear-gradient(rgba(217,185,168,.25), rgba(242,223,210,.25)), url("assets/img/vase1-new-0722-102.png") center/cover no-repeat;
+            background: linear-gradient(rgba(217,185,168,.25), rgba(242,223,210,.25)), url("assets/img/1.png") center/cover no-repeat;
+            background-color: #f3ece5;
         }
 
-        .bold .dm-card-image,
-        .dm-post {
-            background: url("assets/img/vase2-new-0722-102.png") center/cover no-repeat;
+        .bold .dm-card-image {
+            background: url("assets/img/2.png") center/cover no-repeat;
+            background-color: #2c3b2b;
         }
 
         .editorial .dm-card-image {
-            background: url("assets/img/vase3-new-0722-102.png") center/cover no-repeat;
+            background: url("assets/img/3.png") center/cover no-repeat;
+            background-color: #d9c5a8;
         }
 
         .dm-card footer {
-            height: 56px;
-            padding: 0 18px;
+            height: 52px;
+            padding: 0 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            background: #fff;
         }
+
+            .dm-card footer b {
+                font-size: 15px;
+                font-weight: 700;
+                color: #1f2951;
+            }
 
             .dm-card footer span {
                 width: 22px;
                 height: 22px;
                 border-radius: 50%;
-                border: 2px solid #9aa1b2;
+                border: 2px solid #c5cad5;
                 display: grid;
                 place-items: center;
-                font-size: 12px;
+                font-size: 11px;
+                color: transparent;
+                transition: all 0.2s ease;
             }
 
         .dm-card.active footer span {
@@ -297,107 +407,94 @@
             border-color: #6257f6;
         }
 
-        .dm-arrow {
-            color: #c5cad5;
-            margin: 3px 0;
-            font-size: 26px;
+        .expertise-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 28px auto 0;
+            padding: 12px 24px;
+            width: fit-content;
+            background: #f1edff;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #5a4ddb;
         }
 
-        .dm-social-strip {
-            border-radius: 12px;
-            background: #fff;
-            box-shadow: 0 12px 28px rgba(15,23,42,.08);
-            padding: 20px 14px 24px;
+            .expertise-badge i {
+                font-size: 16px;
+            }
+
+        /* ---------- CREATIVE PROCESS ---------- */
+        .creative-process {
+            margin-top: 36px;
+            border-top: 1px solid #ececf1;
+            padding-top: 30px;
+        }
+
+            .creative-process h3 {
+                font-family: "SF Pro Display", Arial, sans-serif;
+                font-size: 22px;
+                font-weight: 750;
+                letter-spacing: -0.02em;
+                color: #1f2951;
+                margin: 0 0 28px;
+            }
+
+        .process-steps {
             display: grid;
-            grid-template-columns: 1.2fr .7fr .8fr .8fr;
+            grid-template-columns: 1fr auto 1fr auto 1fr;
+            align-items: start;
             gap: 12px;
-            align-items: end;
         }
 
-        .dm-post,
-        .dm-phone {
-            height: 174px;
-            border-radius: 7px;
-            padding: 28px 18px;
+        .process-step {
             text-align: left;
-            position: relative;
-            overflow: hidden;
         }
 
-        .dm-phone {
-            height: 210px;
-            border: 6px solid #111;
-            border-radius: 22px;
-            background: url("assets/img/vase4.png") center/cover no-repeat;
-        }
-
-        .video span {
-            position: absolute;
-            right: 36px;
-            top: 61px;
-            width: 58px;
-            height: 58px;
+        .process-icon {
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
-            border: 2px solid #fff;
-            color: white;
+            background: #f1edff;
             display: grid;
             place-items: center;
-            font-size: 24px;
+            color: #5a4ddb;
+            font-size: 20px;
+            margin-bottom: 14px;
         }
 
-        .dm-platforms {
+        .process-step h4 {
+            margin: 0 0 6px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #1f2951;
             display: flex;
-            justify-content: space-around;
-            margin-top: 28px;
-            font-weight: 900;
-            font-size: 25px;
+            align-items: center;
+            gap: 6px;
         }
 
-        .float-icon {
-            position: absolute;
-            user-select: none;
-            pointer-events: none;
+            .process-step h4 .step-num {
+                color: #5a4ddb;
+                font-weight: 800;
+                font-size: 14px;
+            }
+
+        .process-step p {
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.45;
+            color: #5f6889;
         }
 
-            .float-icon:nth-child(1) {
-                top: 10%;
-                left: 12%;
-                font-size: 22px;
-            }
+        .process-arrow {
+            color: #c5cad5;
+            font-size: 20px;
+            margin-top: 14px;
+        }
 
-            .float-icon:nth-child(2) {
-                top: 18%;
-                right: 8%;
-                font-size: 30px;
-                opacity: .8;
-            }
-
-            .float-icon:nth-child(3) {
-                top: 40%;
-                left: 20%;
-                font-size: 18px;
-            }
-
-            .float-icon:nth-child(4) {
-                bottom: 4%;
-                right: 5%;
-                font-size: 26px;
-            }
-
-            .float-icon:nth-child(5) {
-                top: 65%;
-                left: 8%;
-                font-size: 26px;
-            }
-
-            .float-icon:nth-child(6) {
-                top: 55%;
-                right: 25%;
-                font-size: 17px;
-                opacity: .6;
-            }
-
-        /* High-resolution desktop positioning */
+        /* ---------- RESPONSIVE ---------- */
         @media (min-width: 1367px) {
             .dm-page {
                 padding-top: 8px;
@@ -407,16 +504,18 @@
                 padding-top: 8px;
             }
 
-            /* Move the logo, headline, description, and form slightly lower */
             .dm-copy {
                 margin-top: 20px;
             }
         }
 
-        /* Standard desktop / laptop positioning */
         @media (min-width: 1025px) and (max-width: 1366px) {
             .dm-copy {
                 margin-top: 28px;
+            }
+
+            .dm-hero {
+                gap: 48px;
             }
         }
 
@@ -440,19 +539,21 @@
             }
 
             .dm-card-image {
-                height: 220px;
-                padding: 22px 16px;
+                height: 190px;
+                padding: 20px 16px;
             }
 
-            .dm-social-strip {
-                grid-template-columns: repeat(2, minmax(0,1fr));
+            .dm-form {
+                margin-top: 0;
             }
 
-            .video span {
-                top: 50%;
-                left: 50%;
-                right: auto;
-                transform: translate(-50%, -50%);
+            .process-steps {
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+
+            .process-arrow {
+                display: none;
             }
         }
 
@@ -463,13 +564,28 @@
             }
 
             .dm-card-image {
-                height: 180px;
-                padding: 18px 12px;
+                height: 150px;
+                padding: 14px 12px;
             }
 
                 .dm-card-image p {
-                    font-size: 16px !important;
+                    font-size: 15px !important;
                 }
+
+            .preview-header h2 {
+                font-size: 22px;
+            }
+
+            .dm-preview {
+                padding: 28px 22px;
+            }
+
+            .designer-proof {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 18px;
+            }
         }
 
         @media (max-width: 520px) {
@@ -478,11 +594,11 @@
             }
 
             .dm-copy h1 {
-                font-size: 43px;
+                font-size: 40px;
             }
 
             .dm-copy > p {
-                font-size: 19px;
+                font-size: 17px;
             }
 
             .dm-direction-row {
@@ -490,47 +606,636 @@
             }
 
             .dm-card-image {
+                height: 200px;
+            }
+
+            .preview-header {
+                flex-direction: column;
+                gap: 6px;
+            }
+
+                .preview-header h2 {
+                    font-size: 24px;
+                }
+        }
+
+        @font-face {
+            font-family: "SF Pro Display";
+            font-style: normal;
+            font-weight: 500;
+            src: url("https://raw.githubusercontent.com/blaisck/sfwin/master/SFPro/TrueType/SFProDisplay-Medium.ttf");
+        }
+
+        @font-face {
+            font-family: "SF Pro Display";
+            font-style: normal;
+            font-weight: 600;
+            src: url("https://raw.githubusercontent.com/blaisck/sfwin/master/SFPro/TrueType/SFProDisplay-SemiBold.ttf");
+        }
+    </style>
+
+    <style id="reference-layout-overrides">
+        .dm-page {
+            min-height: 100vh;
+            padding: 14px 4.5%;
+            background: radial-gradient(ellipse at 92% 8%, rgba(224, 211, 255, .38), transparent 34%), radial-gradient(ellipse at 8% 92%, rgba(235, 226, 255, .5), transparent 38%), #fbfaff;
+            font-family: "SF Pro Display", "Lexend", Inter, Arial, sans-serif;
+        }
+
+        .dm-hero {
+            width: 100%;
+            max-width: 1440px;
+            grid-template-columns: minmax(0, .72fr) minmax(0, 1fr);
+            align-items: center;
+            gap: 32px;
+            padding-top: 8px;
+        }
+
+        .dm-copy {
+            margin-top: 0;
+        }
+
+        .dm-brand-line {
+            gap: 0;
+            flex-wrap: wrap;
+        }
+
+        .dm-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 28px;
+            padding: 11px 20px;
+            border-radius: 999px;
+            background: #e2f8e8;
+            color: #176334;
+            font-size: 15px;
+            line-height: 1;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .dm-copy h1 {
+            margin: 34px 0 18px;
+            font-size: clamp(44px, 3.75vw, 45px);
+            line-height: 1.04;
+            letter-spacing: -.052em;
+            font-weight: 750;
+            color: #34365f;
+        }
+
+            .dm-copy h1 span {
+                color: #6424df;
+            }
+
+        .dm-copy > p {
+            max-width: 610px;
+            margin-bottom: 20px;
+            font-size: 19px;
+            line-height: 1.48;
+            color: #454464;
+        }
+
+        .designer-proof {
+            max-width: none;
+            min-height: 128px;
+            padding: 14px 18px;
+            gap: 20px;
+            border-radius: 22px;
+            background: rgba(255,255,255,.68);
+            border-color: #e9e2f7;
+        }
+
+        .designer-photo-wrap {
+            width: 104px;
+            height: 99px;
+        }
+
+        .designer-proof strong {
+            font-size: 17px;
+        }
+
+        .designer-proof p {
+            font-size: 15px;
+            line-height: 1.45;
+        }
+
+        .dm-form {
+            width: 100%;
+            max-width: none;
+            margin-top: 20px;
+            padding: 22px 30px 18px;
+            border: 1px solid #ece8f4;
+            border-radius: 22px;
+            background: rgba(255,255,255,.82);
+            box-shadow: 0 10px 24px rgba(74,45,130,.07);
+        }
+
+            .dm-form h2 {
+                margin: 0 0 14px;
+                color: #17183f;
+                font-size: 23px;
+                line-height: 1.25;
+                letter-spacing: -.035em;
+                font-weight: 750;
+            }
+
+            .dm-form label {
+                margin: 17px 0 8px;
+                font-size: 15px;
+                color: #17183f;
+            }
+
+            .dm-form > input,
+            .industry-input {
+                height: 50px;
+                border-radius: 11px;
+                padding: 0 22px;
+                font-size: 16px;
+                box-shadow: 0 2px 5px rgba(20,20,50,.04);
+            }
+
+            .dm-form button[type="submit"] {
+                height: 62px;
+                margin-top: 24px;
+                border-radius: 14px;
+                font-size: 18px;
+                background: linear-gradient(105deg, #5424ed 0%, #8615d9 100%);
+                box-shadow: 0 10px 22px rgba(93,72,235,.22);
+            }
+
+                .dm-form button[type="submit"] i {
+                    font-size: 19px;
+                }
+
+            .dm-form small {
+                margin-top: 9px;
+                color: #73718d;
+                font-size: 14px;
+            }
+
+        .form-error {
+            margin: 8px 0 0;
+        }
+
+        .dm-preview {
+            padding: 34px 36px 30px;
+            border: 1px solid #f0edf5;
+            border-radius: 28px;
+            background: rgba(255,255,255,.9);
+            box-shadow: 0 20px 48px rgba(76,54,130,.09);
+        }
+
+        .preview-header {
+            gap: 16px;
+            margin-bottom: 0;
+        }
+
+        .preview-header-icon {
+            font-size: 34px;
+            margin-top: 2px;
+        }
+
+        .preview-header h2 {
+            max-width: 620px;
+            margin-bottom: 12px;
+            color: #11123e;
+            font-size: 24px;
+            line-height: 1.15;
+            letter-spacing: -.04em;
+            font-weight: 800;
+        }
+
+        .preview-header p {
+            font-size: 17px;
+            color: #454464;
+        }
+
+        .dm-direction-row {
+            gap: 24px;
+            margin-top: 28px;
+        }
+
+        .dm-card {
+            border-radius: 14px;
+        }
+
+        .dm-card-image {
+            height: clamp(220px, 18vw, 287px);
+            padding: 28px 24px;
+            height: 280px;
+        }
+
+            .dm-card-image p {
+                font-size: 21px !important;
+            }
+
+        .dm-card footer {
+            height: 52px;
+            padding: 0 18px;
+        }
+
+            .dm-card footer b {
+                font-size: 16px;
+            }
+
+        .expertise-badge {
+            margin-top: 30px;
+            padding: 12px 26px;
+            background: #f1eaff;
+            color: #34205e;
+            font-size: 16px;
+        }
+
+            .expertise-badge i {
+                color: #7428e8;
+            }
+
+        .creative-process {
+            margin-top: 28px;
+            padding-top: 22px;
+        }
+
+            .creative-process h3 {
+                margin-bottom: 18px;
+                color: #11123e;
+                font-size: 23px;
+            }
+
+        .process-steps {
+            gap: 10px;
+        }
+
+        .process-icon {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 12px;
+            font-size: 23px;
+        }
+
+        .process-step h4 {
+            justify-content: center;
+            font-size: 16px;
+            white-space: nowrap;
+        }
+
+        .process-step p {
+            font-size: 15px;
+            line-height: 1.45;
+        }
+
+        .process-arrow {
+            margin-top: 24px;
+            color: #8c73ef;
+        }
+
+        @media (min-width: 1367px) {
+            .dm-page {
+                padding-top: 14px;
+            }
+
+            .dm-hero {
+                padding-top: 8px;
+            }
+
+            .dm-copy {
+                margin-top: 0;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .dm-hero {
+                grid-template-columns: minmax(0, .88fr) minmax(0, 1fr);
+                gap: 24px;
+            }
+
+            .dm-tag {
+                margin-left: 14px;
+                padding: 9px 13px;
+                font-size: 13px;
+            }
+
+            .dm-preview {
+                padding: 28px 24px;
+            }
+
+            .preview-header h2 {
+                font-size: 26px;
+            }
+
+            .dm-direction-row {
+                gap: 12px;
+            }
+
+            .dm-card-image {
+                height: 210px;
+                padding: 20px 14px;
+            }
+
+            .process-step h4 {
+                white-space: normal;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .dm-page {
+                padding: 24px;
+            }
+
+            .dm-hero {
+                grid-template-columns: 1fr;
+                gap: 28px;
+            }
+
+            .dm-copy {
+                margin-top: 0;
+            }
+
+            .dm-form {
+                margin-top: 20px;
+            }
+
+            .dm-preview {
+                padding: 30px;
+            }
+
+            .dm-card-image {
                 height: 240px;
             }
 
-            .dm-social-strip {
+            .process-steps {
+                grid-template-columns: 1fr;
+                gap: 22px;
+            }
+
+            .process-arrow {
+                display: none;
+            }
+
+            .process-icon {
+                margin-left: 0;
+            }
+
+            .process-step h4 {
+                justify-content: flex-start;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .dm-page {
+                padding: 18px;
+            }
+
+            .dm-brand-line {
+                row-gap: 12px;
+            }
+
+            .dm-tag {
+                margin-left: 12px;
+            }
+
+            .dm-copy h1 {
+                margin-top: 26px;
+                font-size: 42px;
+            }
+
+            .designer-proof {
+                flex-direction: row;
+                align-items: center;
+            }
+
+            .designer-photo-wrap {
+                width: 76px;
+                height: 76px;
+            }
+
+            .dm-form {
+                padding: 22px;
+            }
+
+            .dm-direction-row {
+                grid-template-columns: repeat(3, minmax(0,1fr));
+                gap: 9px;
+            }
+
+            .dm-card-image {
+                height: 160px;
+                padding: 14px 10px;
+            }
+
+                .dm-card-image p {
+                    font-size: 15px !important;
+                }
+
+            .dm-card footer {
+                padding: 0 9px;
+            }
+
+                .dm-card footer b {
+                    font-size: 13px;
+                }
+
+            .preview-header h2 {
+                font-size: 23px;
+            }
+
+            .expertise-badge {
+                width: 100%;
+                text-align: center;
+                font-size: 13px;
+            }
+
+            .process-step h4 {
+                white-space: normal;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .dm-copy h1 {
+                font-size: 38px;
+            }
+
+            .dm-copy > p {
+                font-size: 16px;
+            }
+
+            .dm-tag {
+                margin-left: 0;
+            }
+
+            .designer-proof {
+                align-items: flex-start;
+            }
+
+            .designer-photo-wrap {
+                width: 64px;
+                height: 64px;
+            }
+
+            .dm-direction-row {
                 grid-template-columns: 1fr;
             }
 
-            .dm-post, .dm-phone {
-                height: auto;
-                min-height: 170px;
+            .dm-card-image {
+                height: 210px;
+                padding: 20px;
             }
 
-            .dm-phone {
-                min-height: 220px;
+                .dm-card-image p {
+                    font-size: 20px !important;
+                }
+
+            .preview-header {
+                flex-direction: row;
+            }
+
+            .dm-preview {
+                padding: 24px 18px;
             }
         }
     </style>
+
+
+    <style id="process-step-centered-text">
+        /* Center each step's description directly beneath its heading. */
+        .process-step {
+            text-align: center;
+        }
+
+            .process-step .process-icon {
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .process-step h4 {
+                justify-content: center;
+                text-align: center;
+            }
+
+            .process-step p {
+                text-align: center;
+            }
+
+        @media (max-width: 1024px) {
+            .process-step {
+                text-align: center;
+            }
+
+                .process-step .process-icon {
+                    margin-left: auto;
+                    margin-right: auto;
+                }
+
+                .process-step h4 {
+                    justify-content: center;
+                }
+
+                .process-step p {
+                    text-align: center;
+                }
+        }
+    </style>
+
+
+    <style id="cta-button-refinement">
+        .dm-form button[type="submit"] {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 0 22px;
+            white-space: normal;
+            line-height: 1.2;
+        }
+
+            .dm-form button[type="submit"] > i {
+                flex: 0 0 auto;
+                font-size: 18px;
+            }
+
+            .dm-form button[type="submit"] #buttonText {
+                display: inline-block;
+                flex: 0 1 auto;
+                width: auto;
+                max-width: 100%;
+                text-align: center;
+            }
+
+            .dm-form button[type="submit"] .spinner {
+                flex: 0 0 auto;
+            }
+
+        @media (max-width: 767px) {
+            .dm-form button[type="submit"] {
+                min-height: 62px;
+                height: auto;
+                padding: 12px 18px;
+                gap: 9px;
+                border-radius: 14px;
+                font-size: 17px;
+                box-shadow: 0 8px 18px rgba(93, 72, 235, .18);
+            }
+
+                .dm-form button[type="submit"] > i {
+                    font-size: 17px;
+                }
+
+                .dm-form button[type="submit"] #buttonText {
+                    max-width: 265px;
+                }
+        }
+
+        @media (max-width: 520px) {
+            .dm-form button[type="submit"] {
+                min-height: 60px;
+                padding: 11px 14px;
+                font-size: 16px;
+            }
+
+                .dm-form button[type="submit"] #buttonText {
+                    max-width: 235px;
+                }
+        }
+    </style>
+
 </head>
 
 <body>
     <div class="dm-page" id="page">
         <main class="dm-hero">
+            <!-- LEFT COLUMN -->
             <section class="dm-copy">
                 <div class="dm-brand-line">
                     <img src="assets/img/logo-left.png" class="dm-brand-symbol" alt="Design Mode logo" />
                     <span class="dm-brand-name">
                         design<img src="images/logo-m3.svg" class="dm-brand-mark" alt="" />ode.ai
                     </span>
+                    <span class="dm-tag"><i class="fas fa-user-friends"></i> Human creativity + AI speed</span>
                 </div>
 
                 <h1>
-                    Explore Social<br />
-                    Content Directions<span>.</span>
+                    Meet Your Creative Designer. Build Your
+                    <span>Social Brand.</span>
                 </h1>
 
                 <p>
-                    Discover designer-built creative directions and generate
-                    consistent social content tailored to your brand.
+                    Get professional creative direction and an AI-powered design studio that helps you create beautiful, consistent social media content for your business.
                 </p>
 
+                <div class="designer-proof">
+                    <div class="designer-photo-wrap" style="background: rgb(238, 231, 250); border-radius: 50%;">
+                        <img class="designer-photo" src="/avatar.jpeg" alt="Your creative designer" style="display: block;">
+                        <span class="designer-online"></span>
+                    </div>
+                    <div>
+                        <strong>A real designer behind your creative experience</strong>
+                        <p>A real designer shapes your brand’s creative direction. Then AI helps bring that direction to life across consistent, on-brand social content.</p>
+                    </div>
+                </div>
+
                 <form class="dm-form" id="companyForm" novalidate>
+                    <h2>Let’s create something for your brand. <span style="color: #6424df;">Start below.</span></h2>
                     <label for="companyName">Company name</label>
                     <input id="companyName" name="companyName"
                            placeholder="Enter your company name" autocomplete="organization" />
@@ -543,80 +1248,71 @@
                            autocomplete="organization-title" />
 
                     <button type="submit" id="submitButton">
-                        <span id="buttonText">See My Directions ➝</span>
+                        <i class="fas fa-user"></i>
+                        <span id="buttonText">Meet My Designer &amp; Create 3 Concepts →</span>
                     </button>
 
-                    <p class="form-error" id="formError" aria-live="polite"></p>
-
-                    <small>No credit card required</small>
-
-                    <div class="industry-proof">
-                        Trusted across Beauty • Fashion • Food • SaaS • Ecommerce
-                    </div>
+                    <small class="form-reassurance">Free to explore · No credit card required</small>
+                    <span class="form-error" id="formError" aria-live="polite" style="text-align:center;"></span>
                 </form>
             </section>
 
+            <!-- RIGHT COLUMN -->
             <section class="dm-preview">
+                <div class="preview-header">
+                    <div class="preview-header-icon">✦</div>
+                    <div>
+                        <h2>Professional Creative Direction. Personalized for Your Brand.</h2>
+                        <p>Explore three distinct visual directions created with a designer-guided AI system.</p>
+                    </div>
+                </div>
+
                 <div class="dm-direction-row">
                     <article class="dm-card minimal">
                         <div class="dm-card-image">
-                            <p style="font-weight:500;font-size:20px;color:#2F2A26;">
-                                Less is more.<br />Always.
-                            </p>
                         </div>
                         <footer><b>Minimal</b><span></span></footer>
                     </article>
 
                     <article class="dm-card active bold">
                         <div class="dm-card-image">
-                            <p style="font-weight:500;font-size:20px;color:white;">
-                                Nature<br />in every drop.
-                            </p>
                         </div>
                         <footer><b>Bold</b><span>✓</span></footer>
                     </article>
 
                     <article class="dm-card editorial">
                         <div class="dm-card-image">
-                            <p style="font-weight:500;font-size:20px;color:white;">
-                                Thoughtful<br />by nature.
-                            </p>
                         </div>
                         <footer><b>Editorial</b><span></span></footer>
                     </article>
                 </div>
 
-                <div class="dm-arrow">↓</div>
-                <h4>Your selected direction</h4>
-
-                <div class="dm-social-strip">
-                    <div class="dm-post large">
-                        <p style="color:white;">Clean beauty.<br />Powered by<br />nature.</p>
-                    </div>
-
-                    <div xxclass="dm-phone"><img src="/assets/img/vase4.png" style="width:150px;"></div>
-
-                    <div class="dm-post">
-                        <span class="float-icon">❤️</span>
-                        <span class="float-icon">💬</span>
-                        <span class="float-icon">💬</span>
-                        <span class="float-icon">❤️</span>
-                        <span class="float-icon">💬</span>
-                        <span class="float-icon">❤️</span>
-                    </div>
-
-                    <div class="dm-post video">
-                        <span>▶</span>
-                    </div>
+                <div class="expertise-badge">
+                    <i class="fas fa-user-plus"></i>
+                    Creative direction powered by real design expertise
                 </div>
 
-                <div class="dm-platforms" aria-label="Supported social platforms">
-                    <span><i class="fab fa-instagram"></i></span>
-                    <span><i class="fab fa-facebook-f"></i></span>
-                    <span><i class="fab fa-tiktok"></i></span>
-                    <span><i class="fab fa-pinterest-p"></i></span>
-                    <span><i class="fab fa-linkedin-in"></i></span>
-                    <span><i class="fab fa-youtube"></i></span>
+                <div class="creative-process">
+                    <h3>Your designer-guided creative process</h3>
+                    <div class="process-steps">
+                        <div class="process-step">
+                            <div class="process-icon"><i class="fas fa-user"></i></div>
+                            <h4><span class="step-num">01</span> Meet your designer</h4>
+                            <p>Get matched with a creative professional.</p>
+                        </div>
+                        <div class="process-arrow">→</div>
+                        <div class="process-step">
+                            <div class="process-icon"><i class="fas fa-layer-group"></i></div>
+                            <h4><span class="step-num">02</span> Explore 3 concepts</h4>
+                            <p>Review designer-developed creative directions.</p>
+                        </div>
+                        <div class="process-arrow">→</div>
+                        <div class="process-step">
+                            <div class="process-icon"><i class="fas fa-image"></i></div>
+                            <h4><span class="step-num">03</span> Build your brand</h4>
+                            <p>Generate a complete set of social content, ready to use.</p>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
@@ -648,7 +1344,7 @@
             API_BASE_URL = "https://designmodeaiserver20250401080115.azurewebsites.net/";
         }
 
-        try { window.designModePrivacy?.initialize(API_BASE_URL)?.catch(() => {}); } catch { /* Preferences must not block the funnel. */ }
+        try { window.designModePrivacy?.initialize(API_BASE_URL)?.catch(() => { }); } catch { /* Preferences must not block the funnel. */ }
         const acquisitionCapture = window.designModeAttribution.capture(API_BASE_URL)
             .catch(error => {
                 console.error("[ATTRIBUTION] initialization failed", error);
@@ -730,7 +1426,7 @@
         function setLoading(loading) {
             isLoading = loading;
             submitButton.disabled = loading;
-            buttonText.textContent = loading ? "Loading..." : "See My Directions →";
+            buttonText.textContent = loading ? "Loading..." : "Meet My Designer & Explore Concepts →";
 
             const existingSpinner = submitButton.querySelector(".spinner");
             if (loading && !existingSpinner) {
@@ -801,21 +1497,6 @@
             }
         });
     </script>
-    <style>
-        @font-face {
-            font-family: "SF Pro Display";
-            font-style: normal;
-            font-weight: 500;
-            src: url("https://raw.githubusercontent.com/blaisck/sfwin/master/SFPro/TrueType/SFProDisplay-Medium.ttf");
-        }
-
-        @font-face {
-            font-family: "SF Pro Display";
-            font-style: normal;
-            font-weight: 600;
-            src: url("https://raw.githubusercontent.com/blaisck/sfwin/master/SFPro/TrueType/SFProDisplay-SemiBold.ttf");
-        }
-    </style>
     <iframe id="blazor-preload"
             style="
             position:absolute;

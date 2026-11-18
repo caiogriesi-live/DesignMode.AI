@@ -324,6 +324,12 @@ public sealed class FunnelRecoveryTests
                 return Task.FromResult(State);
             }
         }
+        public Task<string?> ResolveInviteIdAsync(
+    string userId,
+    string projectId)
+        {
+            return Task.FromResult<string?>(null);
+        }
         public Task<FunnelRecoveryState?> ReadAsync(string id) => Task.FromResult(State);
         public Task<bool> ClaimAsync(string id)
         {

@@ -42,6 +42,17 @@ static void ConfigureServices(IServiceCollection services, IConfiguration config
     // Add configuration as a singleton
     services.AddSingleton<IConfiguration>(config);
 
+    services.AddSingleton<FunnelEmailTrackingService>();
+
+    services.AddSingleton<FunnelRecoveryService>(sp =>
+        new FunnelRecoveryService(
+            sp.GetRequiredService<IFunnelRecoveryStore>(),
+            sp.GetRequiredService<IFunnelRecoveryEmailSender>(),
+            sp.GetRequiredService<ILogger<FunnelRecoveryService>>(),
+            sp.GetService<FunnelRecoveryUnsubscribe>(),
+            sp.GetRequiredService<FunnelEmailTrackingService>()
+        ));
+
     services.AddSingleton<IOpenAIService, OpenAIService>(); // OpenAI API service
     services.AddSingleton<ITestString, TestString>();       // Business layer service
     services.AddSingleton<ITestDac, TestDac>();
@@ -74,7 +85,6 @@ static void ConfigureServices(IServiceCollection services, IConfiguration config
     services.AddSingleton<IFunnelRecoveryMarketingPermission>(provider => provider.GetRequiredService<FunnelRecoveryUnsubscribe>());
     services.AddSingleton<FunnelRecoverySequence>();
     services.AddSingleton<IFunnelRecoveryEmailSender, SesFunnelRecoveryEmailSender>();
-    services.AddSingleton<FunnelRecoveryService>();
     services.AddSingleton<DesignMode.AI.Shared.Navigation.IPostAuthRoutingStore, PostAuthRoutingStore>();
 services.AddSingleton<AIGenerationUsageStore>();
 services.AddSingleton<AIUsageRecorder>();

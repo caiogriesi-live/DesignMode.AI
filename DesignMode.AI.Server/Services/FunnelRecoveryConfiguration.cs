@@ -24,7 +24,10 @@ public sealed class FunnelRecoveryConfiguration(IConfiguration configuration)
         var publicUrlConfigured = false;
         try
         {
-            _ = FunnelRecoveryEmail.Create(HostUrl, null, AllowLocalLinks);
+            _ = FunnelRecoveryEmail.Create(
+    HostUrl,
+    null,
+    AllowLocalLinks);
             publicUrlConfigured = true;
         }
         catch (InvalidOperationException) { }
